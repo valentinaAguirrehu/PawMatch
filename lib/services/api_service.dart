@@ -34,4 +34,26 @@ class ApiService {
       throw Exception(data['error'] ?? 'Error al registrar el usuario');
     }
   }
+
+  static Future<Map<String, dynamic>> iniciarSesion({
+    required String correo,
+    required String contrasena,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/usuarios/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'correo': correo,
+        'contrasena': contrasena,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data as Map<String, dynamic>;
+    } else {
+      throw Exception(data['error'] ?? 'Error al iniciar sesión');
+    }
+  }
 }
