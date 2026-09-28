@@ -1,11 +1,19 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Android emulator -> 10.0.2.2 apunta al localhost de tu PC.
-  // Dispositivo físico (celular real) -> usa la IP local de tu PC, ej: 192.168.1.15
-  // iOS simulator -> localhost funciona directo.
-  static const String baseUrl = 'http://10.0.2.2:3000/api';
+  // Elige la URL según donde corra la app:
+  // - Web (Chrome/Edge): localhost
+  // - Emulador de Android: 10.0.2.2 apunta al localhost de tu PC
+  // - Windows, macOS, Linux, iOS simulator: localhost
+  // - Celular físico: cambia por la IP local de tu PC, ej: http://192.168.1.15:3000/api
+  static String get baseUrl {
+    if (kIsWeb) return 'http://localhost:3000/api';
+    if (Platform.isAndroid) return 'http://10.0.2.2:3000/api';
+    return 'http://localhost:3000/api';
+  }
 
   static Future<Map<String, dynamic>> registrarUsuario({
     required String nombres,
@@ -42,10 +50,7 @@ class ApiService {
     final response = await http.post(
       Uri.parse('$baseUrl/usuarios/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'correo': correo,
-        'contrasena': contrasena,
-      }),
+      body: jsonEncode({'correo': correo, 'contrasena': contrasena}),
     );
 
     final data = jsonDecode(response.body);
