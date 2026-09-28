@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '/services/api_service.dart';
+import 'menu_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _cargando = false;
 
+  @override
+  void dispose() {
+    _correoCtrl.dispose();
+    _contrasenaCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _iniciarSesion() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -27,18 +35,19 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('¡Bienvenido, ${usuario['nombres']}!')),
-      );
 
-      // Aquí, cuando tengas la pantalla principal de la app (home logeado),
-      // navega con algo como:
-      // Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => HomeScreen(usuario: usuario)));
+      // Reemplaza la pantalla de login por el menú principal
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MenuScreen(nombre: '${usuario['nombres']}'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -65,8 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 controller: _contrasenaCtrl,
                 decoration: const InputDecoration(labelText: 'Contraseña'),
                 obscureText: true,
-                validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Requerido' : null,
+                validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
               ),
               const SizedBox(height: 24),
               ElevatedButton(
