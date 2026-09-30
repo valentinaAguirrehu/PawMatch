@@ -49,4 +49,5 @@ paw_match_backend/node_modules/
 paw_match_backend/.env
 paw_match_backend/npm-debug.log*
 paw_match_backend/.npm/
-
+paw_match_backend/uploads/
+android/build/
