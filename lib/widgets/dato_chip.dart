@@ -9,11 +9,16 @@ class DatoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
-        child: Text(
-          texto,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.marron),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      texto,
+      style: Theme.of(
+        context,
+      ).textTheme.labelLarge?.copyWith(color: AppColors.texto),
+    ),
+  );
 }

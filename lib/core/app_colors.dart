@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
 
-/// Paleta única de Paw Match. Si ya tienes un archivo de colores, pega estas
-/// constantes ahí y borra los `const _naranja = ...` sueltos de cada pantalla.
+/// Paleta única de Paw Match: SOLO rosado y blanco.
+/// Los tonos claros son el mismo rosado mezclado con blanco (no son colores nuevos).
 class AppColors {
   AppColors._();
 
-  static const naranja = Color(0xFFF97316);
-  static const marron = Color(0xFF7C3A10);
-  static const durazno = Color(0xFFFFF7ED);
-  static const bordeDurazno = Color(0xFFFED7AA);
-  static const rosaSuave = Color(0xFFFFD9CF); // fondo de la tarjeta de la foto
+  static const rosa = Color(0xFFED4F9D); // color principal
+  static const blanco = Colors.white;
 
-  /// Colores pastel para los chips de datos (se reparten en orden).
-  static const pastel = [
-    Color(0xFFDDF5E3), // verde
-    Color(0xFFDCEBFF), // celeste
-    Color(0xFFF0E2FF), // lila
-    Color(0xFFFFF0BF), // amarillo
-    Color(0xFFFFE1D6), // durazno
-  ];
+  // Rosado suavizado (rosa sobre blanco) para fondos, bordes y tarjetas
+  static const rosaSuave = Color(0xFFFDEDF5); // ~10 %
+  static const rosaClaro = Color(0xFFFBDCEB); // ~20 %
+  static const bordeRosa = Color(0xFFF9C1DE); // ~35 %
+
+  // Texto: gris casi negro, neutro, para que se lea bien sobre blanco y rosado
+  static const texto = Color(0xFF2E2A2C);
+
+  /// Fondos de tarjetas y chips (se alternan en orden).
+  static const pastel = [rosaSuave, rosaClaro];
 }
