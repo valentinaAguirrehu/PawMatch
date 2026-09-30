@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '/services/api_service.dart';
+import '../services/session.dart';
 import 'menu_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -36,12 +37,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
+      // Guarda quién inició sesión (id, nombre y rol) para usarlo en la app
+      Session.iniciar(usuario);
+
       // Reemplaza la pantalla de login por el menú principal
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => MenuScreen(nombre: '${usuario['nombres']}'),
-        ),
+        MaterialPageRoute(builder: (_) => const MenuScreen()),
       );
     } catch (e) {
       if (!mounted) return;
