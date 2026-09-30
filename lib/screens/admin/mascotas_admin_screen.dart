@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../models/pet.dart';
-import '../../../services/mascota_service.dart';
-import '../../../widgets/pet_card.dart';
-import '../admin/mascota_form_screen.dart';
+import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/screens/admin/mascota_form_screen.dart';
+import 'package:paw_match/services/mascota_service.dart';
+import 'package:paw_match/widgets/pet_card.dart'; // PetImage y EstadoChip
 
 /// Gestión de mascotas para el administrador (RF16): listar, agregar,
 /// editar y eliminar.
@@ -44,7 +44,6 @@ class _MascotasAdminScreenState extends State<MascotasAdminScreen> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Eliminar'),
           ),

@@ -86,7 +86,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
                           p.nombre,
                           style: t.headlineMedium?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: AppColors.marron,
+                            color: AppColors.texto,
                           ),
                         ),
                         if (raza.isNotEmpty) Text(raza, style: t.bodyLarge),
@@ -109,7 +109,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
                         Text(
                           'Sobre ${p.nombre}',
                           style: t.titleMedium?.copyWith(
-                            color: AppColors.marron,
+                            color: AppColors.texto,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -123,7 +123,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
                         Text(
                           'Personalidad',
                           style: t.titleMedium?.copyWith(
-                            color: AppColors.marron,
+                            color: AppColors.texto,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -158,7 +158,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [AppColors.durazno, AppColors.rosaSuave],
+            colors: [AppColors.rosaSuave, AppColors.rosaClaro],
           ),
         ),
         child: SizedBox(
@@ -180,7 +180,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
                 Positioned(
                   top: 12,
                   right: 12,
-                  child: _pildora(estado, AppColors.naranja, Colors.white),
+                  child: _pildora(estado, AppColors.rosa, Colors.white),
                 ),
                 Positioned(
                   left: 12,
@@ -211,7 +211,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(10),
-        child: Icon(icono, size: 22, color: AppColors.marron),
+        child: Icon(icono, size: 22, color: AppColors.texto),
       ),
     ),
   );
@@ -247,7 +247,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
       if (snap.connectionState != ConnectionState.done) {
         return const Padding(
           padding: EdgeInsets.symmetric(vertical: 8),
-          child: LinearProgressIndicator(color: AppColors.naranja),
+          child: LinearProgressIndicator(color: AppColors.rosa),
         );
       }
       if (snap.hasError) {
@@ -299,7 +299,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
           Expanded(
             child: FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.naranja,
+                backgroundColor: AppColors.rosa,
                 minimumSize: const Size.fromHeight(56),
                 shape: const StadiumBorder(),
                 textStyle: Theme.of(context).textTheme.titleMedium,
@@ -325,7 +325,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.zero,
                 shape: const CircleBorder(),
-                side: const BorderSide(color: AppColors.naranja, width: 1.5),
+                side: const BorderSide(color: AppColors.rosa, width: 1.5),
               ),
               onPressed: _puedeApadrinar
                   ? (widget.onApadrinar ??
@@ -335,7 +335,7 @@ class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
                   : null,
               child: const Icon(
                 Icons.volunteer_activism,
-                color: AppColors.naranja,
+                color: AppColors.rosa,
               ),
             ),
           ),

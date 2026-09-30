@@ -20,30 +20,59 @@ class RasgoBarra extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Icon(icono, size: 18, color: AppColors.naranja),
-          const SizedBox(width: 8),
-          Expanded(child: Text(titulo, style: t.titleSmall?.copyWith(color: AppColors.marron))),
-          Text('$valor/5', style: t.labelLarge?.copyWith(color: AppColors.naranja)),
-        ]),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: valor / 5,
-            minHeight: 8,
-            color: AppColors.naranja,
-            backgroundColor: AppColors.bordeDurazno,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icono, size: 18, color: AppColors.rosa),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: t.titleSmall?.copyWith(color: AppColors.texto),
+                ),
+              ),
+              Text(
+                '$valor/5',
+                style: t.labelLarge?.copyWith(color: AppColors.rosa),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 4),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Flexible(child: Text(minimo, style: t.bodySmall, overflow: TextOverflow.ellipsis)),
-          const SizedBox(width: 8),
-          Flexible(child: Text(maximo, style: t.bodySmall, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis)),
-        ]),
-      ]),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: valor / 5,
+              minHeight: 8,
+              color: AppColors.rosa,
+              backgroundColor: AppColors.bordeRosa,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  minimo,
+                  style: t.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  maximo,
+                  style: t.bodySmall,
+                  textAlign: TextAlign.right,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
