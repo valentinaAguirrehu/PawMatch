@@ -1,5 +1,3 @@
-/// Textos de la Fundación mostrados en el inicio.
-/// TODO: reemplazar por el texto oficial (más adelante vendrán del backend: RF23).
 class FundacionInfo {
   FundacionInfo._();
 

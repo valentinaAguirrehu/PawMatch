@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
-import '/services/api_service.dart';
-import '../services/session.dart';
-import 'menu_screen.dart';
+import 'package:paw_match/screens/menu_screen.dart';
+import 'package:paw_match/screens/olvide_contrasena_screen.dart';
+import 'package:paw_match/screens/registro_screen.dart';
+import 'package:paw_match/services/api_service.dart';
+import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/auth_scaffold.dart';
+import 'package:paw_match/widgets/boton_blanco.dart';
+import 'package:paw_match/widgets/campo_auth.dart';
+import 'package:paw_match/widgets/logo_paw.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,9 +53,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -57,40 +63,90 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Iniciar sesión')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _correoCtrl,
-                decoration: const InputDecoration(labelText: 'Correo'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (v) =>
-                    (v == null || !v.contains('@')) ? 'Correo inválido' : null,
+    final t = Theme.of(context).textTheme;
+    final blanco = TextButton.styleFrom(foregroundColor: Colors.white);
+
+    return AuthScaffold(
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Center(child: LogoPaw()),
+            const SizedBox(height: 28),
+            Text(
+              'Iniciar sesión',
+              style: t.headlineMedium?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
-              TextFormField(
-                controller: _contrasenaCtrl,
-                decoration: const InputDecoration(labelText: 'Contraseña'),
-                obscureText: true,
-                validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Ingresa tu correo y contraseña',
+              style: t.bodyMedium?.copyWith(color: Colors.white70),
+            ),
+            const SizedBox(height: 24),
+            CampoAuth(
+              controller: _correoCtrl,
+              icono: Icons.email_outlined,
+              etiqueta: 'Correo',
+              teclado: TextInputType.emailAddress,
+              accion: TextInputAction.next,
+              validator: (v) =>
+                  (v == null || !v.contains('@')) ? 'Correo inválido' : null,
+            ),
+            const SizedBox(height: 14),
+            CampoAuth(
+              controller: _contrasenaCtrl,
+              icono: Icons.lock_outline,
+              etiqueta: 'Contraseña',
+              esContrasena: true,
+              accion: TextInputAction.done,
+              onEnviar: _iniciarSesion,
+              validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                style: blanco,
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const OlvideContrasenaScreen(),
+                  ),
+                ),
+                child: const Text('¿Olvidaste tu contraseña?'),
               ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _cargando ? null : _iniciarSesion,
-                child: _cargando
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Iniciar sesión'),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            BotonBlanco(
+              texto: 'Iniciar sesión',
+              cargando: _cargando,
+              onPressed: _iniciarSesion,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '¿No tienes cuenta?',
+                  style: t.bodyMedium?.copyWith(color: Colors.white70),
+                ),
+                TextButton(
+                  style: blanco,
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const RegistroScreen()),
+                  ),
+                  child: const Text(
+                    'Regístrate',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
