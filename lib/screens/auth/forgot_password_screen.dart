@@ -8,14 +8,14 @@ import 'package:paw_match/widgets/logo_paw.dart';
 /// Recuperar contraseña en dos pasos:
 ///   1) escribir el correo y recibir un código
 ///   2) escribir el código y la contraseña nueva
-class OlvideContrasenaScreen extends StatefulWidget {
-  const OlvideContrasenaScreen({super.key});
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
 
   @override
-  State<OlvideContrasenaScreen> createState() => _OlvideContrasenaScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
-class _OlvideContrasenaScreenState extends State<OlvideContrasenaScreen> {
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _correo = TextEditingController();
   final _codigo = TextEditingController();

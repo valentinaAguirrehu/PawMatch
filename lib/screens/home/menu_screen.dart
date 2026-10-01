@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/screens/admin/mascotas_admin_screen.dart';
-import 'package:paw_match/screens/inicio_tab.dart';
-import 'package:paw_match/screens/mascotas_screen.dart';
-import 'package:paw_match/screens/welcome_screen.dart';
+import 'package:paw_match/screens/home/home_tab.dart';
+import 'package:paw_match/screens/pets/pet_screen.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/nav_flotante.dart';
 
-/// Pantalla principal después de iniciar sesión (solo navegación).
-/// Usuario:        Inicio | Mascotas
-/// Administrador:  Inicio | Mascotas | Gestionar
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
 
@@ -35,13 +32,13 @@ class _MenuScreenState extends State<MenuScreen> {
     final isAdmin = Session.isAdmin;
 
     final paginas = <Widget>[
-      InicioTab(onVerMascotas: () => _irA(1), onCerrarSesion: _cerrarSesion),
-      const MascotasScreen(),
+      HomeTab(onVerMascotas: () => _irA(1), onCerrarSesion: _cerrarSesion),
+      const PetScreen(),
       if (isAdmin) const MascotasAdminScreen(),
     ];
 
     return Scaffold(
-      // El Inicio trae su propio encabezado; las otras pestañas usan la barra superior.
+      
       appBar: _index == 0
           ? null
           : AppBar(

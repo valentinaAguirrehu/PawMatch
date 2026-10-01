@@ -8,12 +8,12 @@ import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 import 'package:paw_match/widgets/rasgo_barra.dart';
 
 /// Detalle de una mascota (RF04 / RF05). Se abre con:
-///   Navigator.push(context, MaterialPageRoute(builder: (_) => MascotaDetalleScreen(pet: pet)));
+///   Navigator.push(context, MaterialPageRoute(builder: (_) => PetDetailScreen(pet: pet)));
 /// `onAdoptar` y `onApadrinar` se conectan cuando existan RF08 y RF10.
-class MascotaDetalleScreen extends StatefulWidget {
+class PetDetailScreen extends StatefulWidget {
   final Pet pet;
   final VoidCallback? onAdoptar, onApadrinar;
-  const MascotaDetalleScreen({
+  const PetDetailScreen({
     super.key,
     required this.pet,
     this.onAdoptar,
@@ -21,10 +21,10 @@ class MascotaDetalleScreen extends StatefulWidget {
   });
 
   @override
-  State<MascotaDetalleScreen> createState() => _MascotaDetalleScreenState();
+  State<PetDetailScreen> createState() => _PetDetailScreenState();
 }
 
-class _MascotaDetalleScreenState extends State<MascotaDetalleScreen> {
+class _PetDetailScreenState extends State<PetDetailScreen> {
   // La lista no trae la personalidad: se consulta la mascota completa.
   late Future<Pet> _completa = MascotaService.obtener(widget.pet.id);
 

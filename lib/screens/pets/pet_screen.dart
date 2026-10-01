@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import '../models/pet.dart';
-import '../services/mascota_service.dart';
-import '../widgets/pet_card.dart';
-import 'mascota_detalle_screen.dart';
+import '../../models/pet.dart';
+import '../../services/mascota_service.dart';
+import '../../widgets/pet_card.dart';
+import 'pet_detail_screen.dart';
 
 /// Lista de mascotas para el usuario (RF04): busca, filtra y abre el detalle.
-class MascotasScreen extends StatefulWidget {
-  const MascotasScreen({super.key});
+class PetScreen extends StatefulWidget {
+  const PetScreen({super.key});
 
   @override
-  State<MascotasScreen> createState() => _MascotasScreenState();
+  State<PetScreen> createState() => _PetScreenState();
 }
 
-class _MascotasScreenState extends State<MascotasScreen> {
+class _PetScreenState extends State<PetScreen> {
   late Future<List<Pet>> _future = MascotaService.listar();
   String _busqueda = '';
   String _especie = 'Todas';
@@ -124,7 +124,7 @@ class _MascotasScreenState extends State<MascotasScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
-                                  MascotaDetalleScreen(pet: pets[i]),
+                                  PetDetailScreen(pet: pets[i]),
                             ),
                           ),
                         ),

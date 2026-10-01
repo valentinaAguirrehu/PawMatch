@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '/services/api_service.dart';
 
-class RegistroScreen extends StatefulWidget {
-  const RegistroScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<RegistroScreen> createState() => _RegistroScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegistroScreenState extends State<RegistroScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nombresCtrl = TextEditingController();
   final _apellidosCtrl = TextEditingController();

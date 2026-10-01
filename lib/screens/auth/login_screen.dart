@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:paw_match/screens/menu_screen.dart';
-import 'package:paw_match/screens/olvide_contrasena_screen.dart';
-import 'package:paw_match/screens/registro_screen.dart';
+import 'package:paw_match/screens/home/menu_screen.dart';
+import 'package:paw_match/screens/auth/forgot_password_screen.dart';
+import 'package:paw_match/screens/auth/register_screen.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/auth_scaffold.dart';
@@ -113,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const OlvideContrasenaScreen(),
+                    builder: (_) => const ForgotPasswordScreen(),
                   ),
                 ),
                 child: const Text('¿Olvidaste tu contraseña?'),
@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: blanco,
                   onPressed: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const RegistroScreen()),
+                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
                   ),
                   child: const Text(
                     'Regístrate',

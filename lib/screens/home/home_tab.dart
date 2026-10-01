@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
-import 'package:paw_match/screens/mascota_detalle_screen.dart';
+import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/mascota_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/chip_seleccion.dart';
@@ -10,19 +10,19 @@ import 'package:paw_match/widgets/fundacion_banner.dart';
 import 'package:paw_match/widgets/pet_card_color.dart';
 
 /// Pestaña "Inicio": saludo, buscador, Fundación y perros para adoptar o apadrinar.
-class InicioTab extends StatefulWidget {
+class HomeTab extends StatefulWidget {
   final VoidCallback onVerMascotas, onCerrarSesion;
-  const InicioTab({
+  const HomeTab({
     super.key,
     required this.onVerMascotas,
     required this.onCerrarSesion,
   });
 
   @override
-  State<InicioTab> createState() => _InicioTabState();
+  State<HomeTab> createState() => _HomeTabState();
 }
 
-class _InicioTabState extends State<InicioTab> {
+class _HomeTabState extends State<HomeTab> {
   late Future<List<Pet>> _future = MascotaService.listar();
   bool _paraAdopcion = true; // false = para apadrinar
 
@@ -67,7 +67,7 @@ class _InicioTabState extends State<InicioTab> {
 
   void _abrirDetalle(Pet pet) => Navigator.push(
     context,
-    MaterialPageRoute(builder: (_) => MascotaDetalleScreen(pet: pet)),
+    MaterialPageRoute(builder: (_) => PetDetailScreen(pet: pet)),
   );
 
   @override

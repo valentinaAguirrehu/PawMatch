@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_theme.dart';
-import 'package:paw_match/screens/welcome_screen.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 
 void main() {
   runApp(const PawMatchApp());
