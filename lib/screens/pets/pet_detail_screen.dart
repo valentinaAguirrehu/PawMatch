@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
-import 'package:paw_match/services/mascota_service.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/dato_chip.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 import 'package:paw_match/widgets/rasgo_barra.dart';
@@ -26,7 +26,7 @@ class PetDetailScreen extends StatefulWidget {
 
 class _PetDetailScreenState extends State<PetDetailScreen> {
   // La lista no trae la personalidad: se consulta la mascota completa.
-  late Future<Pet> _completa = MascotaService.obtener(widget.pet.id);
+  late Future<Pet> _completa = PetsService.obtener(widget.pet.id);
 
   static const _estados = {
     'disponible': 'Disponible',
@@ -256,7 +256,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             const Expanded(child: Text('No se pudo cargar la personalidad.')),
             TextButton(
               onPressed: () => setState(
-                () => _completa = MascotaService.obtener(widget.pet.id),
+                () => _completa = PetsService.obtener(widget.pet.id),
               ),
               child: const Text('Reintentar'),
             ),

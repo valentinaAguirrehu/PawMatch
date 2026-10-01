@@ -5,20 +5,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
-import 'package:paw_match/services/mascota_service.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 
-/// Formulario para agregar (pet == null) o editar una mascota.
-/// Al guardar con éxito hace Navigator.pop(context, true).
-class MascotaFormScreen extends StatefulWidget {
+class PetsFormScreen extends StatefulWidget {
   final Pet? pet;
-  const MascotaFormScreen({super.key, this.pet});
+  const PetsFormScreen({super.key, this.pet});
 
   @override
-  State<MascotaFormScreen> createState() => _MascotaFormScreenState();
+  State<PetsFormScreen> createState() => _PetsFormScreenState();
 }
 
-class _MascotaFormScreenState extends State<MascotaFormScreen> {
+class _PetsFormScreenState extends State<PetsFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
   late final _nombre = TextEditingController(text: widget.pet?.nombre);
@@ -65,7 +63,7 @@ class _MascotaFormScreenState extends State<MascotaFormScreen> {
   Future<void> _cargarPersonalidad() async {
     setState(() => _cargandoPerfil = true);
     try {
-      final completa = await MascotaService.obtener(widget.pet!.id);
+      final completa = await PetsService.obtener(widget.pet!.id);
       if (!mounted) return;
       setState(() {
         completa.personalidad.forEach((clave, valor) {
@@ -164,7 +162,7 @@ class _MascotaFormScreenState extends State<MascotaFormScreen> {
       // 1) si eligió una foto nueva, primero se sube y se obtiene su ruta
       String? ruta = _fotoActual;
       if (_fotoBytes != null) {
-        ruta = await MascotaService.subirFoto(_fotoBytes!, _fotoNombre);
+        ruta = await PetsService.subirFoto(_fotoBytes!, _fotoNombre);
       }
 
       // 2) se guarda la mascota con su personalidad
@@ -188,9 +186,9 @@ class _MascotaFormScreenState extends State<MascotaFormScreen> {
       );
 
       if (_esEdicion) {
-        await MascotaService.actualizar(widget.pet!.id, pet);
+        await PetsService.actualizar(widget.pet!.id, pet);
       } else {
-        await MascotaService.crear(pet);
+        await PetsService.crear(pet);
       }
       if (!mounted) return;
       _aviso(

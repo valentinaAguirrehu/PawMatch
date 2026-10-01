@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:paw_match/screens/admin/mascotas_admin_screen.dart';
+import 'package:paw_match/screens/admin/pets_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
@@ -34,7 +34,7 @@ class _MenuScreenState extends State<MenuScreen> {
     final paginas = <Widget>[
       HomeTab(onVerMascotas: () => _irA(1), onCerrarSesion: _cerrarSesion),
       const PetScreen(),
-      if (isAdmin) const MascotasAdminScreen(),
+      if (isAdmin) const PetsAdminScreen(),
     ];
 
     return Scaffold(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/pet.dart';
-import '../../services/mascota_service.dart';
+import '../../services/pets_service.dart';
 import '../../widgets/pet_card.dart';
 import 'pet_detail_screen.dart';
 
@@ -13,14 +13,14 @@ class PetScreen extends StatefulWidget {
 }
 
 class _PetScreenState extends State<PetScreen> {
-  late Future<List<Pet>> _future = MascotaService.listar();
+  late Future<List<Pet>> _future = PetsService.listar();
   String _busqueda = '';
   String _especie = 'Todas';
 
   static const _filtros = ['Todas', 'Perro', 'Gato', 'Otro'];
 
   Future<void> _recargar() async {
-    setState(() => _future = MascotaService.listar());
+    setState(() => _future = PetsService.listar());
     await _future.catchError((_) => <Pet>[]);
   }
 

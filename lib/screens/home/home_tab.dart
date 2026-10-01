@@ -3,7 +3,7 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
-import 'package:paw_match/services/mascota_service.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/chip_seleccion.dart';
 import 'package:paw_match/widgets/fundacion_banner.dart';
@@ -23,11 +23,11 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
-  late Future<List<Pet>> _future = MascotaService.listar();
+  late Future<List<Pet>> _future = PetsService.listar();
   bool _paraAdopcion = true; // false = para apadrinar
 
   Future<void> _recargar() async {
-    setState(() => _future = MascotaService.listar());
+    setState(() => _future = PetsService.listar());
     await _future.catchError((_) => <Pet>[]);
   }
 
