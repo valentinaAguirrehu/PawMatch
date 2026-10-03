@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/home/menu_screen.dart';
 import 'package:paw_match/screens/auth/forgot_password_screen.dart';
 import 'package:paw_match/screens/auth/register_screen.dart';
@@ -6,7 +7,7 @@ import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/auth_scaffold.dart';
 import 'package:paw_match/widgets/boton_blanco.dart';
-import 'package:paw_match/widgets/campo_auth.dart';
+import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -87,9 +88,9 @@ class _LoginScreenState extends State<LoginScreen> {
               style: t.bodyMedium?.copyWith(color: Colors.white70),
             ),
             const SizedBox(height: 24),
-            CampoAuth(
+            _CampoLogin(
               controller: _correoCtrl,
-              icono: Icons.email_outlined,
+              icono: const FeatureIcon.sobre(color: AppColors.rosa),
               etiqueta: 'Correo',
               teclado: TextInputType.emailAddress,
               accion: TextInputAction.next,
@@ -97,9 +98,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   (v == null || !v.contains('@')) ? 'Correo inválido' : null,
             ),
             const SizedBox(height: 14),
-            CampoAuth(
+            _CampoLogin(
               controller: _contrasenaCtrl,
-              icono: Icons.lock_outline,
+              icono: const FeatureIcon.cerradura(color: AppColors.rosa),
               etiqueta: 'Contraseña',
               esContrasena: true,
               accion: TextInputAction.done,
@@ -148,6 +149,82 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CampoLogin extends StatefulWidget {
+  final TextEditingController controller;
+  final Widget icono;
+  final String etiqueta;
+  final bool esContrasena;
+  final TextInputType? teclado;
+  final String? Function(String?)? validator;
+  final TextInputAction? accion;
+  final VoidCallback? onEnviar;
+
+  const _CampoLogin({
+    required this.controller,
+    required this.icono,
+    required this.etiqueta,
+    this.esContrasena = false,
+    this.teclado,
+    this.validator,
+    this.accion,
+    this.onEnviar,
+  });
+
+  @override
+  State<_CampoLogin> createState() => _CampoLoginState();
+}
+
+class _CampoLoginState extends State<_CampoLogin> {
+  late bool _oculto = widget.esContrasena;
+
+  OutlineInputBorder _borde([Color? color, double ancho = 0]) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: color == null
+            ? BorderSide.none
+            : BorderSide(color: color, width: ancho),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: widget.controller,
+      obscureText: _oculto,
+      keyboardType: widget.teclado,
+      textInputAction: widget.accion,
+      onFieldSubmitted: widget.onEnviar == null
+          ? null
+          : (_) => widget.onEnviar!(),
+      validator: widget.validator,
+      style: const TextStyle(color: AppColors.texto),
+      decoration: InputDecoration(
+        hintText: widget.etiqueta,
+        filled: true,
+        fillColor: AppColors.blanco,
+        prefixIcon: widget.icono,
+        suffixIcon: widget.esContrasena
+            ? IconButton(
+                tooltip: _oculto ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                onPressed: () => setState(() => _oculto = !_oculto),
+                icon: _oculto
+                    ? const FeatureIcon.ocultarContrasena(color: AppColors.rosa)
+                    : const FeatureIcon.mostrarContrasena(color: AppColors.rosa),
+              )
+            : null,
+        errorStyle: const TextStyle(
+          color: AppColors.blanco,
+          fontWeight: FontWeight.w600,
+        ),
+        border: _borde(),
+        enabledBorder: _borde(),
+        focusedBorder: _borde(AppColors.bordeRosa, 2),
+        errorBorder: _borde(AppColors.blanco, 2),
+        focusedErrorBorder: _borde(AppColors.blanco, 2),
       ),
     );
   }

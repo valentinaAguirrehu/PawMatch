@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
 import 'login_screen.dart';
@@ -54,19 +55,23 @@ class WelcomeScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 22),
                           const _Beneficio(
-                            icono: Icons.pets_outlined,
+                            icono: FeatureIcon.adopcion(color: AppColors.rosa),
                             titulo: 'Adopción',
                             detalle:
                                 'Encuentra al peludito ideal para ti y dale la oportunidad de tener un hogar lleno de amor.',
                           ),
                           const _Beneficio(
-                            icono: Icons.volunteer_activism_outlined,
+                            icono: FeatureIcon.apadrinamiento(
+                              color: AppColors.rosa,
+                            ),
                             titulo: 'Apadrinamiento',
                             detalle:
                                 'Transforma su vida mientras espera una familia. Tu apoyo marca toda la diferencia.',
                           ),
                           const _Beneficio(
-                            icono: Icons.favorite_outline,
+                            icono: FeatureIcon.compatibilidad(
+                              color: AppColors.rosa,
+                            ),
                             titulo: 'Compatibilidad',
                             detalle:
                                 'Descubre qué peludito encaja perfecto con tu estilo de vida y personalidad.',
@@ -98,7 +103,7 @@ class WelcomeScreen extends StatelessWidget {
                     children: [
                       FilledButton.icon(
                         onPressed: () => _abrir(context, const LoginScreen()),
-                        icon: const Icon(Icons.login_rounded, size: 20),
+                        icon: const FeatureIcon.iniciarSesion(),
                         label: const Text('Iniciar sesión'),
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(54),
@@ -109,10 +114,7 @@ class WelcomeScreen extends StatelessWidget {
                       OutlinedButton.icon(
                         onPressed: () =>
                             _abrir(context, const RegisterScreen()),
-                        icon: const Icon(
-                          Icons.person_add_alt_1_outlined,
-                          size: 20,
-                        ),
+                        icon: const FeatureIcon.registrarse(),
                         label: const Text('Registrarse'),
                         style: OutlinedButton.styleFrom(
                           minimumSize: const Size.fromHeight(54),
@@ -192,7 +194,7 @@ class _Encabezado extends StatelessWidget {
 }
 
 class _Beneficio extends StatelessWidget {
-  final IconData icono;
+  final Widget icono;
   final String titulo;
   final String detalle;
 
@@ -217,7 +219,7 @@ class _Beneficio extends StatelessWidget {
               color: AppColors.rosaSuave,
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icono, color: AppColors.rosa, size: 24),
+            child: icono,
           ),
           const SizedBox(width: 14),
           Expanded(
