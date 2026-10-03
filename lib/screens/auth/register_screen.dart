@@ -89,6 +89,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         correo: _correoCtrl.text.trim(),
         telefono: _telefonoCtrl.text.trim(),
         contrasena: _contrasenaCtrl.text,
+        fechaNacimiento: _nacimiento!,
       );
 
       if (!mounted) return;

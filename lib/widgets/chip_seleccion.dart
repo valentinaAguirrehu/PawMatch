@@ -4,7 +4,7 @@ import 'package:paw_match/core/app_colors.dart';
 /// Píldora seleccionable (Adopción / Apadrinamiento).
 class ChipSeleccion extends StatelessWidget {
   final String texto;
-  final IconData icono;
+  final Widget icono;
   final bool seleccionado;
   final VoidCallback onTap;
   const ChipSeleccion({
@@ -33,7 +33,10 @@ class ChipSeleccion extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icono, size: 18, color: color),
+              IconTheme(
+                data: IconThemeData(color: color, size: 18),
+                child: icono,
+              ),
               const SizedBox(width: 8),
               Text(
                 texto,

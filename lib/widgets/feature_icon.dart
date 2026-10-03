@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Iconos de autenticación. Las pantallas solo los llaman.
+/// Iconos de la app. Las pantallas solo los llaman.
 class FeatureIcon extends StatelessWidget {
   final IconData icono;
   final double tamano;
@@ -61,8 +61,38 @@ class FeatureIcon extends StatelessWidget {
   const FeatureIcon.persona({super.key, this.tamano = 24, this.color})
     : icono = Icons.person_outline;
 
+  const FeatureIcon.perfil({super.key, this.tamano = 24, this.color})
+    : icono = Icons.account_circle_outlined;
+
+  const FeatureIcon.editar({super.key, this.tamano = 24, this.color})
+    : icono = Icons.edit_outlined;
+
+  const FeatureIcon.direccion({super.key, this.tamano = 24, this.color})
+    : icono = Icons.location_on_outlined;
+
+  const FeatureIcon.documento({super.key, this.tamano = 24, this.color})
+    : icono = Icons.badge_outlined;
+
   const FeatureIcon.telefono({super.key, this.tamano = 24, this.color})
     : icono = Icons.phone_outlined;
+
+  const FeatureIcon.inicio({super.key, this.tamano = 24, this.color})
+    : icono = Icons.home_rounded;
+
+  const FeatureIcon.cerrarSesion({super.key, this.tamano = 24, this.color})
+    : icono = Icons.logout;
+
+  const FeatureIcon.gestionar({super.key, this.tamano = 24, this.color})
+    : icono = Icons.edit_note;
+
+  const FeatureIcon.buscar({super.key, this.tamano = 24, this.color})
+    : icono = Icons.search;
+
+  const FeatureIcon.apadrinar({super.key, this.tamano = 24, this.color})
+    : icono = Icons.volunteer_activism;
+
+  const FeatureIcon.sinConexion({super.key, this.tamano = 24, this.color})
+    : icono = Icons.cloud_off;
 
   static const huella = '🐾';
 

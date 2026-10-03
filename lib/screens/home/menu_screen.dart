@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/screens/admin/pets_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
+import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/nav_flotante.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -34,6 +36,7 @@ class _MenuScreenState extends State<MenuScreen> {
     final paginas = <Widget>[
       HomeTab(onVerMascotas: () => _irA(1), onCerrarSesion: _cerrarSesion),
       const PetScreen(),
+      const ProfileScreen(),
       if (isAdmin) const PetsAdminScreen(),
     ];
 
@@ -46,7 +49,7 @@ class _MenuScreenState extends State<MenuScreen> {
               actions: [
                 IconButton(
                   tooltip: 'Cerrar sesión',
-                  icon: const Icon(Icons.logout),
+                  icon: const FeatureIcon.cerrarSesion(),
                   onPressed: _cerrarSesion,
                 ),
               ],
@@ -56,9 +59,10 @@ class _MenuScreenState extends State<MenuScreen> {
         indice: _index,
         onTap: _irA,
         items: [
-          const NavItem(Icons.home_rounded, 'Inicio'),
-          const NavItem(Icons.pets, 'Mascotas'),
-          if (isAdmin) const NavItem(Icons.edit_note, 'Gestionar'),
+          const NavItem(FeatureIcon.inicio(), 'Inicio'),
+          const NavItem(FeatureIcon.mascota(tamano: 24), 'Mascotas'),
+          const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
+          if (isAdmin) const NavItem(FeatureIcon.gestionar(), 'Gestionar'),
         ],
       ),
     );
