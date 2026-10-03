@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 
 class NavItem {
-  final IconData icono;
+  final Widget icono;
   final String etiqueta;
   const NavItem(this.icono, this.etiqueta);
 }
@@ -53,9 +53,11 @@ class NavFlotante extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: i == indice ? Colors.white : Colors.transparent,
                   ),
-                  child: Icon(
-                    items[i].icono,
-                    color: i == indice ? AppColors.rosa : Colors.white70,
+                  child: IconTheme(
+                    data: IconThemeData(
+                      color: i == indice ? AppColors.rosa : Colors.white70,
+                    ),
+                    child: items[i].icono,
                   ),
                 ),
               ),

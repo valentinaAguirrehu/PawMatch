@@ -6,6 +6,7 @@ import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/chip_seleccion.dart';
+import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/fundacion_banner.dart';
 import 'package:paw_match/widgets/pet_card_color.dart';
 
@@ -102,7 +103,7 @@ class _HomeTabState extends State<HomeTab> {
                 IconButton.filledTonal(
                   tooltip: 'Cerrar sesión',
                   onPressed: widget.onCerrarSesion,
-                  icon: const Icon(Icons.logout),
+                  icon: const FeatureIcon.cerrarSesion(),
                 ),
               ],
             ),
@@ -124,7 +125,7 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.search, color: AppColors.texto),
+                      const FeatureIcon.buscar(color: AppColors.texto),
                       const SizedBox(width: 10),
                       Text('Buscar mascotas...', style: t.bodyLarge),
                     ],
@@ -148,14 +149,14 @@ class _HomeTabState extends State<HomeTab> {
               children: [
                 ChipSeleccion(
                   texto: 'Adopción',
-                  icono: Icons.pets,
+                  icono: const FeatureIcon.mascota(tamano: 18),
                   seleccionado: _paraAdopcion,
                   onTap: () => setState(() => _paraAdopcion = true),
                 ),
                 const SizedBox(width: 10),
                 ChipSeleccion(
                   texto: 'Apadrinamiento',
-                  icono: Icons.volunteer_activism,
+                  icono: const FeatureIcon.apadrinar(tamano: 18),
                   seleccionado: !_paraAdopcion,
                   onTap: () => setState(() => _paraAdopcion = false),
                 ),
@@ -196,7 +197,7 @@ class _HomeTabState extends State<HomeTab> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.cloud_off, size: 40),
+                          const FeatureIcon.sinConexion(tamano: 40),
                           const SizedBox(height: 8),
                           const Text('No pudimos cargar las mascotas'),
                           TextButton(

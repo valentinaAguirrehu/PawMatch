@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/services/recuperacion_service.dart';
 import 'package:paw_match/widgets/auth_scaffold.dart';
 import 'package:paw_match/widgets/boton_blanco.dart';
-import 'package:paw_match/widgets/campo_auth.dart';
+import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
 /// Recuperar contraseña en dos pasos:
@@ -97,9 +98,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 24),
             if (paso1) ...[
-              CampoAuth(
+              _CampoRecuperacion(
                 controller: _correo,
-                icono: Icons.email_outlined,
+                icono: const FeatureIcon.sobre(color: AppColors.rosa),
                 etiqueta: 'Correo',
                 teclado: TextInputType.emailAddress,
                 accion: TextInputAction.done,
@@ -109,27 +110,27 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               const SizedBox(height: 20),
               BotonBlanco(texto: 'Enviar código', cargando: _cargando, onPressed: _enviarCodigo),
             ] else ...[
-              CampoAuth(
+              _CampoRecuperacion(
                 controller: _codigo,
-                icono: Icons.pin_outlined,
+                icono: const FeatureIcon.pin(color: AppColors.rosa),
                 etiqueta: 'Código de 6 dígitos',
                 teclado: TextInputType.number,
                 accion: TextInputAction.next,
                 validator: (v) => (v == null || v.trim().length != 6) ? 'Ingresa los 6 dígitos' : null,
               ),
               const SizedBox(height: 14),
-              CampoAuth(
+              _CampoRecuperacion(
                 controller: _nueva,
-                icono: Icons.lock_outline,
+                icono: const FeatureIcon.cerradura(color: AppColors.rosa),
                 etiqueta: 'Contraseña nueva',
                 esContrasena: true,
                 accion: TextInputAction.next,
                 validator: (v) => (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
               ),
               const SizedBox(height: 14),
-              CampoAuth(
+              _CampoRecuperacion(
                 controller: _confirmar,
-                icono: Icons.lock_reset,
+                icono: const FeatureIcon.restablecer(color: AppColors.rosa),
                 etiqueta: 'Repite la contraseña',
                 esContrasena: true,
                 accion: TextInputAction.done,
@@ -147,6 +148,82 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CampoRecuperacion extends StatefulWidget {
+  final TextEditingController controller;
+  final Widget icono;
+  final String etiqueta;
+  final bool esContrasena;
+  final TextInputType? teclado;
+  final String? Function(String?)? validator;
+  final TextInputAction? accion;
+  final VoidCallback? onEnviar;
+
+  const _CampoRecuperacion({
+    required this.controller,
+    required this.icono,
+    required this.etiqueta,
+    this.esContrasena = false,
+    this.teclado,
+    this.validator,
+    this.accion,
+    this.onEnviar,
+  });
+
+  @override
+  State<_CampoRecuperacion> createState() => _CampoRecuperacionState();
+}
+
+class _CampoRecuperacionState extends State<_CampoRecuperacion> {
+  late bool _oculto = widget.esContrasena;
+
+  OutlineInputBorder _borde([Color? color, double ancho = 0]) =>
+      OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: color == null
+            ? BorderSide.none
+            : BorderSide(color: color, width: ancho),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: widget.controller,
+      obscureText: _oculto,
+      keyboardType: widget.teclado,
+      textInputAction: widget.accion,
+      onFieldSubmitted: widget.onEnviar == null
+          ? null
+          : (_) => widget.onEnviar!(),
+      validator: widget.validator,
+      style: const TextStyle(color: AppColors.texto),
+      decoration: InputDecoration(
+        hintText: widget.etiqueta,
+        filled: true,
+        fillColor: AppColors.blanco,
+        prefixIcon: widget.icono,
+        suffixIcon: widget.esContrasena
+            ? IconButton(
+                tooltip: _oculto ? 'Mostrar contraseña' : 'Ocultar contraseña',
+                onPressed: () => setState(() => _oculto = !_oculto),
+                icon: _oculto
+                    ? const FeatureIcon.ocultarContrasena(color: AppColors.rosa)
+                    : const FeatureIcon.mostrarContrasena(color: AppColors.rosa),
+              )
+            : null,
+        errorStyle: const TextStyle(
+          color: AppColors.blanco,
+          fontWeight: FontWeight.w600,
+        ),
+        border: _borde(),
+        enabledBorder: _borde(),
+        focusedBorder: _borde(AppColors.bordeRosa, 2),
+        errorBorder: _borde(AppColors.blanco, 2),
+        focusedErrorBorder: _borde(AppColors.blanco, 2),
       ),
     );
   }
