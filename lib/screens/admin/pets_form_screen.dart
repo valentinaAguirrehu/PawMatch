@@ -8,6 +8,8 @@ import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 
+/// Formulario para agregar (pet == null) o editar una mascota.
+/// Al guardar con éxito hace Navigator.pop(context, true).
 class PetsFormScreen extends StatefulWidget {
   final Pet? pet;
   const PetsFormScreen({super.key, this.pet});
@@ -260,9 +262,9 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
     Widget contenido;
     if (_fotoBytes != null) {
-      contenido = Image.memory(_fotoBytes!, fit: BoxFit.cover);
+      contenido = Image.memory(_fotoBytes!, fit: BoxFit.contain);
     } else if (tieneFoto) {
-      contenido = PetImage(url: _fotoActual);
+      contenido = PetImage(url: _fotoActual, fit: BoxFit.contain);
     } else {
       contenido = const Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -292,7 +294,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
           child: CustomPaint(
             painter: _BordePunteado(),
             child: Container(
-              height: 180,
+              height: 260,
               width: double.infinity,
               margin: const EdgeInsets.all(1),
               decoration: BoxDecoration(
