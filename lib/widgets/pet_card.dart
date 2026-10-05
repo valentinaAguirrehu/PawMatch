@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:paw_match/core/app_colors.dart';
 import '../models/pet.dart';
 import '../services/api_service.dart';
 
@@ -40,28 +41,29 @@ class PetImage extends StatelessWidget {
   }
 }
 
-/// Etiqueta de color con el estado de adopción.
+/// Etiqueta con el estado de adopción (solo rosado y blanco).
 class EstadoChip extends StatelessWidget {
   final String estado;
   const EstadoChip({super.key, required this.estado});
 
   @override
   Widget build(BuildContext context) {
-    final color = switch (estado) {
-      'disponible' => Colors.green,
-      'en_proceso' => Colors.amber.shade800,
-      _ => Colors.grey,
+    // disponible: rosado intenso · en proceso: rosado suave · adoptado: gris neutro
+    final (Color letra, Color fondo) = switch (estado) {
+      'disponible' => (Colors.white, AppColors.rosa),
+      'en_proceso' => (AppColors.rosa, AppColors.rosaClaro),
+      _ => (AppColors.texto.withValues(alpha: 0.6), AppColors.rosaSuave),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: fondo,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         etiquetaEstadoAdopcion(estado),
         style: TextStyle(
-          color: color,
+          color: letra,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
