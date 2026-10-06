@@ -115,6 +115,28 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+router.put('/:id/contrasena', async (req, res) => {
+  const { contrasena } = req.body;
+  if (!contrasena || String(contrasena).length < 6) {
+    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+  }
+
+  try {
+    const contrasena_hash = await bcrypt.hash(contrasena, 10);
+    const resultado = await pool.query(
+      'UPDATE usuario SET contrasena_hash = $1 WHERE id_usuario = $2 RETURNING id_usuario',
+      [contrasena_hash, req.params.id]
+    );
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json({ mensaje: 'Contraseña actualizada' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo actualizar la contraseña' });
+  }
+});
+
 router.put('/:id', async (req, res) => {
   const { nombres, apellidos, correo, telefono, direccion, documento_identidad, fecha_nacimiento, foto_perfil } = req.body;
 
