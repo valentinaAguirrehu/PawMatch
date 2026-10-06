@@ -5,7 +5,6 @@ import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/dato_detalle.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
-import 'package:paw_match/widgets/rasgo_barra.dart';
 import 'package:paw_match/widgets/tarjeta_blanca.dart';
 
 /// Detalle de una mascota (RF04 / RF05): foto circular, datos, descripción,
@@ -276,6 +275,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     ),
   );
 
+  // Personalidad: solo se muestran las etiquetas de los rasgos que destacan,
+  // sin la escala de 1 a 5.
+  //   valor 1-2 => texto del extremo bajo  (ej: "Muy tranquila")
+  //   valor 4-5 => texto del extremo alto  (ej: "Muy activa")
+  //   valor 3   => no se muestra (el rasgo no destaca)
   Widget _personalidad() => FutureBuilder<Pet>(
     future: _completa,
     builder: (context, snap) {
@@ -298,20 +302,40 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           ],
         );
       }
+
       final valores = snap.data!.personalidad;
-      return Column(
-        children: [
-          for (final r in rasgosMascota)
-            RasgoBarra(
-              icono: r.icono,
-              titulo: r.titulo,
-              valor: (valores[r.clave] ?? 3).toInt().clamp(1, 5).toInt(),
-              minimo: '${r.minimo}',
-              maximo: '${r.maximo}',
-            ),
-        ],
-      );
+      if (valores.isEmpty) {
+        return const Text('Aún no hay datos de personalidad.');
+      }
+
+      final chips = <Widget>[];
+      for (final r in rasgosMascota) {
+        final v = valores[r.clave];
+        if (v == null || v == 3) continue;
+        chips.add(_chipRasgo(r.icono, v <= 2 ? r.minimo : r.maximo));
+      }
+
+      if (chips.isEmpty) {
+        return const Text('Tiene una personalidad equilibrada.');
+      }
+      return Wrap(spacing: 8, runSpacing: 8, children: chips);
     },
+  );
+
+  Widget _chipRasgo(IconData icono, String texto) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    decoration: BoxDecoration(
+      color: AppColors.rosaClaro,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icono, size: 16, color: AppColors.rosa),
+        const SizedBox(width: 6),
+        Text(texto, style: Theme.of(context).textTheme.bodyMedium),
+      ],
+    ),
   );
 
   // Botones Adoptar / Apadrinar fijos abajo

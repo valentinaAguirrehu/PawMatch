@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 
 /// Píldora seleccionable (Adopción / Apadrinamiento).
+/// `icono` es un Widget: puede ser `Icon(Icons.pets)` o tu `FeatureIcon.mascota(...)`.
 class ChipSeleccion extends StatelessWidget {
   final String texto;
   final Widget icono;
