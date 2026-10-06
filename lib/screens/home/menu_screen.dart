@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/screens/admin/admins_admin_screen.dart';
 import 'package:paw_match/screens/admin/pets_admin_screen.dart';
+import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
+import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
 import 'package:paw_match/screens/users/profile_screen.dart';
@@ -7,6 +11,20 @@ import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/nav_flotante.dart';
+
+/// Opciones del menú desplegable del administrador (último ícono de la barra).
+enum _Gestion {
+  mascotas('Mascotas', Icons.pets),
+  adopcion('Adopción', Icons.favorite_border),
+  apadrinamiento('Apadrinamiento', Icons.volunteer_activism),
+  seguimiento('Seguimiento de adopción', Icons.timeline),
+  usuarios('Usuarios', Icons.people_outline),
+  administradores('Administradores', Icons.admin_panel_settings_outlined);
+
+  final String etiqueta;
+  final IconData icono;
+  const _Gestion(this.etiqueta, this.icono);
+}
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -17,6 +35,7 @@ class MenuScreen extends StatefulWidget {
 
 class _MenuScreenState extends State<MenuScreen> {
   int _index = 0;
+  _Gestion _seccion = _Gestion.mascotas;
 
   // Cada pestaña tiene su propio Navigator: las pantallas que se abren desde
   // una pestaña (ej: el detalle de la mascota) aparecen DENTRO del menú,
@@ -37,21 +56,93 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
+  /// Cambia de pestaña (o de sección de gestión) con un navegador nuevo.
+  void _cambiarA(int i, {_Gestion? seccion}) {
+    setState(() {
+      _index = i;
+      if (seccion != null) _seccion = seccion;
+      _enDetalle = false;
+      _navKey = GlobalKey<NavigatorState>();
+      _obs = _ObservadorPaginas(_alCambiarPila);
+    });
+  }
+
   void _alTocarPestana(int i) {
+    // Último ícono (solo administrador): abre el menú desplegable
+    if (Session.isAdmin && i == 3) {
+      _mostrarMenuGestion();
+      return;
+    }
     if (i == _index) {
       // tocar la pestaña actual vuelve a su pantalla principal
       _navKey.currentState?.popUntil((r) => r.isFirst);
       return;
     }
-    setState(() {
-      _index = i;
-      _enDetalle = false;
-      _navKey = GlobalKey<NavigatorState>(); // navegador nuevo para la pestaña
-      _obs = _ObservadorPaginas(_alCambiarPila);
-    });
+    _cambiarA(i);
   }
 
   void _irA(int i) => _alTocarPestana(i);
+
+  Future<void> _mostrarMenuGestion() async {
+    final tam = MediaQuery.of(context).size;
+    final inferior = MediaQuery.of(context).padding.bottom;
+
+    // Ajusta estos dos números si el menú queda muy pegado o muy separado
+    // de la barra flotante.
+    const altoBarra = 96.0; // alto de la barra flotante + su margen
+    final altoMenu = _Gestion.values.length * 48.0 + 16;
+
+    final elegida = await showMenu<_Gestion>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        tam.width - 270, // pegado a la derecha, bajo el último ícono
+        tam.height - inferior - altoBarra - altoMenu,
+        16,
+        0,
+      ),
+      color: Colors.white,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      items: [
+        for (final g in _Gestion.values)
+          PopupMenuItem<_Gestion>(
+            value: g,
+            child: Row(
+              children: [
+                Icon(g.icono, size: 20, color: AppColors.rosa),
+                const SizedBox(width: 12),
+                Text(g.etiqueta),
+              ],
+            ),
+          ),
+      ],
+    );
+
+    if (elegida != null && mounted) _cambiarA(3, seccion: elegida);
+  }
+
+  /// Pantalla que se muestra en la pestaña "Gestionar" según la opción elegida.
+  Widget _paginaGestion() => switch (_seccion) {
+    _Gestion.mascotas => const PetsAdminScreen(),
+    _Gestion.adopcion => const SeccionAdminScreen(
+      titulo: 'Solicitudes de adopción',
+      icono: Icons.favorite_border,
+      detalle: 'Aquí revisarás y responderás las solicitudes de adopción.',
+    ),
+    _Gestion.apadrinamiento => const SeccionAdminScreen(
+      titulo: 'Solicitudes de apadrinamiento',
+      icono: Icons.volunteer_activism,
+      detalle:
+          'Aquí revisarás y responderás las solicitudes de apadrinamiento.',
+    ),
+    _Gestion.seguimiento => const SeccionAdminScreen(
+      titulo: 'Seguimiento de adopción',
+      icono: Icons.timeline,
+      detalle: 'Aquí harás el seguimiento de las mascotas ya adoptadas.',
+    ),
+    _Gestion.usuarios => const UsersAdminScreen(),
+    _Gestion.administradores => const AdminsAdminScreen(),
+  };
 
   void _cerrarSesion() {
     Session.cerrar();
@@ -70,7 +161,7 @@ class _MenuScreenState extends State<MenuScreen> {
       HomeTab(onVerMascotas: () => _irA(1), onCerrarSesion: _cerrarSesion),
       const PetScreen(),
       const ProfileScreen(),
-      if (isAdmin) const PetsAdminScreen(),
+      if (isAdmin) _paginaGestion(),
     ];
     final paginaActual = paginas[_index];
 
