@@ -27,12 +27,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _telefonoCtrl = TextEditingController();
   final _documentoCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
+  final _claveKey = GlobalKey<FormState>();
+  final _claveCtrl = TextEditingController();
+  final _confirmarCtrl = TextEditingController();
 
   User? _usuario;
   DateTime? _nacimiento;
   Uint8List? _fotoNueva;
   String _fotoNombre = 'perfil.jpg';
   bool _editando = false;
+  bool _cambiandoClave = false;
+  bool _ocultarClave = true;
+  bool _ocultarConfirmar = true;
+  bool _guardandoClave = false;
   bool _cargando = true;
   String? _error;
 
@@ -57,6 +64,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _telefonoCtrl.dispose();
     _documentoCtrl.dispose();
     _direccionCtrl.dispose();
+    _claveCtrl.dispose();
+    _confirmarCtrl.dispose();
     super.dispose();
   }
 
@@ -213,6 +222,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _abrirCambioClave() => setState(() => _cambiandoClave = true);
+
+  void _cerrarCambioClave() {
+    _claveCtrl.clear();
+    _confirmarCtrl.clear();
+    setState(() {
+      _cambiandoClave = false;
+      _ocultarClave = true;
+      _ocultarConfirmar = true;
+    });
+  }
+
+  Future<void> _guardarClave() async {
+    final usuario = _usuario;
+    if (usuario == null || !_claveKey.currentState!.validate()) return;
+
+    setState(() => _guardandoClave = true);
+    try {
+      await ApiService.cambiarContrasena(
+        id: usuario.id,
+        contrasena: _claveCtrl.text,
+      );
+      if (!mounted) return;
+      _cerrarCambioClave();
+      setState(() => _guardandoClave = false);
+      _aviso('Contraseña actualizada', exito: true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _guardandoClave = false);
+      _aviso(e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   String _fecha(DateTime fecha) =>
       '${fecha.day} ${_meses[fecha.month - 1]} ${fecha.year}';
 
@@ -233,11 +275,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final texto = Theme.of(context).textTheme;
     final fotoPendiente = usuario.fotoPendiente && _fotoNueva == null;
 
-    return Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        children: [
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      children: [
+        Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
           _EncabezadoPerfil(
             nombre: usuario.nombreCompleto,
             correo: usuario.correo,
@@ -358,7 +403,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: const Text('Cancelar'),
             ),
           ],
-        ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 28),
+      Text(
+        'Contraseña',
+        style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 12),
+      if (!_cambiandoClave)
+        OutlinedButton.icon(
+          onPressed: _guardandoClave ? null : _abrirCambioClave,
+          icon: const FeatureIcon.cerradura(color: AppColors.rosa),
+          label: const Text('Modificar contraseña'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+        )
+      else
+        Form(
+          key: _claveKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _clave(
+                controller: _claveCtrl,
+                etiqueta: 'Nueva contraseña',
+                oculta: _ocultarClave,
+                onVer: () => setState(() => _ocultarClave = !_ocultarClave),
+                validator: (v) =>
+                    (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
+              ),
+              _clave(
+                controller: _confirmarCtrl,
+                etiqueta: 'Confirmar contraseña',
+                oculta: _ocultarConfirmar,
+                onVer: () => setState(() => _ocultarConfirmar = !_ocultarConfirmar),
+                validator: (v) =>
+                    v != _claveCtrl.text ? 'Las contraseñas no coinciden' : null,
+              ),
+              FilledButton(
+                onPressed: _guardandoClave ? null : _guardarClave,
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+                child: _guardandoClave
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          color: AppColors.blanco,
+                        ),
+                      )
+                    : const Text('Actualizar contraseña'),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _guardandoClave ? null : _cerrarCambioClave,
+                child: const Text('Cancelar'),
+              ),
+            ],
+          ),
+        ),
+    ],
+    );
+  }
+
+  Widget _clave({
+    required TextEditingController controller,
+    required String etiqueta,
+    required bool oculta,
+    required VoidCallback onVer,
+    required String? Function(String?) validator,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: controller,
+        enabled: !_guardandoClave,
+        obscureText: oculta,
+        validator: validator,
+        decoration: InputDecoration(
+          labelText: etiqueta,
+          prefixIcon: const FeatureIcon.cerradura(color: AppColors.rosa),
+          suffixIcon: IconButton(
+            tooltip: oculta ? 'Mostrar contraseña' : 'Ocultar contraseña',
+            onPressed: onVer,
+            icon: oculta
+                ? const FeatureIcon.ocultarContrasena(color: AppColors.rosa)
+                : const FeatureIcon.mostrarContrasena(color: AppColors.rosa),
+          ),
+        ),
       ),
     );
   }

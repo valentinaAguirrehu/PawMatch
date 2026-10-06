@@ -93,6 +93,21 @@ class ApiService {
     throw Exception(data['error'] ?? 'No se pudo guardar el perfil');
   }
 
+  static Future<void> cambiarContrasena({
+    required String id,
+    required String contrasena,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/usuarios/$id/contrasena'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'contrasena': contrasena}),
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'No se pudo actualizar la contraseña');
+    }
+  }
+
   static Future<String> subirFotoPerfil(Uint8List bytes, String nombreArchivo) async {
     final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/usuarios/foto'));
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
