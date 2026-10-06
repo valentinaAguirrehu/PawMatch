@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node.js / Backend (paw_match_backend) related
+paw_match_backend/node_modules/
+paw_match_backend/.env
+paw_match_backend/npm-debug.log*
+paw_match_backend/.npm/
+paw_match_backend/uploads/
+android/build/
