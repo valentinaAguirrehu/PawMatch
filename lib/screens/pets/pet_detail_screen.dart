@@ -78,7 +78,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           valor: '$edad ${edad == 1 ? 'año' : 'años'}',
         ),
       if (_t(p.sexo).isNotEmpty)
-        DatoDetalle(icono: Icons.wc, etiqueta: 'Sexo', valor: _t(p.sexo)),
+        DatoDetalle(
+          icono: Icons.pets, // huella en lugar del ícono hombre/mujer
+          etiqueta: 'Sexo',
+          valor: _t(p.sexo),
+        ),
       if (_t(p.raza).isNotEmpty)
         DatoDetalle(
           icono: Icons.category_outlined,
@@ -312,7 +316,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       for (final r in rasgosMascota) {
         final v = valores[r.clave];
         if (v == null || v == 3) continue;
-        chips.add(_chipRasgo(r.icono, v <= 2 ? r.minimo : r.maximo));
+        // El texto concuerda con el sexo: "Muy activo" / "Muy activa", etc.
+        final texto = v <= 2
+            ? r.minimoPara(widget.pet.sexo)
+            : r.maximoPara(widget.pet.sexo);
+        chips.add(_chipRasgo(r.icono, texto));
       }
 
       if (chips.isEmpty) {
