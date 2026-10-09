@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/core/layout.dart';
 import 'package:paw_match/models/pet.dart';
@@ -9,12 +10,11 @@ import 'package:paw_match/screens/auth/registro_screen.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/bloque_landing.dart';
 import 'package:paw_match/widgets/boton_landing.dart';
-import 'package:paw_match/widgets/chip_seleccion.dart';
-import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/landing_barra.dart';
-import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 import 'package:paw_match/widgets/perrito_landing_card.dart';
+import 'package:paw_match/widgets/redes_sociales.dart';
 import 'package:paw_match/widgets/stat_logro.dart';
+import 'package:paw_match/widgets/tarjeta_ayuda.dart';
 import 'package:paw_match/widgets/titulo_landing.dart';
 
 /// Medidas calculadas según el ancho de la pantalla (celular, tablet o computador).
@@ -30,8 +30,8 @@ class _Medidas {
   );
 }
 
-/// Página de inicio (antes de iniciar sesión): quiénes somos, logros y perritos.
-/// Arriba siempre están los botones de Iniciar sesión y Registrarse.
+/// Página de inicio (antes de iniciar sesión): presenta la Fundación, sus logros,
+/// los perritos, cómo ayudar y cómo encontrarla. Arriba: Iniciar sesión y Registrarse.
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
 
@@ -43,7 +43,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   List<Pet> _pets = [];
   bool _cargando = true;
   bool _error = false;
-  bool _paraAdopcion = true; // false = para apadrinar
+
+  final _kAyuda = GlobalKey();
 
   @override
   void initState() {
@@ -76,15 +77,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     context,
     MaterialPageRoute(builder: (_) => const LoginScreen()),
   );
-
   void _irRegistro() => Navigator.push(
     context,
     MaterialPageRoute(builder: (_) => const RegistroScreen()),
   );
 
-  bool _esRecorte(String? foto) {
-    final f = (foto ?? '').toLowerCase();
-    return f.endsWith('.png') || f.endsWith('.webp'); // sin fondo: se ve entera
+  void _bajarA(GlobalKey clave) {
+    final contexto = clave.currentContext;
+    if (contexto == null) return;
+    Scrollable.ensureVisible(
+      contexto,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeInOut,
+    );
   }
 
   /// Al tocar un perrito o "Quiero adoptar / apadrinar": invita a crear cuenta o entrar.
@@ -96,50 +101,54 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
       constraints: const BoxConstraints(maxWidth: 480),
       builder: (ctx) {
         final t = Theme.of(ctx).textTheme;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.pets, size: 40, color: AppColors.rosa),
-              const SizedBox(height: 12),
-              Text(
-                titulo,
-                textAlign: TextAlign.center,
-                style: t.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.texto,
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.pets, size: 40, color: AppColors.rosa),
+                const SizedBox(height: 12),
+                Text(
+                  titulo,
+                  textAlign: TextAlign.center,
+                  style: t.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.texto,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Para continuar necesitas una cuenta. Es gratis y toma un minuto.',
-                textAlign: TextAlign.center,
-                style: t.bodyLarge,
-              ),
-              const SizedBox(height: 20),
-              BotonLanding(
-                texto: 'Crear cuenta',
-                expandido: true,
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _irRegistro();
-                },
-              ),
-              const SizedBox(height: 10),
-              BotonLanding(
-                texto: 'Ya tengo cuenta',
-                expandido: true,
-                relleno: false,
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  _irLogin();
-                },
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  'Para continuar necesitas una cuenta. Es gratis y toma un minuto.',
+                  textAlign: TextAlign.center,
+                  style: t.bodyLarge,
+                ),
+                const SizedBox(height: 20),
+                BotonLanding(
+                  texto: 'Crear cuenta',
+                  expandido: true,
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _irRegistro();
+                  },
+                ),
+                const SizedBox(height: 10),
+                BotonLanding(
+                  texto: 'Ya tengo cuenta',
+                  expandido: true,
+                  relleno: false,
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _irLogin();
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -160,6 +169,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       contenido - 2 * interior,
       escritorio ? 40 : 28,
     );
+    const separacion = SizedBox(height: 16);
 
     return Scaffold(
       backgroundColor: AppColors.rosaSuave,
@@ -174,21 +184,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     maxWidth: Layout.anchoMaximo,
                   ),
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(pad, 16, pad, 24),
+                    padding: EdgeInsets.fromLTRB(pad, 16, pad, 90),
                     child: Column(
                       children: [
                         _hero(m),
-                        const SizedBox(height: 16),
-                        _quienesSomos(m),
-                        const SizedBox(height: 16),
-                        _logros(m),
-                        const SizedBox(height: 16),
+                        separacion,
+                        _rescatista(m),
+                        separacion,
+                        _mision(m),
+                        separacion,
                         _perritos(m),
-                        const SizedBox(height: 16),
-                        _cta(m),
-                        const SizedBox(height: 24),
+                        separacion,
+                        KeyedSubtree(key: _kAyuda, child: _ayuda(m)),
+                        const SizedBox(height: 12),
                         Text(
-                          '© ${DateTime.now().year} Paw Match · ${FundacionInfo.nombre} · San Juan de Pasto',
+                          '© ${DateTime.now().year} Paw Match · ${FundacionInfo.nombre} · ${FundacionInfo.ciudad}',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
@@ -206,58 +216,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   // ───────────── 1. Presentación ─────────────
   Widget _hero(_Medidas m) {
+    final t = Theme.of(context).textTheme;
     final textos = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TituloLanding(
-          texto: 'Conoce a quienes',
-          acento: 'esperan un hogar',
-          color: Colors.white,
-          tamano: m.tTitulo + 4,
+          texto: 'Conoce nuestra',
+          acento: FundacionInfo.nombre,
+          color: AppColors.texto,
+          colorAcento: AppColors.rosa,
+          tamano: m.tTitulo + 2,
         ),
         const SizedBox(height: 16),
         Text(
-          '${FundacionInfo.resumen}. Adopta o apadrina a un peludito de la ${FundacionInfo.nombre} y haz la diferencia hoy.',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            height: 1.5,
-          ),
-        ),
-        const SizedBox(height: 20),
-        const _Punto(
-          titulo: 'Adopción',
-          texto:
-              'Dale a un peludito la oportunidad de tener un hogar lleno de amor.',
-        ),
-        const SizedBox(height: 14),
-        const _Punto(
-          titulo: 'Apadrinamiento',
-          texto: 'Apoya su cuidado mientras espera una familia, sin adoptarlo.',
-        ),
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            BotonLanding(
-              texto: 'Quiero adoptar',
-              sobreRosa: true,
-              onPressed: () => _pedirCuenta(adopcion: true),
-            ),
-            BotonLanding(
-              texto: 'Quiero apadrinar',
-              sobreRosa: true,
-              relleno: false,
-              onPressed: () => _pedirCuenta(adopcion: false),
-            ),
-          ],
+          'Nos encontramos ubicados en ${FundacionInfo.ciudad}.\n\n'
+          '${FundacionInfo.historia}',
+          style: t.bodyLarge?.copyWith(height: 1.55),
         ),
       ],
     );
 
     return BloqueLanding(
-      color: AppColors.rosa,
+      color: Colors.white,
       padding: EdgeInsets.all(m.interior),
       child: m.escritorio
           ? Row(
@@ -265,84 +245,65 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               children: [
                 Expanded(flex: 6, child: textos),
                 const SizedBox(width: 32),
-                Expanded(flex: 5, child: _collage(260)),
+                Expanded(flex: 5, child: _heroImagen(340)),
               ],
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [textos, const SizedBox(height: 24), _collage(170)],
+              children: [textos, const SizedBox(height: 28), _heroImagen(300)],
             ),
     );
   }
 
-  /// Dos fotos de perritos reales; si aún no hay, el logo.
-  Widget _collage(double alto) {
-    final conFoto = _pets
-        .where((p) => (p.foto ?? '').isNotEmpty)
-        .take(2)
-        .toList();
-    if (conFoto.isEmpty) {
-      return Center(
-        child: Container(
-          width: alto,
-          height: alto,
-          padding: EdgeInsets.all(alto * 0.12),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-          ),
-          child: ClipOval(
-            child: Image.asset(
-              'assets/images/logo.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) =>
-                  Icon(Icons.pets, size: alto * 0.4, color: AppColors.rosa),
+  /// Imagen de presentación de la Fundación, sin fotos de mascotas de la base de datos.
+  Widget _heroImagen(double alto) {
+    return SizedBox(
+      height: alto,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: alto * 0.92,
+            height: alto * 0.92,
+            decoration: const BoxDecoration(
+              color: AppColors.rosa,
+              shape: BoxShape.circle,
             ),
           ),
-        ),
-      );
-    }
-
-    Widget foto(Pet p) => Container(
-      height: alto,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: PetImage(
-        url: p.foto,
-        fit: _esRecorte(p.foto) ? BoxFit.contain : BoxFit.cover,
-      ),
-    );
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: foto(conFoto[0])),
-        if (conFoto.length > 1) ...[
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 28),
-              child: foto(conFoto[1]),
+          SizedBox(
+            width: alto * 0.74,
+            height: alto * 0.86,
+            child: ClipOval(
+              child: Image.asset(
+                'assets/fundacion/Maritzanimada.jpg',
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => const ColoredBox(
+                  color: AppColors.rosaClaro,
+                  child: Center(
+                    child: Icon(
+                      Icons.volunteer_activism,
+                      color: AppColors.rosa,
+                      size: 80,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 
-  // ───────────── 2. Quiénes somos ─────────────
-  Widget _quienesSomos(_Medidas m) {
-    const mision = _TarjetaTexto(
-      icono: Icons.flag_outlined,
-      titulo: 'Misión',
+  // ───────────── 2. Nuestra misión ─────────────
+  Widget _mision(_Medidas m) {
+    final t = Theme.of(context).textTheme;
+    const que = _ColumnaTexto(
+      titulo: 'Lo que hacemos',
       texto: FundacionInfo.mision,
     );
-    const vision = _TarjetaTexto(
-      icono: Icons.visibility_outlined,
-      titulo: 'Visión',
+    const queremos = _ColumnaTexto(
+      titulo: 'Lo que queremos',
       texto: FundacionInfo.vision,
     );
     return BloqueLanding(
@@ -350,36 +311,119 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       padding: EdgeInsets.all(m.interior),
       child: Column(
         children: [
-          TituloLanding(
-            texto: 'Conoce',
-            acento: 'quiénes somos',
-            color: AppColors.rosa,
-            tamano: m.tTitulo,
-            alineacion: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
           Text(
-            '${FundacionInfo.nombre}. ${FundacionInfo.resumen}.',
+            'TRABAJANDO EN PRO DE LOS ANIMALES',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyLarge,
+            style: t.labelLarge?.copyWith(
+              letterSpacing: 2.5,
+              color: AppColors.rosa,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 8),
+          Text(
+            'NUESTRA MISIÓN',
+            textAlign: TextAlign.center,
+            style: t.headlineMedium?.copyWith(
+              fontSize: m.tTitulo + 4,
+              fontWeight: FontWeight.w800,
+              color: AppColors.texto,
+            ),
+          ),
+          const SizedBox(height: 28),
           m.escritorio
               ? const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: mision),
-                    SizedBox(width: 16),
-                    Expanded(child: vision),
+                    Expanded(child: que),
+                    SizedBox(width: 40),
+                    Expanded(child: queremos),
                   ],
                 )
-              : const Column(children: [mision, SizedBox(height: 16), vision]),
+              : const Column(children: [que, SizedBox(height: 24), queremos]),
+          const SizedBox(height: 28),
+          BotonLanding(
+            texto: '¿Cómo ayudar?',
+            onPressed: () => _bajarA(_kAyuda),
+          ),
         ],
       ),
     );
   }
 
-  // ───────────── 3. Nuestros logros (datos reales de la base de datos) ─────────────
+  // ───────────── 3. Nuestra rescatista ─────────────
+  Widget _rescatista(_Medidas m) {
+    final t = Theme.of(context).textTheme;
+    final foto = Image.asset(
+      FundacionInfo.fotoRescatista,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => const ColoredBox(
+        color: AppColors.rosaClaro,
+        child: Center(
+          child: Icon(
+            Icons.volunteer_activism,
+            size: 64,
+            color: AppColors.rosa,
+          ),
+        ),
+      ),
+    );
+
+    final panel = Container(
+      color: AppColors.rosaClaro,
+      padding: EdgeInsets.all(m.interior),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'NUESTRA RESCATISTA',
+            style: t.headlineSmall?.copyWith(
+              color: AppColors.texto,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            FundacionInfo.rescatistaNombre,
+            style: t.titleLarge?.copyWith(
+              color: AppColors.rosa,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            FundacionInfo.rescatistaTexto,
+            style: t.bodyLarge?.copyWith(height: 1.55, color: AppColors.texto),
+          ),
+        ],
+      ),
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: m.escritorio
+          ? SizedBox(
+              height: 380,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: foto),
+                  Expanded(child: panel),
+                ],
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(height: 260, child: foto),
+                panel,
+              ],
+            ),
+    );
+  }
+
+  // ───────────── Logros (datos reales de la base de datos) ─────────────
   Widget _logros(_Medidas m) {
     String v(int n) => _cargando ? '…' : (_error ? '–' : '$n');
     final adoptados = _pets.where((p) => p.estadoAdopcion == 'adoptado').length;
@@ -390,15 +434,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         .where((p) => p.estadoApadrinamiento == 'apadrinado')
         .length;
 
-    final columnas = m.escritorio ? 4 : 2;
     const sep = 12.0;
-    final w = (m.anchoInterior - sep * (columnas - 1)) / columnas;
 
     final items = [
       StatLogro(
         icono: Icons.pets,
         valor: v(_pets.length),
-        etiqueta: 'Perritos registrados',
+        etiqueta: 'Perritos que hemos ayudado',
       ),
       StatLogro(
         icono: Icons.home_outlined,
@@ -417,40 +459,45 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       ),
     ];
 
-    return BloqueLanding(
-      color: Colors.white,
-      padding: EdgeInsets.all(m.interior),
-      child: Column(
-        children: [
-          TituloLanding(
-            texto: 'Nuestros',
-            acento: 'logros',
-            color: AppColors.rosa,
-            tamano: m.tTitulo,
-            alineacion: TextAlign.center,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'NUESTROS LOGROS',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: m.tTitulo,
           ),
-          const SizedBox(height: 24),
-          Wrap(
-            spacing: sep,
-            runSpacing: sep,
-            alignment: WrapAlignment.center,
-            children: [for (final s in items) SizedBox(width: w, child: s)],
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 24),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columnas = constraints.maxWidth >= 800 ? 4 : 2;
+            final anchoTarjeta =
+                (constraints.maxWidth - sep * (columnas - 1)) / columnas;
+            return Wrap(
+              spacing: sep,
+              runSpacing: sep,
+              alignment: WrapAlignment.center,
+              children: [
+                for (final item in items)
+                  SizedBox(width: anchoTarjeta, child: item),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
-  // ───────────── 4. Conoce a nuestros perritos ─────────────
+  // ───────────── Perritos en adopción ─────────────
   Widget _perritos(_Medidas m) {
     final perros = _pets
         .where((p) => p.especie.toLowerCase() == 'perro')
-        .where(
-          (p) => _paraAdopcion
-              ? p.estadoAdopcion == 'disponible'
-              : p.estadoApadrinamiento == 'disponible',
-        )
-        .take(m.escritorio ? 8 : 6)
+        .where((p) => p.estadoAdopcion == 'disponible')
+        .take(4)
         .toList();
 
     final columnas = m.escritorio ? 4 : (m.ancho >= Layout.tablet ? 3 : 2);
@@ -489,10 +536,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           for (final p in perros)
             SizedBox(
               width: w,
+              height: 440,
               child: PerritoLandingCard(
                 pet: p,
-                paraAdopcion: _paraAdopcion,
-                onTap: () => _pedirCuenta(pet: p, adopcion: _paraAdopcion),
+                paraAdopcion: true,
+                onTap: () => _pedirCuenta(pet: p, adopcion: true),
               ),
             ),
         ],
@@ -507,168 +555,199 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           TituloLanding(
             texto: 'Conoce a nuestros',
             acento: 'perritos',
-            color: AppColors.rosa,
+            color: AppColors.texto,
+            colorAcento: AppColors.rosa,
             tamano: m.tTitulo,
             alineacion: TextAlign.center,
           ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            alignment: WrapAlignment.center,
-            children: [
-              ChipSeleccion(
-                texto: 'Para adoptar',
-                icono: const FeatureIcon.mascota(tamano: 18),
-                seleccionado: _paraAdopcion,
-                onTap: () => setState(() => _paraAdopcion = true),
-              ),
-              ChipSeleccion(
-                texto: 'Para apadrinar',
-                icono: const FeatureIcon.apadrinar(tamano: 18),
-                seleccionado: !_paraAdopcion,
-                onTap: () => setState(() => _paraAdopcion = false),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           cuerpo,
-          const SizedBox(height: 20),
-          BotonLanding(
-            texto: _paraAdopcion ? 'Quiero adoptar' : 'Quiero apadrinar',
-            relleno: false,
-            onPressed: () => _pedirCuenta(adopcion: _paraAdopcion),
-          ),
         ],
       ),
     );
   }
 
-  // ───────────── 5. Llamado a crear cuenta ─────────────
-  Widget _cta(_Medidas m) => BloqueLanding(
-    color: AppColors.rosa,
-    padding: EdgeInsets.all(m.interior),
-    child: Column(
+  // ───────────── 6. Ayuda y contacto ─────────────
+  Widget _ayuda(_Medidas m) {
+    final columnas = m.ancho >= Layout.tablet ? 2 : 1;
+    const sep = 14.0;
+    final w = (m.anchoInterior - sep * (columnas - 1)) / columnas;
+
+    final tarjetas = [
+      TarjetaAyuda(
+        icono: Icons.home_outlined,
+        titulo: 'Adopta',
+        texto:
+            'Encuentra un compañero que encaje contigo y dale un hogar lleno de cariño.',
+      ),
+      TarjetaAyuda(
+        icono: Icons.volunteer_activism,
+        titulo: 'Apadrina',
+        texto:
+            'Contribuye a su cuidado mientras esperan encontrar una familia permanente.',
+      ),
+    ];
+
+    return Column(
       children: [
-        TituloLanding(
-          texto: 'Crea tu cuenta y encuentra a',
-          acento: 'tu compañero ideal',
-          color: Colors.white,
-          tamano: m.tTitulo,
-          alineacion: TextAlign.center,
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Regístrate gratis, descubre qué peludito encaja con tu estilo de vida '
-          'y empieza el proceso de adopción o apadrinamiento.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white, fontSize: 16, height: 1.5),
-        ),
-        const SizedBox(height: 24),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          alignment: WrapAlignment.center,
-          children: [
-            BotonLanding(
-              texto: 'Registrarse',
-              sobreRosa: true,
-              onPressed: _irRegistro,
+        ClipRRect(
+          borderRadius: BorderRadius.circular(32),
+          child: SizedBox(
+            width: double.infinity,
+            height: m.escritorio ? 350 : 460,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.asset(
+                  FundacionInfo.fotoFondoAyudas,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const ColoredBox(color: AppColors.rosa),
+                ),
+                ColoredBox(color: AppColors.rosa.withValues(alpha: 0.82)),
+                Padding(
+                  padding: EdgeInsets.all(m.interior),
+                  child: Center(child: _logros(m)),
+                ),
+              ],
             ),
-            BotonLanding(
-              texto: 'Iniciar sesión',
-              sobreRosa: true,
-              relleno: false,
-              onPressed: _irLogin,
-            ),
-          ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        BloqueLanding(
+          color: AppColors.rosaClaro,
+          padding: EdgeInsets.all(m.interior),
+          child: Column(
+            children: [
+              TituloLanding(
+                texto: 'Encuéntranos',
+                acento: 'y ayúdanos',
+                color: AppColors.texto,
+                colorAcento: AppColors.rosa,
+                tamano: m.tTitulo,
+                alineacion: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Wrap(
+                spacing: sep,
+                runSpacing: sep,
+                alignment: WrapAlignment.center,
+                children: [
+                  for (final tarjeta in tarjetas)
+                    SizedBox(width: w, height: 220, child: tarjeta),
+                ],
+              ),
+              const SizedBox(height: 28),
+              _contactoContenido(m),
+            ],
+          ),
         ),
       ],
-    ),
-  );
-}
+    );
+  }
 
-/// Punto con huella: título y texto cortos (sobre fondo rosado).
-class _Punto extends StatelessWidget {
-  final String titulo, texto;
-  const _Punto({required this.titulo, required this.texto});
-
-  @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Padding(
-        padding: EdgeInsets.only(top: 2),
-        child: Icon(Icons.pets, color: Colors.white, size: 22),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            Text(
-              texto,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
-/// Tarjeta rosada con ícono, título y texto (Misión / Visión).
-class _TarjetaTexto extends StatelessWidget {
-  final IconData icono;
-  final String titulo, texto;
-  const _TarjetaTexto({
-    required this.icono,
-    required this.titulo,
-    required this.texto,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: AppColors.rosaClaro,
-      borderRadius: BorderRadius.circular(24),
-    ),
-    child: Column(
+  // ───────────── 7. Dónde encontrarnos ─────────────
+  Widget _contactoContenido(_Medidas m) {
+    final t = Theme.of(context).textTheme;
+    final ubicacion = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icono, color: AppColors.rosa),
+            const Icon(Icons.location_on_outlined, color: AppColors.rosa),
             const SizedBox(width: 8),
-            Text(
-              titulo,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: AppColors.texto,
+            Expanded(
+              child: Text(
+                'UBICACIÓN',
+                style: t.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.texto,
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Text(
-          texto,
-          style: const TextStyle(height: 1.5, color: AppColors.texto),
+          '${FundacionInfo.nombre}\n${FundacionInfo.direccion}\n${FundacionInfo.ciudad}',
+          style: t.bodyLarge?.copyWith(height: 1.5),
+        ),
+        const SizedBox(height: 14),
+        BotonLanding(
+          texto: 'Abrir ubicación en Google Maps',
+          relleno: false,
+          onPressed: () =>
+              abrirEnlace(context, FundacionInfo.mapaUrl, nombre: 'el mapa'),
         ),
       ],
-    ),
-  );
+    );
+
+    final donar = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.card_giftcard, color: AppColors.rosa),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'CONTACTO Y REDES',
+                style: t.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.texto,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Para coordinar una donación, contáctanos por WhatsApp.',
+          style: t.bodyLarge?.copyWith(height: 1.5),
+        ),
+        const SizedBox(height: 14),
+        const RedesSociales(conTexto: true),
+      ],
+    );
+
+    return m.escritorio
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: ubicacion),
+              const SizedBox(width: 40),
+              Expanded(child: donar),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [ubicacion, const SizedBox(height: 24), donar],
+          );
+  }
+}
+
+/// Columna de la sección de misión: título en mayúsculas y texto.
+class _ColumnaTexto extends StatelessWidget {
+  final String titulo, texto;
+  const _ColumnaTexto({required this.titulo, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          titulo.toUpperCase(),
+          style: t.titleMedium?.copyWith(
+            letterSpacing: 2,
+            fontWeight: FontWeight.w800,
+            color: AppColors.texto,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(texto, style: t.bodyLarge?.copyWith(height: 1.7)),
+      ],
+    );
+  }
 }
