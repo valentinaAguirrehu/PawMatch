@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+import 'package:paw_match/models/admin_user.dart';
 import 'package:paw_match/models/user.dart';
 import 'package:paw_match/services/session.dart';
 
@@ -108,8 +109,96 @@ class ApiService {
     }
   }
 
-  static Future<String> subirFotoPerfil(Uint8List bytes, String nombreArchivo) async {
-    final req = http.MultipartRequest('POST', Uri.parse('$baseUrl/usuarios/foto'));
+  static Future<List<AdminUser>> listarUsuariosAdmin({
+    required String rol,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/admin/usuarios',
+    ).replace(queryParameters: {'rol': rol});
+    final response = await http.get(
+      uri,
+      headers: {'x-usuario-id': Session.idUsuario ?? ''},
+    );
+    final contentType = response.headers['content-type'] ?? '';
+    if (!contentType.contains('application/json')) {
+      throw Exception(
+        'La API respondió HTTP ${response.statusCode} sin JSON en $uri. '
+        'Verifica que la aplicación y el backend estén usando el mismo servidor.',
+      );
+    }
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return (data as List<dynamic>)
+          .map((item) => AdminUser.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+    throw Exception(
+      (data as Map<String, dynamic>)['error'] ??
+          'No se pudieron cargar las cuentas',
+    );
+  }
+
+  static Future<AdminUser> cambiarEstadoUsuarioAdmin({
+    required String id,
+    required bool activo,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/admin/usuarios/$id/estado'),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-usuario-id': Session.idUsuario ?? '',
+      },
+      body: jsonEncode({'estado_cuenta': activo ? 'activo' : 'inactivo'}),
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return AdminUser.fromJson(data as Map<String, dynamic>);
+    }
+    throw Exception(
+      (data as Map<String, dynamic>)['error'] ??
+          'No se pudo actualizar la cuenta',
+    );
+  }
+
+  static Future<AdminUser> crearAdministrador({
+    required String nombres,
+    required String apellidos,
+    required String correo,
+    required String telefono,
+    required String contrasena,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/admin/usuarios/administradores'),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-usuario-id': Session.idUsuario ?? '',
+      },
+      body: jsonEncode({
+        'nombres': nombres,
+        'apellidos': apellidos,
+        'correo': correo,
+        'telefono': telefono,
+        'contrasena': contrasena,
+      }),
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 201) {
+      return AdminUser.fromJson(data as Map<String, dynamic>);
+    }
+    throw Exception(
+      (data as Map<String, dynamic>)['error'] ??
+          'No se pudo crear el administrador',
+    );
+  }
+
+  static Future<String> subirFotoPerfil(
+    Uint8List bytes,
+    String nombreArchivo,
+  ) async {
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/usuarios/foto'),
+    );
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
     req.files.add(
       http.MultipartFile.fromBytes('foto', bytes, filename: nombreArchivo),

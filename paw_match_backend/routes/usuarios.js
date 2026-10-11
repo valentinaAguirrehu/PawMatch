@@ -64,7 +64,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const resultado = await pool.query(
-      `SELECT id_usuario, nombres, apellidos, correo, rol, contrasena_hash
+      `SELECT id_usuario, nombres, apellidos, correo, rol, estado_cuenta, contrasena_hash
        FROM Usuario WHERE correo = $1`,
       [correo]
     );
@@ -80,7 +80,15 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
     }
 
+    // NUEVO: una cuenta inactiva o suspendida no puede ingresar (RF02)
+    if (usuario.estado_cuenta !== 'activo') {
+      return res.status(403).json({
+        error: 'Tu cuenta está inactiva. Comunícate con la Fundación.',
+      });
+    }
+
     delete usuario.contrasena_hash;
+    delete usuario.estado_cuenta;
     res.status(200).json(usuario);
   } catch (error) {
     console.error(error);

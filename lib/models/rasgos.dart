@@ -6,10 +6,16 @@ import 'package:flutter/material.dart';
 class Rasgo {
   final String clave;
   final String titulo;
-  final String pregunta; // pregunta para la MASCOTA (evaluación de la fundación)
-  final String minimo; // significado del 1
-  final String maximo; // significado del 5
+  final String
+  pregunta; // pregunta para la MASCOTA (evaluación de la fundación)
+  final String minimo; // significado del 1 (en femenino / neutro)
+  final String maximo; // significado del 5 (en femenino / neutro)
   final IconData icono;
+
+  /// Versión en masculino. Solo se define cuando la frase cambia
+  /// (ej: "Muy activa" -> "Muy activo"); si es null, la frase es neutra.
+  final String? minimoMasc;
+  final String? maximoMasc;
 
   const Rasgo({
     required this.clave,
@@ -18,7 +24,19 @@ class Rasgo {
     required this.minimo,
     required this.maximo,
     required this.icono,
+    this.minimoMasc,
+    this.maximoMasc,
   });
+
+  static bool _esMacho(String? sexo) => sexo?.trim().toLowerCase() == 'macho';
+
+  /// Texto del extremo bajo (1) concordando con el sexo de la mascota.
+  String minimoPara(String? sexo) =>
+      _esMacho(sexo) ? (minimoMasc ?? minimo) : minimo;
+
+  /// Texto del extremo alto (5) concordando con el sexo de la mascota.
+  String maximoPara(String? sexo) =>
+      _esMacho(sexo) ? (maximoMasc ?? maximo) : maximo;
 }
 
 const rasgosMascota = <Rasgo>[
@@ -27,7 +45,9 @@ const rasgosMascota = <Rasgo>[
     titulo: 'Nivel de energía',
     pregunta: '¿Cuál es el nivel de actividad física de la mascota?',
     minimo: 'Muy tranquila',
+    minimoMasc: 'Muy tranquilo',
     maximo: 'Muy activa',
+    maximoMasc: 'Muy activo',
     icono: Icons.bolt,
   ),
   Rasgo(
@@ -35,6 +55,7 @@ const rasgosMascota = <Rasgo>[
     titulo: 'Sociabilidad con personas',
     pregunta: '¿Qué tan sociable es con las personas?',
     minimo: 'Reservada o tímida',
+    minimoMasc: 'Reservado o tímido',
     maximo: 'Muy sociable',
     icono: Icons.groups,
   ),
@@ -43,6 +64,7 @@ const rasgosMascota = <Rasgo>[
     titulo: 'Sociabilidad con mascotas',
     pregunta: '¿Cuánto disfruta la compañía de otras mascotas?',
     minimo: 'Prefiere estar sola',
+    minimoMasc: 'Prefiere estar solo',
     maximo: 'Le encantan',
     icono: Icons.pets,
   ),
@@ -59,7 +81,9 @@ const rasgosMascota = <Rasgo>[
     titulo: 'Nivel de juego',
     pregunta: '¿Qué tan juguetona es?',
     minimo: 'Poco juguetona',
+    minimoMasc: 'Poco juguetón',
     maximo: 'Muy juguetona',
+    maximoMasc: 'Muy juguetón',
     icono: Icons.sports_tennis,
   ),
   Rasgo(
@@ -67,7 +91,9 @@ const rasgosMascota = <Rasgo>[
     titulo: 'Cariño',
     pregunta: '¿Qué tan afectuosa es?',
     minimo: 'Poco afectuosa',
+    minimoMasc: 'Poco afectuoso',
     maximo: 'Muy cariñosa',
+    maximoMasc: 'Muy cariñoso',
     icono: Icons.favorite,
   ),
   Rasgo(
@@ -75,7 +101,9 @@ const rasgosMascota = <Rasgo>[
     titulo: 'Protección',
     pregunta: '¿Qué tan protectora es?',
     minimo: 'Nada protectora',
+    minimoMasc: 'Nada protector',
     maximo: 'Muy protectora',
+    maximoMasc: 'Muy protector',
     icono: Icons.shield,
   ),
   Rasgo(
