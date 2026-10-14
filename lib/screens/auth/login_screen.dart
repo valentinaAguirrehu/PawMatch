@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
-import 'package:paw_match/screens/home/menu_screen.dart';
 import 'package:paw_match/screens/auth/forgot_password_screen.dart';
+import 'package:paw_match/screens/match/user_personality.dart';
 import 'package:paw_match/screens/auth/register_screen.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -47,11 +47,8 @@ class _LoginScreenState extends State<LoginScreen> {
       // Guarda quién inició sesión (id, nombre y rol) para usarlo en la app
       Session.iniciar(usuario);
 
-      // Reemplaza la pantalla de login por el menú principal
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const MenuScreen()),
-      );
+      // Cuestionario solo la primera vez; si ya existe, va al inicio
+      await abrirDestinoTrasAuth(context);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
