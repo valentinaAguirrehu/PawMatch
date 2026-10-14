@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/screens/match/dog_personality.dart';
 import 'package:paw_match/models/pet.dart';
-import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 
@@ -42,13 +42,9 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   Uint8List? _fotoBytes;
   String _fotoNombre = 'foto.jpg';
 
-  // Personalidad: un valor de 1 a 5 por rasgo (3 = punto medio)
-  final Map<String, double> _valores = {
-    for (final r in rasgosMascota) r.clave: 3,
-  };
+  final _personalidad = DogPersonalityController();
 
   bool _guardando = false;
-  bool _cargandoPerfil = false;
   bool get _esEdicion => widget.pet != null;
 
   static const _especies = ['Perro', 'Gato', 'Otro'];
@@ -58,31 +54,17 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   @override
   void initState() {
     super.initState();
-    if (_esEdicion) _cargarPersonalidad();
+    _personalidad.addListener(_refrescarPersonalidad);
   }
 
-  /// La lista de mascotas no trae la personalidad; se consulta al editar.
-  Future<void> _cargarPersonalidad() async {
-    setState(() => _cargandoPerfil = true);
-    try {
-      final completa = await PetsService.obtener(widget.pet!.id);
-      if (!mounted) return;
-      setState(() {
-        completa.personalidad.forEach((clave, valor) {
-          if (_valores.containsKey(clave)) {
-            _valores[clave] = valor.clamp(1, 5).toDouble();
-          }
-        });
-      });
-    } catch (_) {
-      if (mounted) _aviso('No se pudo cargar la personalidad actual');
-    } finally {
-      if (mounted) setState(() => _cargandoPerfil = false);
-    }
+  void _refrescarPersonalidad() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _personalidad.removeListener(_refrescarPersonalidad);
+    _personalidad.dispose();
     _nombre.dispose();
     _raza.dispose();
     _edad.dispose();
@@ -182,9 +164,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
         foto: ruta,
         estadoAdopcion: _estadoAdopcion,
         estadoApadrinamiento: _estadoApadrinamiento,
-        personalidad: {
-          for (final r in rasgosMascota) r.clave: _valores[r.clave]!.round(),
-        },
+        personalidad: _personalidad.personalidad,
       );
 
       if (_esEdicion) {
@@ -321,111 +301,6 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                 label: const Text('Quitar'),
               ),
             ],
-          ),
-      ],
-    );
-  }
-
-  Widget _seccionPersonalidad() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Personalidad',
-          style: TextStyle(
-            color: AppColors.texto,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Evalúa a la mascota de 1 a 5 en cada rasgo. Estas respuestas se '
-          'usan para calcular el match con los adoptantes.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
-        ),
-        if (_cargandoPerfil)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: LinearProgressIndicator(color: AppColors.rosa),
-          ),
-        const SizedBox(height: 8),
-        for (final r in rasgosMascota)
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-            decoration: BoxDecoration(
-              color: AppColors.rosaSuave,
-              border: Border.all(color: AppColors.bordeRosa),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(r.icono, size: 18, color: AppColors.rosa),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        r.titulo,
-                        style: const TextStyle(
-                          color: AppColors.texto,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      _valores[r.clave]!.round().toString(),
-                      style: const TextStyle(
-                        color: AppColors.rosa,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(r.pregunta, style: const TextStyle(fontSize: 13)),
-                Slider(
-                  value: _valores[r.clave]!,
-                  min: 1,
-                  max: 5,
-                  divisions: 4,
-                  activeColor: AppColors.rosa,
-                  label: _valores[r.clave]!.round().toString(),
-                  onChanged: _cargandoPerfil
-                      ? null
-                      : (v) => setState(() => _valores[r.clave] = v),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        '1 · ${r.minimo}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        '5 · ${r.maximo}',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.black54,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-              ],
-            ),
           ),
       ],
     );
@@ -576,7 +451,10 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    _seccionPersonalidad(),
+                    DogPersonality(
+                      controller: _personalidad,
+                      mascotaId: _esEdicion ? widget.pet!.id : null,
+                    ),
                     const SizedBox(height: 10),
                     _campo(
                       'Descripción',
@@ -652,7 +530,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      onPressed: (_guardando || _cargandoPerfil)
+                      onPressed: (_guardando || _personalidad.cargando)
                           ? null
                           : _guardar,
                       child: Padding(

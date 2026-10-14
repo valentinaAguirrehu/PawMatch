@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/user.dart';
+import 'package:paw_match/screens/users/personality_detail.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
@@ -405,6 +406,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
             ],
           ),
+        ),
+        const SizedBox(height: 28),
+        Text(
+          'Personalidad',
+          style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()),
+          ),
+          icon: const FeatureIcon.compatibilidad(color: AppColors.rosa),
+          label: const Text('Mi personalidad'),
+          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
         ),
         const SizedBox(height: 28),
       Text(

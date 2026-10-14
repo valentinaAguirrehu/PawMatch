@@ -96,6 +96,31 @@ class FeatureIcon extends StatelessWidget {
 
   static const huella = '🐾';
 
+  /// Emojis de cada rasgo de `personalidadusuario`. La clave es la columna.
+  static const energia = '⚡';
+  static const personas = '🤝';
+  static const companera = '🐶';
+  static const independencia = '🚶';
+  static const juego = '🎾';
+  static const carino = '💗';
+  static const proteccion = '🛡️';
+  static const casa = '🏠';
+  static const cambio = '🔄';
+
+  static const emojisRasgo = <String, String>{
+    'nivel_energia': energia,
+    'sociabilidad_personas': personas,
+    'sociabilidad_mascotas': companera,
+    'independencia': independencia,
+    'nivel_juego': juego,
+    'carino': carino,
+    'proteccion': proteccion,
+    'tolerancia_soledad': casa,
+    'adaptabilidad': cambio,
+  };
+
+  static String emojiRasgo(String clave) => emojisRasgo[clave] ?? huella;
+
   @override
   Widget build(BuildContext context) {
     return Icon(icono, size: tamano, color: color);

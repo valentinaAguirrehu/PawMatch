@@ -12,6 +12,11 @@ class Rasgo {
   final String maximo; // significado del 5 (en femenino / neutro)
   final IconData icono;
 
+  /// Pregunta y extremos de la escala cuando responde la persona adoptante.
+  final String preguntaUsuario;
+  final String minimoUsuario;
+  final String maximoUsuario;
+
   /// Versión en masculino. Solo se define cuando la frase cambia
   /// (ej: "Muy activa" -> "Muy activo"); si es null, la frase es neutra.
   final String? minimoMasc;
@@ -24,6 +29,9 @@ class Rasgo {
     required this.minimo,
     required this.maximo,
     required this.icono,
+    required this.preguntaUsuario,
+    required this.minimoUsuario,
+    required this.maximoUsuario,
     this.minimoMasc,
     this.maximoMasc,
   });
@@ -49,6 +57,9 @@ const rasgosMascota = <Rasgo>[
     maximo: 'Muy activa',
     maximoMasc: 'Muy activo',
     icono: Icons.bolt,
+    preguntaUsuario: '¿Qué tan activo/a te consideras en tu día a día?',
+    minimoUsuario: 'Poco activo/a',
+    maximoUsuario: 'Muy activo/a',
   ),
   Rasgo(
     clave: 'sociabilidad_personas',
@@ -58,6 +69,10 @@ const rasgosMascota = <Rasgo>[
     minimoMasc: 'Reservado o tímido',
     maximo: 'Muy sociable',
     icono: Icons.groups,
+    preguntaUsuario:
+        '¿Qué tan cómodo/a te sientes rodeado/a de nuevas personas?',
+    minimoUsuario: 'Incómodo/a',
+    maximoUsuario: 'Muy cómodo/a',
   ),
   Rasgo(
     clave: 'sociabilidad_mascotas',
@@ -67,6 +82,9 @@ const rasgosMascota = <Rasgo>[
     minimoMasc: 'Prefiere estar solo',
     maximo: 'Le encantan',
     icono: Icons.pets,
+    preguntaUsuario: '¿Qué tan bien te llevas con otras mascotas o animales?',
+    minimoUsuario: 'Me cuesta',
+    maximoUsuario: 'Me llevo muy bien',
   ),
   Rasgo(
     clave: 'independencia',
@@ -75,6 +93,10 @@ const rasgosMascota = <Rasgo>[
     minimo: 'Necesita atención constante',
     maximo: 'Muy independiente',
     icono: Icons.directions_walk,
+    preguntaUsuario:
+        '¿Prefieres pasar tiempo a solas realizando tus actividades?',
+    minimoUsuario: 'Prefiero compañía',
+    maximoUsuario: 'Prefiero estar a solas',
   ),
   Rasgo(
     clave: 'nivel_juego',
@@ -85,6 +107,10 @@ const rasgosMascota = <Rasgo>[
     maximo: 'Muy juguetona',
     maximoMasc: 'Muy juguetón',
     icono: Icons.sports_tennis,
+    preguntaUsuario:
+        '¿Qué tanto disfrutas dedicar tiempo a actividades recreativas o juegos?',
+    minimoUsuario: 'Casi nada',
+    maximoUsuario: 'Muchísimo',
   ),
   Rasgo(
     clave: 'carino',
@@ -95,6 +121,9 @@ const rasgosMascota = <Rasgo>[
     maximo: 'Muy cariñosa',
     maximoMasc: 'Muy cariñoso',
     icono: Icons.favorite,
+    preguntaUsuario: '¿Qué tan expresivo/a y afectuoso/a te consideras?',
+    minimoUsuario: 'Reservado/a',
+    maximoUsuario: 'Muy afectuoso/a',
   ),
   Rasgo(
     clave: 'proteccion',
@@ -105,6 +134,10 @@ const rasgosMascota = <Rasgo>[
     maximo: 'Muy protectora',
     maximoMasc: 'Muy protector',
     icono: Icons.shield,
+    preguntaUsuario:
+        '¿Te consideras una persona protectora y atenta con quienes te rodean?',
+    minimoUsuario: 'Poco protector/a',
+    maximoUsuario: 'Muy protector/a',
   ),
   Rasgo(
     clave: 'tolerancia_soledad',
@@ -113,6 +146,9 @@ const rasgosMascota = <Rasgo>[
     minimo: 'No tolera la soledad',
     maximo: 'Tolera muy bien',
     icono: Icons.home,
+    preguntaUsuario: '¿Qué tan bien toleras pasar varias horas fuera de casa?',
+    minimoUsuario: 'Me cuesta',
+    maximoUsuario: 'Lo tolero muy bien',
   ),
   Rasgo(
     clave: 'adaptabilidad',
@@ -121,5 +157,8 @@ const rasgosMascota = <Rasgo>[
     minimo: 'Le cuesta adaptarse',
     maximo: 'Se adapta fácil',
     icono: Icons.swap_horiz,
+    preguntaUsuario: '¿Qué tan fácil te adaptas a cambios en tu rutina diaria?',
+    minimoUsuario: 'Me cuesta',
+    maximoUsuario: 'Me adapto fácil',
   ),
 ];

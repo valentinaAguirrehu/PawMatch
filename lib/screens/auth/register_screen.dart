@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
-import 'package:paw_match/screens/home/menu_screen.dart';
+import 'package:paw_match/screens/match/user_personality.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
@@ -96,11 +96,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
       Session.iniciar(usuario);
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MenuScreen()),
-        (_) => false,
-      );
+      await abrirDestinoTrasAuth(context);
     } catch (e) {
       if (!mounted) return;
       _aviso(e.toString().replaceFirst('Exception: ', ''));
