@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/screens/home/menu_screen.dart';
 import 'package:paw_match/services/api_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
@@ -93,10 +95,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (!mounted) return;
-      final nombre = usuario['nombres'] ?? _nombresCtrl.text.trim();
-      _aviso(
-        '¡Listo, $nombre! Tu cuenta ya está creada ${FeatureIcon.huella}',
-        exito: true,
+      Session.iniciar(usuario);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MenuScreen()),
+        (_) => false,
       );
     } catch (e) {
       if (!mounted) return;

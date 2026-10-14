@@ -6,7 +6,7 @@ import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/core/layout.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/screens/auth/login_screen.dart';
-import 'package:paw_match/screens/auth/registro_screen.dart';
+import 'package:paw_match/screens/auth/register_screen.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/bloque_landing.dart';
 import 'package:paw_match/widgets/boton_landing.dart';
@@ -79,7 +79,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   );
   void _irRegistro() => Navigator.push(
     context,
-    MaterialPageRoute(builder: (_) => const RegistroScreen()),
+    MaterialPageRoute(builder: (_) => const RegisterScreen()),
   );
 
   void _bajarA(GlobalKey clave) {
