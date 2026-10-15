@@ -1,3 +1,5 @@
+import 'package:paw_match/services/match_estado.dart';
+
 /// Guarda en memoria al usuario que inició sesión.
 /// (Si cierras la app hay que volver a iniciar sesión.)
 class Session {
@@ -21,6 +23,7 @@ class Session {
   }
 
   static void cerrar() {
+    MatchEstado.instancia.reiniciar();
     idUsuario = null;
     nombre = '';
     apellidos = '';

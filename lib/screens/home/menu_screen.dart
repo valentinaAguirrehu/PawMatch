@@ -28,20 +28,33 @@ enum _Gestion {
 }
 
 class MenuScreen extends StatefulWidget {
-  const MenuScreen({super.key});
+  /// Pestaña que se abre al entrar. [indiceMatch] es Match perfecto.
+  final int indiceInicial;
+
+  const MenuScreen({super.key, this.indiceInicial = 0});
+
+  /// Match perfecto solo está en la barra de quien no administra.
+  static int get indiceMatch => Session.isAdmin ? 0 : 2;
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  int _index = 0;
+  late int _index;
   _Gestion _seccion = _Gestion.mascotas;
 
   late GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
 
   bool _enDetalle = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final pedido = widget.indiceInicial;
+    _index = (pedido >= 0 && pedido <= 3) ? pedido : 0;
+  }
 
   void _alCambiarPila() {
     // se difiere al final del frame para no llamar setState durante un build

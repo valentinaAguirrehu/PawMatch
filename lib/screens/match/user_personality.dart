@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/home/menu_screen.dart';
+import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/personalidad_usuario_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
@@ -47,15 +48,19 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen> {
   double _valorDe(String clave) => _valores[clave] ?? 3;
 
   Future<void> _guardar() async {
+    final valores = {
+      for (final r in rasgosMascota) r.clave: _valorDe(r.clave).round(),
+    };
     setState(() => _guardando = true);
     try {
-      await PersonalidadUsuarioService.guardar({
-        for (final r in rasgosMascota) r.clave: _valorDe(r.clave).round(),
-      });
+      await PersonalidadUsuarioService.guardar(valores);
+      MatchEstado.instancia.publicar(valores);
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const MenuScreen()),
+        MaterialPageRoute(
+          builder: (_) => MenuScreen(indiceInicial: MenuScreen.indiceMatch),
+        ),
         (_) => false,
       );
     } catch (e) {

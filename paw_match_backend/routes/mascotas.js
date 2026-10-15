@@ -80,6 +80,7 @@ router.get('/', async (req, res) => {
       query = `${petSelect} WHERE m.estado_adopcion = $1 ORDER BY m.fecha_ingreso DESC, m.nombre`;
     }
     const result = await pool.query(query, values);
+    res.set('Cache-Control', 'no-store');
     res.json(result.rows);
   } catch (error) {
     console.error(error);

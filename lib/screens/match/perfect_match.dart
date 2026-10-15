@@ -3,6 +3,7 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
@@ -17,11 +18,30 @@ class PerfectMatchScreen extends StatefulWidget {
 }
 
 class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
-  late Future<RankingMatch> _future = MatchService.mejores();
+  late Future<RankingMatch> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    MatchEstado.instancia.addListener(_alActualizarPersonalidad);
+    _future = MatchService.mejores();
+  }
+
+  @override
+  void dispose() {
+    MatchEstado.instancia.removeListener(_alActualizarPersonalidad);
+    super.dispose();
+  }
+
+  void _alActualizarPersonalidad() {
+    if (!mounted) return;
+    _cargar();
+  }
 
   Future<void> _cargar() async {
-    setState(() => _future = MatchService.mejores());
-    await _future.catchError(
+    final futuro = MatchService.mejores();
+    setState(() => _future = futuro);
+    await futuro.catchError(
       (_) => const RankingMatch(
         tienePersonalidad: false,
         nombreUsuario: '',
@@ -31,11 +51,10 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     );
   }
 
-  Future<void> _abrirCuestionario() async {
-    await Navigator.of(
+  Future<void> _abrirCuestionario() {
+    return Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()));
-    if (mounted) _cargar();
   }
 
   /// Placeholder hasta conectar las solicitudes de adopción y apadrinamiento.
@@ -154,6 +173,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
         ),
         const SizedBox(height: 12),
         _TarjetaDestacada(
+          key: ValueKey(destacado.mascota.id),
           match: destacado,
           nombreUsuario: ranking.nombreUsuario,
           usuario: ranking.usuario,
@@ -176,6 +196,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
               final tarjetas = [
                 for (var i = 0; i < siguientes.length; i++)
                   _TarjetaSecundaria(
+                    key: ValueKey(siguientes[i].mascota.id),
                     puesto: i + 2,
                     match: siguientes[i],
                     nombreUsuario: ranking.nombreUsuario,
@@ -263,6 +284,7 @@ class _TarjetaDestacada extends StatefulWidget {
   final VoidCallback onApadrinar;
 
   const _TarjetaDestacada({
+    super.key,
     required this.match,
     required this.nombreUsuario,
     required this.usuario,
@@ -489,6 +511,7 @@ class _TarjetaSecundaria extends StatefulWidget {
   final VoidCallback onApadrinar;
 
   const _TarjetaSecundaria({
+    super.key,
     required this.puesto,
     required this.match,
     required this.nombreUsuario,

@@ -134,6 +134,7 @@ router.get('/:id/personalidad', async (req, res) => {
        FROM personalidadusuario WHERE id_usuario = $1`,
       [req.params.id],
     );
+    res.set('Cache-Control', 'no-store');
     if (resultado.rows.length === 0) {
       return res.json({ existe: false });
     }
@@ -159,8 +160,8 @@ router.post('/:id/personalidad', async (req, res) => {
   try {
     const resultado = await pool.query(
       `INSERT INTO personalidadusuario
-       (id_usuario, ${personalityColumns.join(', ')})
-       VALUES ($1, ${personalityColumns.map((_, i) => `$${i + 2}`).join(', ')})
+       (id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion)
+       VALUES ($1, ${personalityColumns.map((_, i) => `$${i + 2}`).join(', ')}, CURRENT_TIMESTAMP)
        RETURNING id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion`,
       [req.params.id, ...valores],
     );

@@ -1,6 +1,7 @@
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/services/api_service.dart';
+import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/personalidad_usuario_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -49,11 +50,11 @@ class MatchService {
   static const int limite = 3;
 
   static Future<RankingMatch> mejores() async {
-    final personalidadFuture = PersonalidadUsuarioService.obtener();
+    final publicadas = MatchEstado.instancia.respuestas;
     final mascotasFuture = PetsService.listar();
     final nombreFuture = _nombreUsuario();
 
-    final usuario = await personalidadFuture;
+    final usuario = publicadas ?? await PersonalidadUsuarioService.obtener();
     final nombre = await nombreFuture;
     if (usuario == null) {
       return RankingMatch(
