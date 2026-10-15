@@ -5,6 +5,7 @@ import 'package:paw_match/screens/admin/pets_admin_screen.dart';
 import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
+import 'package:paw_match/screens/match/perfect_match.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
 import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
@@ -37,14 +38,9 @@ class _MenuScreenState extends State<MenuScreen> {
   int _index = 0;
   _Gestion _seccion = _Gestion.mascotas;
 
-  // Cada pestaña tiene su propio Navigator: las pantallas que se abren desde
-  // una pestaña (ej: el detalle de la mascota) aparecen DENTRO del menú,
-  // encima del contenido pero sin tapar la barra flotante.
   late GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
 
-  // true cuando la pestaña actual tiene una pantalla abierta (ej: el detalle).
-  // En ese caso se oculta el AppBar del menú porque esa pantalla trae el suyo.
   bool _enDetalle = false;
 
   void _alCambiarPila() {
@@ -160,13 +156,16 @@ class _MenuScreenState extends State<MenuScreen> {
     final paginas = <Widget>[
       HomeTab(onVerMascotas: () => _irA(1), onCerrarSesion: _cerrarSesion),
       const PetScreen(),
-      const ProfileScreen(),
-      if (isAdmin) _paginaGestion(),
+      if (isAdmin) ...[
+        const ProfileScreen(),
+        _paginaGestion(),
+      ] else ...[
+        const PerfectMatchScreen(),
+        const ProfileScreen(),
+      ],
     ];
     final paginaActual = paginas[_index];
 
-    // Botón "atrás" del celular: primero cierra el detalle, luego vuelve a
-    // Inicio, y solo desde Inicio sale de la pantalla.
     return PopScope(
       canPop: !_enDetalle && _index == 0,
       onPopInvokedWithResult: (didPop, _) {
@@ -202,8 +201,16 @@ class _MenuScreenState extends State<MenuScreen> {
           items: [
             const NavItem(FeatureIcon.inicio(), 'Inicio'),
             const NavItem(FeatureIcon.mascota(tamano: 24), 'Mascotas'),
-            const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
-            if (isAdmin) const NavItem(FeatureIcon.gestionar(), 'Gestionar'),
+            if (isAdmin) ...[
+              const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
+              const NavItem(FeatureIcon.gestionar(), 'Gestionar'),
+            ] else ...[
+              const NavItem(
+                FeatureIcon.compatibilidad(tamano: 24),
+                'Match perfecto',
+              ),
+              const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
+            ],
           ],
         ),
       ),
