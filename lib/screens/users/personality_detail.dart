@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/personalidad_usuario_service.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
@@ -111,6 +112,7 @@ class _PersonalityDetailScreenState extends State<PersonalityDetailScreen> {
       } else {
         await PersonalidadUsuarioService.guardar(valores);
       }
+      MatchEstado.instancia.publicar(valores);
       if (!mounted) return;
 
       final nuevos = _mapaDesde(valores);

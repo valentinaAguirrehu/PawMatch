@@ -41,8 +41,14 @@ class PersonalidadUsuarioService {
   static Future<Map<String, int>?> obtener() async {
     final id = _idSesion();
     final resp = await http.get(
-      Uri.parse('${ApiService.baseUrl}/usuarios/$id/personalidad'),
-      headers: {'x-usuario-id': id},
+      Uri.parse('${ApiService.baseUrl}/usuarios/$id/personalidad').replace(
+        queryParameters: {'_': '${DateTime.now().microsecondsSinceEpoch}'},
+      ),
+      headers: {
+        'x-usuario-id': id,
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
     );
     final data = _leer(resp);
     if (resp.statusCode != 200 || data is! Map) {
