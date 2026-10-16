@@ -85,14 +85,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
               ],
             );
           }
-          if (snap.hasError) return _error();
+          if (snap.hasError) return _error(snap.error);
           return _contenido(snap.data!);
         },
       ),
     );
   }
 
-  Widget _error() {
+  Widget _error(Object? error) {
+    final detalle = (error ?? '').toString().replaceFirst('Exception: ', '');
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
@@ -102,6 +103,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
         ),
         const SizedBox(height: 8),
         const Text('No pudimos calcular tu match', textAlign: TextAlign.center),
+        if (detalle.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+            child: Text(
+              detalle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54, fontSize: 12),
+            ),
+          ),
         Center(
           child: TextButton(
             onPressed: _cargar,

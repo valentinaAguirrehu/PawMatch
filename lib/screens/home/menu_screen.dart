@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
+import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/pets_admin_screen.dart';
 import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
@@ -20,7 +21,8 @@ enum _Gestion {
   apadrinamiento('Apadrinamiento', Icons.volunteer_activism),
   seguimiento('Seguimiento de adopción', Icons.timeline),
   usuarios('Usuarios', Icons.people_outline),
-  administradores('Administradores', Icons.admin_panel_settings_outlined);
+  administradores('Administradores', Icons.admin_panel_settings_outlined),
+  fundacion('Fundación', Icons.info_outline);
 
   final String etiqueta;
   final IconData icono;
@@ -151,6 +153,7 @@ class _MenuScreenState extends State<MenuScreen> {
     ),
     _Gestion.usuarios => const UsersAdminScreen(),
     _Gestion.administradores => const AdminsAdminScreen(),
+    _Gestion.fundacion => const FundacionAdminScreen(),
   };
 
   void _cerrarSesion() {

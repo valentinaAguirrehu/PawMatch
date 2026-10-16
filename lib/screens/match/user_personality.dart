@@ -12,7 +12,8 @@ import 'package:paw_match/widgets/cuestionario_usuario.dart';
 Future<void> abrirDestinoTrasAuth(BuildContext context) async {
   final id = Session.idUsuario;
   var mostrarCuestionario = false;
-  if (id != null && id.isNotEmpty) {
+  // El administrador no responde el cuestionario: va directo al menú.
+  if (!Session.isAdmin && id != null && id.isNotEmpty) {
     try {
       mostrarCuestionario = !await PersonalidadUsuarioService.existe(id);
     } catch (_) {
