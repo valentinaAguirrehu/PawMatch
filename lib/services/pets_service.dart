@@ -15,9 +15,11 @@ class PetsService {
 
   /// Lista mascotas. [estado] puede ser 'disponible', 'en_proceso' o 'adoptado'.
   static Future<List<Pet>> listar({String? estado}) async {
-    final uri = Uri.parse(
-      _url,
-    ).replace(queryParameters: estado == null ? null : {'estado': estado});
+    final parametros = <String, String>{
+      '_': '${DateTime.now().microsecondsSinceEpoch}',
+    };
+    if (estado != null) parametros['estado'] = estado;
+    final uri = Uri.parse(_url).replace(queryParameters: parametros);
     final resp = await http.get(uri);
     _validar(resp, 200);
     final data = jsonDecode(resp.body) as List<dynamic>;

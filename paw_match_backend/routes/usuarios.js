@@ -20,6 +20,22 @@ const upload = multer({
 
 const router = express.Router();
 
+const personalityColumns = [
+  'nivel_energia', 'sociabilidad_personas', 'sociabilidad_mascotas',
+  'independencia', 'nivel_juego', 'carino', 'proteccion',
+  'tolerancia_soledad', 'adaptabilidad',
+];
+
+function personalityValues(personality = {}) {
+  const values = [];
+  for (const column of personalityColumns) {
+    const value = Number(personality[column]);
+    if (!Number.isInteger(value) || value < 1 || value > 5) return null;
+    values.push(value);
+  }
+  return values;
+}
+
 // POST /api/usuarios/registro
 router.post('/registro', async (req, res) => {
   const { nombres, apellidos, correo, telefono, contrasena, fecha_nacimiento } = req.body;
@@ -64,7 +80,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const resultado = await pool.query(
-      `SELECT id_usuario, nombres, apellidos, correo, rol, contrasena_hash
+      `SELECT id_usuario, nombres, apellidos, correo, rol, estado_cuenta, contrasena_hash
        FROM Usuario WHERE correo = $1`,
       [correo]
     );
@@ -80,7 +96,15 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Correo o contraseña incorrectos' });
     }
 
+    // NUEVO: una cuenta inactiva o suspendida no puede ingresar (RF02)
+    if (usuario.estado_cuenta !== 'activo') {
+      return res.status(403).json({
+        error: 'Tu cuenta está inactiva. Comunícate con la Fundación.',
+      });
+    }
+
     delete usuario.contrasena_hash;
+    delete usuario.estado_cuenta;
     res.status(200).json(usuario);
   } catch (error) {
     console.error(error);
@@ -100,6 +124,89 @@ router.post('/foto', upload.single('foto'), async (req, res) => {
   }
   if (!req.file) return res.status(400).json({ error: 'No se recibió la foto' });
   res.status(201).json({ ruta: `/uploads/usuarios/${req.file.filename}` });
+});
+
+// GET /api/usuarios/:id/personalidad — existe y, si hay fila, las respuestas
+router.get('/:id/personalidad', async (req, res) => {
+  try {
+    const resultado = await pool.query(
+      `SELECT id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion
+       FROM personalidadusuario WHERE id_usuario = $1`,
+      [req.params.id],
+    );
+    res.set('Cache-Control', 'no-store');
+    if (resultado.rows.length === 0) {
+      return res.json({ existe: false });
+    }
+    res.json({ existe: true, ...resultado.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo consultar la personalidad' });
+  }
+});
+
+// POST /api/usuarios/:id/personalidad — un registro por usuario
+router.post('/:id/personalidad', async (req, res) => {
+  const sesion = req.header('x-usuario-id');
+  if (!sesion || sesion !== req.params.id) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+
+  const valores = personalityValues(req.body);
+  if (!valores) {
+    return res.status(400).json({ error: 'Cada rasgo debe ser un número del 1 al 5' });
+  }
+
+  try {
+    const resultado = await pool.query(
+      `INSERT INTO personalidadusuario
+       (id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion)
+       VALUES ($1, ${personalityColumns.map((_, i) => `$${i + 2}`).join(', ')}, CURRENT_TIMESTAMP)
+       RETURNING id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion`,
+      [req.params.id, ...valores],
+    );
+    res.status(201).json(resultado.rows[0]);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Ya registraste tu personalidad' });
+    }
+    if (error.code === '23503') {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo guardar la personalidad' });
+  }
+});
+
+// PUT /api/usuarios/:id/personalidad — actualiza las respuestas del usuario
+router.put('/:id/personalidad', async (req, res) => {
+  const sesion = req.header('x-usuario-id');
+  if (!sesion || sesion !== req.params.id) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+
+  const valores = personalityValues(req.body);
+  if (!valores) {
+    return res.status(400).json({ error: 'Cada rasgo debe ser un número del 1 al 5' });
+  }
+
+  try {
+    const resultado = await pool.query(
+      `UPDATE personalidadusuario
+       SET ${personalityColumns.map((column, i) => `${column} = $${i + 1}`).join(', ')},
+           fecha_actualizacion = CURRENT_TIMESTAMP
+       WHERE id_usuario = $${personalityColumns.length + 1}
+       RETURNING id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion`,
+      [...valores, req.params.id],
+    );
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Aún no registras tu personalidad' });
+    }
+    res.json(resultado.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo actualizar la personalidad' });
+  }
 });
 
 router.get('/:id', async (req, res) => {

@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const { quitarFondo } = require('../utils/quitarFondo');
 
 const router = express.Router();
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'mascotas');
@@ -50,10 +51,12 @@ function personalityValues(personality = {}) {
   });
 }
 
+// fecha_ingreso va como texto 'YYYY-MM-DD' para evitar desfases de zona horaria
 const petSelect = `
   SELECT m.id_mascota, m.nombre, m.especie, m.raza, m.edad, m.sexo,
          m.tamano, m.descripcion, m.esterilizado, m.vacunas, m.fotos,
          m.estado_adopcion, m.estado_apadrinamiento,
+         to_char(m.fecha_ingreso, 'YYYY-MM-DD') AS fecha_ingreso,
          CASE WHEN pm.id_mascota IS NULL THEN '{}'::json ELSE json_build_object(
            'nivel_energia', pm.nivel_energia,
            'sociabilidad_personas', pm.sociabilidad_personas,
@@ -77,6 +80,7 @@ router.get('/', async (req, res) => {
       query = `${petSelect} WHERE m.estado_adopcion = $1 ORDER BY m.fecha_ingreso DESC, m.nombre`;
     }
     const result = await pool.query(query, values);
+    res.set('Cache-Control', 'no-store');
     res.json(result.rows);
   } catch (error) {
     console.error(error);
@@ -95,9 +99,13 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/foto', requireAdmin, upload.single('foto'), (req, res) => {
+router.post('/foto', requireAdmin, upload.single('foto'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna foto' });
-  res.status(201).json({ ruta: `/uploads/mascotas/${req.file.filename}` });
+
+  // Quita el fondo (queda un PNG transparente). Si falla, se conserva la foto original.
+  const rutaFinal = await quitarFondo(req.file.path);
+
+  res.status(201).json({ ruta: `/uploads/mascotas/${path.basename(rutaFinal)}` });
 });
 
 router.post('/', requireAdmin, async (req, res) => {
