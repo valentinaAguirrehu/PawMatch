@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/enlaces.dart';
+import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/models/solicitud_apadrinamiento.dart';
+import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
+import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/pets_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/dato_detalle.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 import 'package:paw_match/widgets/tarjeta_blanca.dart';
@@ -27,6 +33,142 @@ class PetDetailScreen extends StatefulWidget {
 class _PetDetailScreenState extends State<PetDetailScreen> {
   // La personalidad vive en otra tabla: se consulta la mascota completa.
   late Future<Pet> _completa = PetsService.obtener(widget.pet.id);
+  SolicitudApadrinamiento? _miSolicitud;
+
+  @override
+  void initState() {
+    super.initState();
+    _consultarMiSolicitud();
+  }
+
+  Future<void> _consultarMiSolicitud() async {
+    if (Session.idUsuario == null) return;
+    try {
+      final lista = await ApadrinamientoService.listarMisSolicitudes(idMascota: widget.pet.id);
+      if (mounted) {
+        setState(() {
+          _miSolicitud = lista.isNotEmpty ? lista.first : null;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _abrirFormularioApadrinar() {
+    SolicitudApadrinamientoDialog.mostrar(
+      context,
+      pet: widget.pet,
+      onEnviadaExitosamente: _consultarMiSolicitud,
+    );
+  }
+
+  void _verEstadoSolicitud() {
+    final s = _miSolicitud;
+    if (s == null) return;
+
+    if (s.esAprobada) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.stars, color: Colors.green, size: 48),
+          title: Text('¡Eres Padrino de ${widget.pet.nombre}! 🎉'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('📅 Fecha oficial de inicio: ${s.fechaInicioApadrinamiento ?? 'Activo'}'),
+              const SizedBox(height: 8),
+              const Text('Gracias por tu compromiso con la Fundación Maritza Arévalo.'),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Text(
+                  'Debes ponerte en contacto con la fundación para ver los últimos permisos y requerimientos que pide la fundación.',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.deepOrange),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('Coordina directamente por el WhatsApp oficial de la fundación:'),
+            ],
+          ),
+          actions: [
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+              icon: const Icon(Icons.chat),
+              label: const Text('Contactar por WhatsApp'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                final num = FundacionInfo.whatsappNumero.isNotEmpty ? FundacionInfo.whatsappNumero : '573136177747';
+                final msg = 'Hola Fundación Maritza Arévalo, soy el padrino de ${widget.pet.nombre} y vengo de Paw Match.';
+                abrirEnlace(context, 'https://wa.me/$num?text=${Uri.encodeComponent(msg)}', nombre: 'WhatsApp');
+              },
+            ),
+          ],
+        ),
+      );
+    } else if (s.esPendiente) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.hourglass_top, color: Colors.orange, size: 48),
+          title: const Text('Solicitud en Revisión'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tu solicitud para apadrinar a ${widget.pet.nombre} fue enviada el ${s.fechaSolicitud}.'),
+              const SizedBox(height: 10),
+              const Text('Tu motivación registrada:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.motivacion, style: const TextStyle(fontStyle: FontStyle.italic)),
+              const SizedBox(height: 10),
+              const Text(
+                'El administrador está evaluando tu solicitud y recibirás una notificación al ser aprobada.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido')),
+          ],
+        ),
+      );
+    } else if (s.esRechazada) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.info_outline, color: Colors.redAccent, size: 48),
+          title: const Text('Solicitud Rechazada'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Tu solicitud anterior para apadrinar a ${widget.pet.nombre} no fue aprobada.'),
+              const SizedBox(height: 10),
+              const Text('Motivo u observaciones:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(s.observaciones ?? 'No se especificó motivo.'),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _abrirFormularioApadrinar();
+              },
+              child: const Text('Enviar Nueva Solicitud'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
 
   static const _estados = {
     'disponible': 'Disponible',
@@ -384,27 +526,70 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    disabledForegroundColor: Colors.white54,
-                    side: BorderSide(
-                      color: _puedeApadrinar ? Colors.white : Colors.white38,
-                      width: 1.5,
-                    ),
-                    minimumSize: const Size.fromHeight(54),
-                    shape: const StadiumBorder(),
-                    textStyle: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  icon: const Icon(Icons.volunteer_activism),
-                  label: Text(_apadrinada ? 'Apadrinada' : 'Apadrinar'),
-                  onPressed: _puedeApadrinar
-                      ? (widget.onApadrinar ??
-                            () => _proximamente(
-                              'El apadrinamiento estará disponible pronto',
-                            ))
-                      : null,
+                child: Builder(
+                  builder: (context) {
+                    String etiqueta = 'Apadrinar';
+                    IconData icono = Icons.volunteer_activism;
+                    VoidCallback? accion = _abrirFormularioApadrinar;
+                    Color colorFondo = Colors.transparent;
+                    Color colorTexto = Colors.white;
+
+                    if (_miSolicitud != null) {
+                      if (_miSolicitud!.esAprobada) {
+                        etiqueta = 'Padrino Oficial';
+                        icono = Icons.stars;
+                        accion = _verEstadoSolicitud;
+                        colorFondo = Colors.green.shade700;
+                      } else if (_miSolicitud!.esPendiente) {
+                        etiqueta = 'En Revisión';
+                        icono = Icons.hourglass_top;
+                        accion = _verEstadoSolicitud;
+                        colorFondo = Colors.orange.shade700;
+                      } else if (_miSolicitud!.esRechazada) {
+                        etiqueta = 'Rechazada';
+                        icono = Icons.info_outline;
+                        accion = _verEstadoSolicitud;
+                        colorFondo = Colors.redAccent.shade700;
+                      }
+                    } else if (_apadrinada) {
+                      etiqueta = 'Apadrinada';
+                      accion = null;
+                    }
+
+                    if (colorFondo != Colors.transparent) {
+                      return FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colorFondo,
+                          foregroundColor: colorTexto,
+                          minimumSize: const Size.fromHeight(54),
+                          shape: const StadiumBorder(),
+                          textStyle: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        icon: Icon(icono),
+                        label: Text(etiqueta),
+                        onPressed: accion,
+                      );
+                    }
+
+                    return OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        disabledForegroundColor: Colors.white54,
+                        side: BorderSide(
+                          color: _puedeApadrinar ? Colors.white : Colors.white38,
+                          width: 1.5,
+                        ),
+                        minimumSize: const Size.fromHeight(54),
+                        shape: const StadiumBorder(),
+                        textStyle: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      icon: Icon(icono),
+                      label: Text(etiqueta),
+                      onPressed: _puedeApadrinar ? accion : null,
+                    );
+                  },
                 ),
               ),
             ],
