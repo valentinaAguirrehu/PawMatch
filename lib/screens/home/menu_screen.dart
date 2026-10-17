@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
+import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/pets_admin_screen.dart';
 import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
@@ -10,6 +11,7 @@ import 'package:paw_match/screens/match/perfect_match.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
 import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
+import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/nav_flotante.dart';
@@ -56,6 +58,13 @@ class _MenuScreenState extends State<MenuScreen> {
     super.initState();
     final pedido = widget.indiceInicial;
     _index = (pedido >= 0 && pedido <= 3) ? pedido : 0;
+    ApadrinamientoService.iniciarMonitoreo();
+  }
+
+  @override
+  void dispose() {
+    ApadrinamientoService.detenerMonitoreo();
+    super.dispose();
   }
 
   void _alCambiarPila() {
@@ -122,14 +131,44 @@ class _MenuScreenState extends State<MenuScreen> {
               children: [
                 Icon(g.icono, size: 20, color: AppColors.rosa),
                 const SizedBox(width: 12),
-                Text(g.etiqueta),
+                Expanded(child: Text(g.etiqueta)),
+                if (g == _Gestion.apadrinamiento)
+                  ValueListenableBuilder<int>(
+                    valueListenable: ApadrinamientoService.noLeidasAdmin,
+                    builder: (context, count, _) {
+                      if (count == 0) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
               ],
             ),
           ),
       ],
     );
 
-    if (elegida != null && mounted) _cambiarA(3, seccion: elegida);
+    if (elegida != null && mounted) {
+      if (elegida == _Gestion.apadrinamiento) {
+        ApadrinamientoService.marcarLeidasAdmin();
+      }
+      _cambiarA(3, seccion: elegida);
+    }
   }
 
   /// Pantalla que se muestra en la pestaña "Gestionar" según la opción elegida.
@@ -140,12 +179,7 @@ class _MenuScreenState extends State<MenuScreen> {
       icono: Icons.favorite_border,
       detalle: 'Aquí revisarás y responderás las solicitudes de adopción.',
     ),
-    _Gestion.apadrinamiento => const SeccionAdminScreen(
-      titulo: 'Solicitudes de apadrinamiento',
-      icono: Icons.volunteer_activism,
-      detalle:
-          'Aquí revisarás y responderás las solicitudes de apadrinamiento.',
-    ),
+    _Gestion.apadrinamiento => const ApadrinamientoAdminScreen(),
     _Gestion.seguimiento => const SeccionAdminScreen(
       titulo: 'Seguimiento de adopción',
       icono: Icons.timeline,
@@ -156,13 +190,52 @@ class _MenuScreenState extends State<MenuScreen> {
     _Gestion.fundacion => const FundacionAdminScreen(),
   };
 
-  void _cerrarSesion() {
-    Session.cerrar();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-      (_) => false,
+  void _confirmarCerrarSesion() {
+    _ejecutarConfirmarCerrarSesion();
+  }
+
+  Future<void> _ejecutarConfirmarCerrarSesion() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: AppColors.rosa),
+            SizedBox(width: 10),
+            Text('Cerrar sesión'),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro de que deseas cerrar sesión?',
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.rosa,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sí, cerrar sesión'),
+          ),
+        ],
+      ),
     );
+
+    if (confirmar == true && mounted) {
+      ApadrinamientoService.detenerMonitoreo();
+      Session.cerrar();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+        (_) => false,
+      );
+    }
   }
 
   @override
@@ -170,7 +243,9 @@ class _MenuScreenState extends State<MenuScreen> {
     final isAdmin = Session.isAdmin;
 
     final paginas = <Widget>[
-      HomeTab(onVerMascotas: () => _irA(1), onCerrarSesion: _cerrarSesion),
+      HomeTab(
+        onVerMascotas: () => _irA(1),
+      ),
       const PetScreen(),
       if (isAdmin) ...[
         const ProfileScreen(),
@@ -201,7 +276,7 @@ class _MenuScreenState extends State<MenuScreen> {
                   IconButton(
                     tooltip: 'Cerrar sesión',
                     icon: const FeatureIcon.cerrarSesion(),
-                    onPressed: _cerrarSesion,
+                    onPressed: _confirmarCerrarSesion,
                   ),
                 ],
               ),
@@ -219,7 +294,20 @@ class _MenuScreenState extends State<MenuScreen> {
             const NavItem(FeatureIcon.mascota(tamano: 24), 'Mascotas'),
             if (isAdmin) ...[
               const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
-              const NavItem(FeatureIcon.gestionar(), 'Gestionar'),
+              NavItem(
+                ValueListenableBuilder<int>(
+                  valueListenable: ApadrinamientoService.noLeidasAdmin,
+                  builder: (context, count, child) => Badge(
+                    isLabelVisible: count > 0,
+                    label: Text('$count'),
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    child: child!,
+                  ),
+                  child: const FeatureIcon.gestionar(),
+                ),
+                'Gestionar',
+              ),
             ] else ...[
               const NavItem(
                 FeatureIcon.compatibilidad(tamano: 24),

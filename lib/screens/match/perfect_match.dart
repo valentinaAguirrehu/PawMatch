@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
@@ -189,8 +190,10 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
           usuario: ranking.usuario,
           onAdoptar: () =>
               _accionPendiente('Adoptar', destacado.mascota.nombre),
-          onApadrinar: () =>
-              _accionPendiente('Apadrinar', destacado.mascota.nombre),
+          onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
+            context,
+            pet: destacado.mascota,
+          ),
         ),
         if (siguientes.isNotEmpty) ...[
           const SizedBox(height: 22),
@@ -215,9 +218,9 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                       'Adoptar',
                       siguientes[i].mascota.nombre,
                     ),
-                    onApadrinar: () => _accionPendiente(
-                      'Apadrinar',
-                      siguientes[i].mascota.nombre,
+                    onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
+                      context,
+                      pet: siguientes[i].mascota,
                     ),
                   ),
               ];
