@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
@@ -85,14 +86,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
               ],
             );
           }
-          if (snap.hasError) return _error();
+          if (snap.hasError) return _error(snap.error);
           return _contenido(snap.data!);
         },
       ),
     );
   }
 
-  Widget _error() {
+  Widget _error(Object? error) {
+    final detalle = (error ?? '').toString().replaceFirst('Exception: ', '');
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       children: [
@@ -102,6 +104,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
         ),
         const SizedBox(height: 8),
         const Text('No pudimos calcular tu match', textAlign: TextAlign.center),
+        if (detalle.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+            child: Text(
+              detalle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.black54, fontSize: 12),
+            ),
+          ),
         Center(
           child: TextButton(
             onPressed: _cargar,
@@ -179,8 +190,10 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
           usuario: ranking.usuario,
           onAdoptar: () =>
               _accionPendiente('Adoptar', destacado.mascota.nombre),
-          onApadrinar: () =>
-              _accionPendiente('Apadrinar', destacado.mascota.nombre),
+          onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
+            context,
+            pet: destacado.mascota,
+          ),
         ),
         if (siguientes.isNotEmpty) ...[
           const SizedBox(height: 22),
@@ -205,9 +218,9 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                       'Adoptar',
                       siguientes[i].mascota.nombre,
                     ),
-                    onApadrinar: () => _accionPendiente(
-                      'Apadrinar',
-                      siguientes[i].mascota.nombre,
+                    onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
+                      context,
+                      pet: siguientes[i].mascota,
                     ),
                   ),
               ];

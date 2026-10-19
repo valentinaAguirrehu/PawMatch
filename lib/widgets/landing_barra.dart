@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/core/layout.dart';
+import 'package:paw_match/widgets/fundacion_imagen.dart';
 
 /// Barra superior fija de la landing: logo a la izquierda y los botones
 /// "Iniciar sesión" y "Registrarse" a la derecha (se compacta en celular).
@@ -101,23 +103,26 @@ class EnlaceBarra {
   const EnlaceBarra(this.texto, this.onPressed);
 }
 
-/// Logo pequeño (assets/images/logo.png); si no existe, una huella.
+/// Logo pequeño configurado en la base de datos (o assets/images/logo.png).
 class _Logo extends StatelessWidget {
   const _Logo();
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 40,
-    height: 40,
-    child: ClipOval(
-      child: Image.asset(
-        'assets/images/logo.png',
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => const ColoredBox(
-          color: AppColors.rosaClaro,
-          child: Icon(Icons.pets, color: AppColors.rosa, size: 22),
+  Widget build(BuildContext context) => ValueListenableBuilder<int>(
+        valueListenable: FundacionInfo.cambios,
+        builder: (context, _, __) => SizedBox(
+          width: 40,
+          height: 40,
+          child: ClipOval(
+            child: FundacionImagen(
+              ruta: FundacionInfo.logo.isEmpty
+                  ? 'assets/images/logo.png'
+                  : FundacionInfo.logo,
+              fit: BoxFit.cover,
+              icono: Icons.pets,
+              tamanoIcono: 22,
+            ),
+          ),
         ),
-      ),
-    ),
-  );
+      );
 }

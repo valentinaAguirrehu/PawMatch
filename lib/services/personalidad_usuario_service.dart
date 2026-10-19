@@ -33,7 +33,7 @@ class PersonalidadUsuarioService {
     );
     if (resp.statusCode == 201 || resp.statusCode == 409) return;
     throw Exception(
-      _mensaje(_leer(resp), 'No se pudo guardar tu personalidad'),
+      _mensaje(_leer(resp), 'No se pudo guardar tu personalidad', resp),
     );
   }
 
@@ -52,7 +52,9 @@ class PersonalidadUsuarioService {
     );
     final data = _leer(resp);
     if (resp.statusCode != 200 || data is! Map) {
-      throw Exception(_mensaje(data, 'No se pudo consultar tu personalidad'));
+      throw Exception(
+        _mensaje(data, 'No se pudo consultar tu personalidad', resp),
+      );
     }
     if (data['existe'] != true) return null;
 
@@ -104,8 +106,16 @@ class PersonalidadUsuarioService {
     }
   }
 
-  static String _mensaje(dynamic data, String porDefecto) {
+  static String _mensaje(
+    dynamic data,
+    String porDefecto, [
+    http.Response? resp,
+  ]) {
     if (data is Map && data['error'] != null) return data['error'].toString();
+    if (resp != null && resp.statusCode == 404) {
+      return '$porDefecto (HTTP 404). Reinicia el backend con: node server.js';
+    }
+    if (resp != null) return '$porDefecto (HTTP ${resp.statusCode})';
     return porDefecto;
   }
 }

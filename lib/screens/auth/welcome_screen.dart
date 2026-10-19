@@ -7,9 +7,11 @@ import 'package:paw_match/core/layout.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/screens/auth/login_screen.dart';
 import 'package:paw_match/screens/auth/register_screen.dart';
+import 'package:paw_match/services/fundacion_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/bloque_landing.dart';
 import 'package:paw_match/widgets/boton_landing.dart';
+import 'package:paw_match/widgets/fundacion_imagen.dart';
 import 'package:paw_match/widgets/landing_barra.dart';
 import 'package:paw_match/widgets/perrito_landing_card.dart';
 import 'package:paw_match/widgets/redes_sociales.dart';
@@ -49,6 +51,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   void initState() {
     super.initState();
+    FundacionService.cargar();
     _cargar();
   }
 
@@ -177,32 +180,39 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         children: [
           LandingBarra(onIniciarSesion: _irLogin, onRegistrarse: _irRegistro),
           Expanded(
-            child: SingleChildScrollView(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: Layout.anchoMaximo,
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(pad, 16, pad, 90),
-                    child: Column(
-                      children: [
-                        _hero(m),
-                        separacion,
-                        _rescatista(m),
-                        separacion,
-                        _mision(m),
-                        separacion,
-                        _perritos(m),
-                        separacion,
-                        KeyedSubtree(key: _kAyuda, child: _ayuda(m)),
-                        const SizedBox(height: 12),
-                        Text(
-                          '© ${DateTime.now().year} Paw Match · ${FundacionInfo.nombre} · ${FundacionInfo.ciudad}',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+            child: ValueListenableBuilder<int>(
+              valueListenable: FundacionInfo.cambios,
+              builder: (context, _, __) => SingleChildScrollView(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: Layout.anchoMaximo,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(pad, 16, pad, 90),
+                      child: Column(
+                        children: [
+                          _hero(m),
+                          separacion,
+                          if (FundacionInfo.rescatistaNombre.isNotEmpty ||
+                              FundacionInfo.rescatistaTexto.isNotEmpty ||
+                              FundacionInfo.fotoRescatista.isNotEmpty) ...[
+                            _rescatista(m),
+                            separacion,
+                          ],
+                          _mision(m),
+                          separacion,
+                          _perritos(m),
+                          separacion,
+                          KeyedSubtree(key: _kAyuda, child: _ayuda(m)),
+                          const SizedBox(height: 12),
+                          Text(
+                            '© ${DateTime.now().year} Paw Match · ${FundacionInfo.nombre} · ${FundacionInfo.ciudad}',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -274,19 +284,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             width: alto * 0.74,
             height: alto * 0.86,
             child: ClipOval(
-              child: Image.asset(
-                'assets/fundacion/Maritzanimada.jpg',
+              child: FundacionImagen(
+                ruta: FundacionInfo.imagenPrincipal,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const ColoredBox(
-                  color: AppColors.rosaClaro,
-                  child: Center(
-                    child: Icon(
-                      Icons.volunteer_activism,
-                      color: AppColors.rosa,
-                      size: 80,
-                    ),
-                  ),
-                ),
+                icono: Icons.volunteer_activism,
+                tamanoIcono: 80,
               ),
             ),
           ),
@@ -298,11 +300,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   // ───────────── 2. Nuestra misión ─────────────
   Widget _mision(_Medidas m) {
     final t = Theme.of(context).textTheme;
-    const que = _ColumnaTexto(
+    final que = _ColumnaTexto(
       titulo: 'Lo que hacemos',
       texto: FundacionInfo.mision,
     );
-    const queremos = _ColumnaTexto(
+    final queremos = _ColumnaTexto(
       titulo: 'Lo que queremos',
       texto: FundacionInfo.vision,
     );
@@ -332,15 +334,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ),
           const SizedBox(height: 28),
           m.escritorio
-              ? const Row(
+              ? Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(child: que),
-                    SizedBox(width: 40),
+                    const SizedBox(width: 40),
                     Expanded(child: queremos),
                   ],
                 )
-              : const Column(children: [que, SizedBox(height: 24), queremos]),
+              : Column(children: [que, const SizedBox(height: 24), queremos]),
           const SizedBox(height: 28),
           BotonLanding(
             texto: '¿Cómo ayudar?',
@@ -354,19 +356,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   // ───────────── 3. Nuestra rescatista ─────────────
   Widget _rescatista(_Medidas m) {
     final t = Theme.of(context).textTheme;
-    final foto = Image.asset(
-      FundacionInfo.fotoRescatista,
+    final foto = FundacionImagen(
+      ruta: FundacionInfo.fotoRescatista,
       fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => const ColoredBox(
-        color: AppColors.rosaClaro,
-        child: Center(
-          child: Icon(
-            Icons.volunteer_activism,
-            size: 64,
-            color: AppColors.rosa,
-          ),
-        ),
-      ),
+      icono: Icons.volunteer_activism,
+      tamanoIcono: 64,
     );
 
     final panel = Container(
@@ -576,15 +570,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final tarjetas = [
       TarjetaAyuda(
         icono: Icons.home_outlined,
-        titulo: 'Adopta',
-        texto:
-            'Encuentra un compañero que encaje contigo y dale un hogar lleno de cariño.',
+        titulo: FundacionInfo.ayudaAdoptaTitulo,
+        texto: FundacionInfo.ayudaAdoptaTexto,
       ),
       TarjetaAyuda(
         icono: Icons.volunteer_activism,
-        titulo: 'Apadrina',
-        texto:
-            'Contribuye a su cuidado mientras esperan encontrar una familia permanente.',
+        titulo: FundacionInfo.ayudaApadrinaTitulo,
+        texto: FundacionInfo.ayudaApadrinaTexto,
       ),
     ];
 
@@ -598,11 +590,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.asset(
-                  FundacionInfo.fotoFondoAyudas,
+                FundacionImagen(
+                  ruta: FundacionInfo.fotoFondoAyudas,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const ColoredBox(color: AppColors.rosa),
+                  icono: Icons.pets,
+                  fondo: AppColors.rosa,
                 ),
                 ColoredBox(color: AppColors.rosa.withValues(alpha: 0.82)),
                 Padding(
@@ -672,13 +664,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           '${FundacionInfo.nombre}\n${FundacionInfo.direccion}\n${FundacionInfo.ciudad}',
           style: t.bodyLarge?.copyWith(height: 1.5),
         ),
-        const SizedBox(height: 14),
-        BotonLanding(
-          texto: 'Abrir ubicación en Google Maps',
-          relleno: false,
-          onPressed: () =>
-              abrirEnlace(context, FundacionInfo.mapaUrl, nombre: 'el mapa'),
-        ),
+        if (FundacionInfo.mapaUrl.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          BotonLanding(
+            texto: 'Abrir ubicación en Google Maps',
+            relleno: false,
+            onPressed: () =>
+                abrirEnlace(context, FundacionInfo.mapaUrl, nombre: 'el mapa'),
+          ),
+        ],
       ],
     );
 
@@ -701,11 +695,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           ],
         ),
         const SizedBox(height: 8),
-        Text(
-          'Para coordinar una donación, contáctanos por WhatsApp.',
-          style: t.bodyLarge?.copyWith(height: 1.5),
-        ),
-        const SizedBox(height: 14),
+        if (FundacionInfo.contactoTexto.isNotEmpty) ...[
+          Text(
+            FundacionInfo.contactoTexto,
+            style: t.bodyLarge?.copyWith(height: 1.5),
+          ),
+          const SizedBox(height: 14),
+        ],
         const RedesSociales(conTexto: true),
       ],
     );
