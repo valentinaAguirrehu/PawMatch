@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
@@ -209,36 +210,57 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
                 ),
-                ValueListenableBuilder<int>(
-                  valueListenable: ApadrinamientoService.noLeidasUsuario,
-                  builder: (context, count, child) => Badge(
-                    isLabelVisible: count > 0,
-                    label: Text(count > 1 ? '$count' : 'Nuevo'),
-                    backgroundColor: Colors.redAccent,
-                    textColor: Colors.white,
-                    child: TextButton.icon(
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.rosa,
-                      ),
-                      icon: const Icon(Icons.volunteer_activism, size: 16),
-                      label: const Text('Mis apadrinamientos'),
-                      onPressed: () {
-                        ApadrinamientoService.marcarLeidasUsuario();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MisApadrinamientosScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
                 TextButton(
                   onPressed: widget.onVerMascotas,
                   child: const Text('Ver todos'),
                 ),
               ],
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 4,
+                children: [
+                  TextButton.icon(
+                    style: TextButton.styleFrom(foregroundColor: AppColors.rosa),
+                    icon: const Icon(Icons.favorite_border, size: 16),
+                    label: const Text('Mis adopciones'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MyAdoptionsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ValueListenableBuilder<int>(
+                    valueListenable: ApadrinamientoService.noLeidasUsuario,
+                    builder: (context, count, child) => Badge(
+                      isLabelVisible: count > 0,
+                      label: Text(count > 1 ? '$count' : 'Nuevo'),
+                      backgroundColor: Colors.redAccent,
+                      textColor: Colors.white,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.rosa,
+                        ),
+                        icon: const Icon(Icons.volunteer_activism, size: 16),
+                        label: const Text('Mis apadrinamientos'),
+                        onPressed: () {
+                          ApadrinamientoService.marcarLeidasUsuario();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MisApadrinamientosScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 8),
 

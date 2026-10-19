@@ -50,4 +50,5 @@ paw_match_backend/.env
 paw_match_backend/npm-debug.log*
 paw_match_backend/.npm/
 paw_match_backend/uploads/
+paw_match_backend/private_uploads/
 android/build/
