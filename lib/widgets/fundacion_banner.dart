@@ -14,68 +14,73 @@ class FundacionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        color: AppColors.rosa,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  FundacionInfo.nombre,
-                  style: t.labelLarge?.copyWith(color: Colors.white70),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  FundacionInfo.resumen,
-                  style: t.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
+    return ValueListenableBuilder<int>(
+      valueListenable: FundacionInfo.cambios,
+      builder: (context, _, __) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            color: AppColors.rosa,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FilledButton(
-                      onPressed: onMision,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppColors.rosa,
-                        minimumSize: const Size(0, 44),
-                        shape: const StadiumBorder(),
-                      ),
-                      child: const Text('Misión'),
+                    Text(
+                      FundacionInfo.nombre,
+                      style: t.labelLarge?.copyWith(color: Colors.white70),
                     ),
-                    OutlinedButton(
-                      onPressed: onVision,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white, width: 1.5),
-                        minimumSize: const Size(0, 44),
-                        shape: const StadiumBorder(),
+                    const SizedBox(height: 6),
+                    Text(
+                      FundacionInfo.resumen,
+                      style: t.titleLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
                       ),
-                      child: const Text('Visión'),
+                    ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: onMision,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppColors.rosa,
+                            minimumSize: const Size(0, 44),
+                            shape: const StadiumBorder(),
+                          ),
+                          child: const Text('Misión'),
+                        ),
+                        OutlinedButton(
+                          onPressed: onVision,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white, width: 1.5),
+                            minimumSize: const Size(0, 44),
+                            shape: const StadiumBorder(),
+                          ),
+                          child: const Text('Visión'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.pets,
+                size: 76,
+                color: Colors.white.withValues(alpha: 0.3),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Icon(
-            Icons.pets,
-            size: 76,
-            color: Colors.white.withValues(alpha: 0.3),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

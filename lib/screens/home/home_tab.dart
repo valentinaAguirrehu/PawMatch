@@ -2,21 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
+import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
+import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
-import 'package:paw_match/widgets/chip_seleccion.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/fundacion_banner.dart';
 import 'package:paw_match/widgets/pet_card_color.dart';
 
 /// Pestaña "Inicio": saludo, buscador, Fundación y perros para adoptar o apadrinar.
 class HomeTab extends StatefulWidget {
-  final VoidCallback onVerMascotas, onCerrarSesion;
+  final VoidCallback onVerMascotas;
   const HomeTab({
     super.key,
     required this.onVerMascotas,
-    required this.onCerrarSesion,
   });
 
   @override
@@ -25,19 +27,18 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   late Future<List<Pet>> _future = PetsService.listar();
-  bool _paraAdopcion = true; // false = para apadrinar
 
   Future<void> _recargar() async {
-    setState(() => _future = PetsService.listar());
+    setState(() {
+      _future = PetsService.listar();
+    });
     await _future.catchError((_) => <Pet>[]);
   }
 
-  /// Solo perros, según el modo elegido.
+  /// Perros disponibles para adopción o apadrinamiento.
   List<Pet> _filtrar(List<Pet> pets) => pets.where((p) {
     if (p.especie.toLowerCase() != 'perro') return false;
-    return _paraAdopcion
-        ? p.estadoAdopcion == 'disponible'
-        : p.estadoApadrinamiento == 'disponible';
+    return p.estadoAdopcion.toLowerCase() != 'adoptado';
   }).toList();
 
   void _mostrarInfo(String titulo, String texto) => showModalBottomSheet(
@@ -71,6 +72,58 @@ class _HomeTabState extends State<HomeTab> {
     MaterialPageRoute(builder: (_) => PetDetailScreen(pet: pet)),
   );
 
+  void _abrirApadrinamiento(Pet pet) {
+    SolicitudApadrinamientoDialog.mostrar(
+      context,
+      pet: pet,
+      onEnviadaExitosamente: _recargar,
+    );
+  }
+
+  Future<void> _confirmarCerrarSesion() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout, color: AppColors.rosa),
+            SizedBox(width: 10),
+            Text('Cerrar sesión'),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro de que deseas cerrar sesión?',
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.rosa,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sí, cerrar sesión'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar == true && mounted) {
+      ApadrinamientoService.detenerMonitoreo();
+      Session.cerrar();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+        (_) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
@@ -102,7 +155,7 @@ class _HomeTabState extends State<HomeTab> {
                 ),
                 IconButton.filledTonal(
                   tooltip: 'Cerrar sesión',
-                  onPressed: widget.onCerrarSesion,
+                  onPressed: _confirmarCerrarSesion,
                   icon: const FeatureIcon.cerrarSesion(),
                 ),
               ],
@@ -144,33 +197,41 @@ class _HomeTabState extends State<HomeTab> {
             ),
             const SizedBox(height: 24),
 
-            // Selector adopción / apadrinamiento
-            Row(
-              children: [
-                ChipSeleccion(
-                  texto: 'Adopción',
-                  icono: const FeatureIcon.mascota(tamano: 18),
-                  seleccionado: _paraAdopcion,
-                  onTap: () => setState(() => _paraAdopcion = true),
-                ),
-                const SizedBox(width: 10),
-                ChipSeleccion(
-                  texto: 'Apadrinamiento',
-                  icono: const FeatureIcon.apadrinar(tamano: 18),
-                  seleccionado: !_paraAdopcion,
-                  onTap: () => setState(() => _paraAdopcion = false),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
+            // Encabezado sección perritos
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    _paraAdopcion
-                        ? 'Perros para adoptar'
-                        : 'Perros para apadrinar',
-                    style: t.titleLarge?.copyWith(color: AppColors.texto),
+                    'Nuestros perritos',
+                    style: t.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.texto,
+                    ),
+                  ),
+                ),
+                ValueListenableBuilder<int>(
+                  valueListenable: ApadrinamientoService.noLeidasUsuario,
+                  builder: (context, count, child) => Badge(
+                    isLabelVisible: count > 0,
+                    label: Text(count > 1 ? '$count' : 'Nuevo'),
+                    backgroundColor: Colors.redAccent,
+                    textColor: Colors.white,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.rosa,
+                      ),
+                      icon: const Icon(Icons.volunteer_activism, size: 16),
+                      label: const Text('Mis apadrinamientos'),
+                      onPressed: () {
+                        ApadrinamientoService.marcarLeidasUsuario();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MisApadrinamientosScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 ),
                 TextButton(
@@ -225,15 +286,17 @@ class _HomeTabState extends State<HomeTab> {
                 }
                 final visibles = pets.take(10).toList();
                 return SizedBox(
-                  height: 290,
+                  height: 330,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: visibles.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 14),
+                    separatorBuilder: (_, index) => const SizedBox(width: 14),
                     itemBuilder: (_, i) => PetCardColor(
                       pet: visibles[i],
                       color: AppColors.pastel[i % AppColors.pastel.length],
                       onTap: () => _abrirDetalle(visibles[i]),
+                      onAdoptar: () => _abrirDetalle(visibles[i]),
+                      onApadrinar: () => _abrirApadrinamiento(visibles[i]),
                     ),
                   ),
                 );

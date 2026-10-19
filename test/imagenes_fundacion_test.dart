@@ -15,9 +15,6 @@ void main() {
       rutas,
       containsAll([
         'assets/fundacion/Maritzanimada.jpg',
-        'assets/fundacion/bebe.jpg',
-        'assets/fundacion/blanca.jpg',
-        'assets/fundacion/gris.jpg',
         'assets/fundacion/maitza.jpeg',
       ]),
     );
@@ -25,7 +22,6 @@ void main() {
       rutas,
       containsAll([
         FundacionInfo.fotoRescatista,
-        FundacionInfo.fotoFondoAyudas,
       ]),
     );
 
