@@ -131,6 +131,78 @@ Fundación Maritza Arévalo & Equipo Paw Match
   }
 }
 
+function escaparHtml(texto) {
+  return String(texto ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Notifica al usuario que su solicitud de adopción fue aprobada.
+ */
+async function enviarCorreoAprobacionAdopcion({
+  destinatario,
+  nombreUsuario,
+  nombreMascota,
+  whatsappFundacion = '573136177747',
+}) {
+  const nombre = escaparHtml(nombreUsuario);
+  const mascota = escaparHtml(nombreMascota);
+  const asunto = `¡Tu solicitud para adoptar a ${nombreMascota} fue aprobada! - Paw Match`;
+  const textoPlano = `
+Hola ${nombreUsuario},
+
+Tu solicitud para adoptar a ${nombreMascota} fue APROBADA por la Fundación Maritza Arévalo.
+
+Para coordinar la entrega y los últimos requisitos, escríbenos por WhatsApp:
+https://wa.me/${whatsappFundacion}
+
+También puedes ver el estado en la app Paw Match, sección Mis adopciones.
+
+Atentamente,
+Fundación Maritza Arévalo & Equipo Paw Match
+`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ffccd5; border-radius: 12px; background-color: #fffafb;">
+      <h1 style="color: #e91e63; text-align: center;">¡Adopción aprobada!</h1>
+      <p>Hola <strong>${nombre}</strong>,</p>
+      <p>Tu solicitud para adoptar a <strong>${mascota}</strong> fue <strong style="color:#2e7d32;">APROBADA</strong>.</p>
+      <p>Contacta a la fundación para coordinar la entrega y los últimos requisitos.</p>
+      <p style="text-align:center;">
+        <a href="https://wa.me/${whatsappFundacion}" style="background:#25d366;color:white;padding:12px 22px;border-radius:24px;text-decoration:none;font-weight:bold;">
+          Contactar por WhatsApp
+        </a>
+      </p>
+    </div>
+  `;
+
+  const transporter = obtenerTransporter();
+  if (!transporter) {
+    console.log(`[CORREO SIMULADO] Adopción aprobada para ${destinatario} (${nombreMascota})`);
+    return { enviado: true, simulado: true };
+  }
+
+  try {
+    const remitente = process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.SMTP_USER;
+    await transporter.sendMail({
+      from: `"Fundación Maritza Arévalo - Paw Match" <${remitente}>`,
+      to: destinatario,
+      subject: asunto,
+      text: textoPlano,
+      html,
+    });
+    console.log(`[CORREO ENVIADO] Adopción aprobada notificada a ${destinatario}`);
+    return { enviado: true };
+  } catch (error) {
+    console.error('[CORREO ERROR] No se pudo enviar la aprobación de adopción:', error.message);
+    return { enviado: false, error: error.message };
+  }
+}
+
 module.exports = {
   enviarCorreoAprobacionApadrinamiento,
+  enviarCorreoAprobacionAdopcion,
 };

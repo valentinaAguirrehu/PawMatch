@@ -1,0 +1,502 @@
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const { randomUUID } = require('crypto');
+const pool = require('../db');
+const { enviarCorreoAprobacionAdopcion } = require('../utils/correo');
+
+const router = express.Router();
+
+const privateUploadsDir = path.join(__dirname, '..', 'private_uploads', 'documentos_adopcion');
+fs.mkdirSync(privateUploadsDir, { recursive: true });
+
+const extensiones = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: privateUploadsDir,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeExt = extensiones.has(ext) ? ext : '.jpg';
+      const prefijo = file.fieldname === 'foto_cedula' ? 'cedula' : 'recibo';
+      cb(null, `${prefijo}_${randomUUID()}${safeExt}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024, files: 2 },
+  fileFilter: (_req, file, cb) => {
+    const mimeOk = /^image\/(jpeg|jpg|png|webp)$/.test(file.mimetype);
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!mimeOk && !extensiones.has(ext)) {
+      return cb(new Error('Solo se permiten imágenes JPG, PNG o WEBP'));
+    }
+    cb(null, true);
+  },
+});
+
+function subirArchivos(req, res, next) {
+  upload.fields([
+    { name: 'foto_cedula', maxCount: 1 },
+    { name: 'foto_servicios_publicos', maxCount: 1 },
+  ])(req, res, (err) => {
+    if (!err) return next();
+    borrarSubidos(req.files);
+    const mensaje = err.code === 'LIMIT_FILE_SIZE'
+      ? 'Cada imagen debe pesar máximo 10 MB'
+      : (err.message || 'No se pudieron subir las imágenes');
+    return res.status(400).json({ error: mensaje });
+  });
+}
+
+function borrarSubidos(files) {
+  if (!files) return;
+  for (const lista of Object.values(files)) {
+    for (const archivo of lista || []) {
+      if (archivo?.path && fs.existsSync(archivo.path)) {
+        fs.unlinkSync(archivo.path);
+      }
+    }
+  }
+}
+
+function esUuid(valor) {
+  return typeof valor === 'string' && uuidRe.test(valor);
+}
+
+function leerBool(valor) {
+  if (valor === true || valor === false) return valor;
+  if (typeof valor !== 'string') return null;
+  const texto = valor.trim().toLowerCase();
+  if (['true', '1', 'si', 'sí', 'yes'].includes(texto)) return true;
+  if (['false', '0', 'no'].includes(texto)) return false;
+  return null;
+}
+
+function archivoPrivado(nombre) {
+  if (typeof nombre !== 'string' || !nombre.trim()) return null;
+  const base = path.basename(nombre.trim());
+  if (base !== nombre.trim()) return null;
+  const full = path.resolve(privateUploadsDir, base);
+  const root = path.resolve(privateUploadsDir);
+  const rootConSep = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (full !== root && !full.startsWith(rootConSep)) return null;
+  return full;
+}
+
+function errorDb(res, err, fallback) {
+  console.error(fallback, err);
+  if (err.code === '42P01' || err.code === '42703') {
+    return res.status(500).json({
+      error: 'La tabla SolicitudAdopcion no coincide con el esquema esperado.',
+    });
+  }
+  return res.status(500).json({ error: fallback });
+}
+
+async function autenticarUsuario(req) {
+  const userId = (req.header('x-usuario-id') || req.query.usuario_id || '').toString().trim();
+  if (!esUuid(userId)) return null;
+
+  try {
+    const res = await pool.query(
+      `SELECT id_usuario, rol, estado_cuenta, nombres, apellidos, correo
+       FROM usuario WHERE id_usuario = $1`,
+      [userId]
+    );
+    if (res.rows.length === 0) return null;
+    const usuario = res.rows[0];
+    if (usuario.estado_cuenta !== 'activo') return null;
+    return usuario;
+  } catch (err) {
+    console.error('Error autenticando usuario:', err);
+    return null;
+  }
+}
+
+async function requireAdmin(req, res, next) {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión con una cuenta activa' });
+  }
+  if (usuario.rol !== 'administrador') {
+    return res.status(403).json({ error: 'Solo un administrador puede realizar esta acción' });
+  }
+  req.usuarioActual = usuario;
+  next();
+}
+
+const selectSolicitud = `
+  SELECT
+    s.id_solicitud_adopcion,
+    s.id_usuario,
+    s.id_mascota,
+    s.tipo_vivienda,
+    s.tiene_patio,
+    s.tiene_ninos,
+    s.tiene_mascotas,
+    s.otras_mascotas,
+    s.tiempo_disponible,
+    s.experiencia_previa,
+    s.informacion_adicional,
+    (s.foto_cedula IS NOT NULL AND btrim(s.foto_cedula) <> '') AS tiene_foto_cedula,
+    (s.foto_servicios_publicos IS NOT NULL AND btrim(s.foto_servicios_publicos) <> '') AS tiene_foto_recibo,
+    to_char(s.fecha_solicitud, 'YYYY-MM-DD HH24:MI:SS') AS fecha_solicitud,
+    s.estado,
+    to_char(s.fecha_actualizacion_estado, 'YYYY-MM-DD HH24:MI:SS') AS fecha_actualizacion_estado,
+    s.id_administrador_revisor,
+    COALESCE(u.nombres, '') AS solicitante_nombres,
+    COALESCE(u.apellidos, '') AS solicitante_apellidos,
+    COALESCE(u.correo, '') AS solicitante_correo,
+    COALESCE(u.telefono, '') AS solicitante_telefono,
+    COALESCE(u.direccion, '') AS solicitante_direccion,
+    COALESCE(u.documento_identidad, '') AS solicitante_cedula,
+    COALESCE(m.nombre, '') AS mascota_nombre,
+    COALESCE(m.especie, '') AS mascota_especie,
+    COALESCE(m.raza, '') AS mascota_raza,
+    m.edad AS mascota_edad,
+    COALESCE(m.fotos, '') AS mascota_fotos,
+    COALESCE(m.estado_adopcion::text, '') AS mascota_estado_adopcion
+  FROM solicitudadopcion s
+  INNER JOIN usuario u ON u.id_usuario = s.id_usuario
+  INNER JOIN mascota m ON m.id_mascota = s.id_mascota
+`;
+
+/**
+ * POST /api/adoption-requests
+ * Crea una solicitud con las respuestas del formulario y las dos fotos.
+ */
+router.post('/', subirArchivos, async (req, res) => {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) {
+    borrarSubidos(req.files);
+    return res.status(401).json({ error: 'Debes iniciar sesión para solicitar una adopción' });
+  }
+
+  let guardada = false;
+  try {
+    const idMascota = (req.body.id_mascota || '').trim();
+    const tipoVivienda = (req.body.tipo_vivienda || '').trim();
+    const tiempoDisponible = (req.body.tiempo_disponible || '').trim();
+    const informacion = (req.body.informacion_adicional || '').trim();
+    const tienePatio = leerBool(req.body.tiene_patio);
+    const tieneNinos = leerBool(req.body.tiene_ninos);
+    const tieneMascotas = leerBool(req.body.tiene_mascotas);
+    const experiencia = leerBool(req.body.experiencia_previa);
+    const otrasMascotas = (req.body.otras_mascotas || '').trim();
+    const cedula = req.files?.foto_cedula?.[0];
+    const recibo = req.files?.foto_servicios_publicos?.[0];
+
+    if (!esUuid(idMascota)) {
+      return res.status(400).json({ error: 'Debes seleccionar una mascota' });
+    }
+    if (!tipoVivienda || tipoVivienda.length > 50) {
+      return res.status(400).json({ error: 'Indica un tipo de vivienda válido' });
+    }
+    if (tienePatio === null || tieneNinos === null || tieneMascotas === null || experiencia === null) {
+      return res.status(400).json({ error: 'Responde todas las preguntas del formulario' });
+    }
+    if (!tiempoDisponible || tiempoDisponible.length > 50) {
+      return res.status(400).json({ error: 'Indica cuánto tiempo puedes dedicarle a la mascota' });
+    }
+    if (informacion.length < 20) {
+      return res.status(400).json({
+        error: 'Cuéntanos un poco más sobre por qué quieres adoptar (mínimo 20 caracteres)',
+      });
+    }
+    if (informacion.length > 2000) {
+      return res.status(400).json({ error: 'La información adicional no puede exceder los 2000 caracteres' });
+    }
+    if (tieneMascotas && (!otrasMascotas || otrasMascotas.length > 200)) {
+      return res.status(400).json({
+        error: 'Describe las otras mascotas del hogar (máximo 200 caracteres)',
+      });
+    }
+    if (!cedula || !recibo) {
+      return res.status(400).json({
+        error: 'Debes adjuntar la foto de la cédula y la del recibo de servicio público',
+      });
+    }
+
+    const petCheck = await pool.query(
+      'SELECT id_mascota, nombre, estado_adopcion FROM mascota WHERE id_mascota = $1',
+      [idMascota]
+    );
+    if (petCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'La mascota seleccionada no existe' });
+    }
+    const mascota = petCheck.rows[0];
+    if (mascota.estado_adopcion === 'adoptado') {
+      return res.status(409).json({ error: 'Esta mascota ya fue adoptada' });
+    }
+    if (mascota.estado_adopcion === 'en_proceso') {
+      return res.status(409).json({ error: 'Esta mascota ya tiene un proceso de adopción en curso' });
+    }
+
+    const existe = await pool.query(
+      `SELECT id_solicitud_adopcion, estado
+       FROM solicitudadopcion
+       WHERE id_usuario = $1 AND id_mascota = $2 AND estado IN ('pendiente', 'aprobada')`,
+      [usuario.id_usuario, idMascota]
+    );
+    if (existe.rows.length > 0) {
+      const est = existe.rows[0].estado;
+      return res.status(409).json({
+        error: est === 'aprobada'
+          ? 'Ya tienes una adopción aprobada para esta mascota'
+          : 'Ya tienes una solicitud pendiente para esta mascota',
+      });
+    }
+
+    const insercion = await pool.query(
+      `INSERT INTO solicitudadopcion (
+        id_usuario, id_mascota, tipo_vivienda, tiene_patio, tiene_ninos,
+        tiene_mascotas, otras_mascotas, tiempo_disponible, experiencia_previa,
+        informacion_adicional, foto_cedula, foto_servicios_publicos, estado
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente')
+      RETURNING id_solicitud_adopcion`,
+      [
+        usuario.id_usuario,
+        idMascota,
+        tipoVivienda,
+        tienePatio,
+        tieneNinos,
+        tieneMascotas,
+        tieneMascotas ? otrasMascotas : null,
+        tiempoDisponible,
+        experiencia,
+        informacion,
+        cedula.filename,
+        recibo.filename,
+      ]
+    );
+
+    guardada = true;
+    return res.status(201).json({
+      mensaje: 'Solicitud de adopción enviada exitosamente',
+      id_solicitud_adopcion: insercion.rows[0].id_solicitud_adopcion,
+    });
+  } catch (err) {
+    return errorDb(res, err, 'Error interno al registrar la solicitud');
+  } finally {
+    if (!guardada) borrarSubidos(req.files);
+  }
+});
+
+/**
+ * GET /api/adoption-requests
+ * Admin: todas las solicitudes. Usuario: solo las suyas.
+ * Query: mine=true, pet_id, status=pendiente|aprobada|rechazada
+ */
+router.get('/', async (req, res) => {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+
+  const esAdmin = usuario.rol === 'administrador';
+  const soloMias = req.query.mine === 'true' || req.query.mis_solicitudes === 'true' || !esAdmin;
+  const estados = { pendiente: 'pendiente', aprobada: 'aprobada', rechazada: 'rechazada', cancelada: 'cancelada' };
+  const estado = estados[(req.query.status || req.query.estado || '').toString().toLowerCase()];
+  const petId = (req.query.pet_id || req.query.mascota_id || '').toString().trim();
+
+  try {
+    const params = [];
+    const filtros = [];
+
+    if (soloMias) {
+      params.push(usuario.id_usuario);
+      filtros.push(`s.id_usuario = $${params.length}`);
+    }
+    if (petId) {
+      if (!esUuid(petId)) {
+        return res.status(400).json({ error: 'La mascota indicada no es válida' });
+      }
+      params.push(petId);
+      filtros.push(`s.id_mascota = $${params.length}`);
+    }
+    if (estado && !soloMias) {
+      params.push(estado);
+      filtros.push(`s.estado = $${params.length}`);
+    }
+
+    const where = filtros.length ? ` WHERE ${filtros.join(' AND ')}` : '';
+    const resultado = await pool.query(
+      `${selectSolicitud}${where} ORDER BY s.fecha_solicitud DESC`,
+      params
+    );
+    res.set('Cache-Control', 'no-store');
+    return res.json(resultado.rows);
+  } catch (err) {
+    return errorDb(res, err, 'No se pudieron consultar las solicitudes');
+  }
+});
+
+async function servirAdjunto(req, res, columna) {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión para consultar este documento' });
+  }
+  if (!esUuid(req.params.id)) {
+    return res.status(400).json({ error: 'Solicitud inválida' });
+  }
+
+  try {
+    const solicitudRes = await pool.query(
+      `SELECT id_usuario, ${columna} AS archivo
+       FROM solicitudadopcion
+       WHERE id_solicitud_adopcion = $1`,
+      [req.params.id]
+    );
+    if (solicitudRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const sol = solicitudRes.rows[0];
+    const esDuenio = sol.id_usuario === usuario.id_usuario;
+    const esAdmin = usuario.rol === 'administrador';
+    if (!esAdmin && !esDuenio) {
+      return res.status(403).json({ error: 'No tienes autorización para ver este documento' });
+    }
+    if (!sol.archivo) {
+      return res.status(404).json({ error: 'No hay archivo adjunto para esta solicitud' });
+    }
+
+    const filePath = archivoPrivado(sol.archivo);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'El archivo no fue encontrado' });
+    }
+
+    res.set('Cache-Control', 'private, no-store');
+    return res.sendFile(filePath);
+  } catch (err) {
+    return errorDb(res, err, 'Error consultando el documento');
+  }
+}
+
+router.get('/:id/id-card', (req, res) => servirAdjunto(req, res, 'foto_cedula'));
+router.get('/:id/utility-bill', (req, res) => servirAdjunto(req, res, 'foto_servicios_publicos'));
+
+/**
+ * PUT /api/adoption-requests/:id/status
+ * El administrador aprueba o rechaza la solicitud.
+ */
+router.put('/:id/status', requireAdmin, async (req, res) => {
+  const estado = (req.body.estado || req.body.status || '').toString().trim();
+  if (!['aprobada', 'rechazada'].includes(estado)) {
+    return res.status(400).json({ error: "El estado debe ser 'aprobada' o 'rechazada'" });
+  }
+  if (!esUuid(req.params.id)) {
+    return res.status(400).json({ error: 'Solicitud inválida' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const actualRes = await client.query(
+      `SELECT s.id_solicitud_adopcion, s.estado, s.id_usuario, s.id_mascota,
+              u.nombres, u.apellidos, u.correo,
+              m.nombre AS nombre_mascota, m.estado_adopcion
+       FROM solicitudadopcion s
+       JOIN usuario u ON u.id_usuario = s.id_usuario
+       JOIN mascota m ON m.id_mascota = s.id_mascota
+       WHERE s.id_solicitud_adopcion = $1
+       FOR UPDATE OF s, m`,
+      [req.params.id]
+    );
+
+    if (actualRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const sol = actualRes.rows[0];
+    if (sol.estado !== 'pendiente') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Esta solicitud ya fue revisada' });
+    }
+
+    if (estado === 'aprobada') {
+      if (sol.estado_adopcion === 'adoptado') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Esta mascota ya figura como adoptada' });
+      }
+      const otra = await client.query(
+        `SELECT id_solicitud_adopcion
+         FROM solicitudadopcion
+         WHERE id_mascota = $1 AND estado = 'aprobada' AND id_solicitud_adopcion <> $2
+         LIMIT 1`,
+        [sol.id_mascota, req.params.id]
+      );
+      if (otra.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Esta mascota ya tiene una adopción aprobada' });
+      }
+    }
+
+    const updateRes = await client.query(
+      `UPDATE solicitudadopcion
+       SET estado = $1,
+           fecha_actualizacion_estado = NOW(),
+           id_administrador_revisor = $2
+       WHERE id_solicitud_adopcion = $3
+       RETURNING id_solicitud_adopcion, estado`,
+      [estado, req.usuarioActual.id_usuario, req.params.id]
+    );
+
+    if (estado === 'aprobada') {
+      await client.query(
+        `UPDATE mascota SET estado_adopcion = 'adoptado' WHERE id_mascota = $1`,
+        [sol.id_mascota]
+      );
+    } else {
+      const quedan = await client.query(
+        `SELECT 1 FROM solicitudadopcion
+         WHERE id_mascota = $1 AND estado IN ('pendiente', 'aprobada')
+         LIMIT 1`,
+        [sol.id_mascota]
+      );
+      if (quedan.rows.length === 0) {
+        await client.query(
+          `UPDATE mascota SET estado_adopcion = 'disponible'
+           WHERE id_mascota = $1 AND estado_adopcion = 'en_proceso'`,
+          [sol.id_mascota]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    if (estado === 'aprobada') {
+      let whatsappFundacion = '573136177747';
+      try {
+        const fundRes = await pool.query('SELECT telefono FROM informacionfundacion LIMIT 1');
+        if (fundRes.rows.length > 0 && fundRes.rows[0].telefono) {
+          const limpio = String(fundRes.rows[0].telefono).replace(/\D/g, '');
+          if (limpio) whatsappFundacion = limpio;
+        }
+      } catch (_) {}
+
+      enviarCorreoAprobacionAdopcion({
+        destinatario: sol.correo,
+        nombreUsuario: `${sol.nombres} ${sol.apellidos}`.trim(),
+        nombreMascota: sol.nombre_mascota,
+        whatsappFundacion,
+      }).catch((err) => console.error('Error al enviar correo de adopción:', err));
+    }
+
+    return res.json({
+      mensaje: estado === 'aprobada'
+        ? 'Solicitud aprobada. La mascota quedó como adoptada.'
+        : 'Solicitud rechazada.',
+      solicitud: updateRes.rows[0],
+    });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    return errorDb(res, err, 'Error interno al actualizar la solicitud');
+  } finally {
+    client.release();
+  }
+});
+
+module.exports = router;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
 import 'package:paw_match/services/match_estado.dart';
@@ -59,14 +60,10 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
   }
 
   /// Placeholder hasta conectar las solicitudes de adopción y apadrinamiento.
-  void _accionPendiente(String accion, String nombre) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.rosa,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Text('$accion a $nombre estará disponible pronto'),
-      ),
+  void _abrirAdopcion(Pet pet) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => AdoptionFormScreen(pet: pet)),
     );
   }
 
@@ -188,8 +185,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
           match: destacado,
           nombreUsuario: ranking.nombreUsuario,
           usuario: ranking.usuario,
-          onAdoptar: () =>
-              _accionPendiente('Adoptar', destacado.mascota.nombre),
+          onAdoptar: () => _abrirAdopcion(destacado.mascota),
           onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
             context,
             pet: destacado.mascota,
@@ -214,10 +210,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                     match: siguientes[i],
                     nombreUsuario: ranking.nombreUsuario,
                     usuario: ranking.usuario,
-                    onAdoptar: () => _accionPendiente(
-                      'Adoptar',
-                      siguientes[i].mascota.nombre,
-                    ),
+                    onAdoptar: () => _abrirAdopcion(siguientes[i].mascota),
                     onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
                       context,
                       pet: siguientes[i].mascota,

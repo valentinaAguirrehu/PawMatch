@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
+import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -13,9 +16,8 @@ import 'package:paw_match/widgets/dato_detalle.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 import 'package:paw_match/widgets/tarjeta_blanca.dart';
 
-/// Detalle de una mascota (RF04 / RF05): foto circular, datos, descripción,
+/// Detalle de una mascota: foto circular, datos, descripción,
 /// personalidad y los botones Adoptar / Apadrinar.
-/// `onAdoptar` y `onApadrinar` se conectan cuando existan RF08 y RF10.
 class PetDetailScreen extends StatefulWidget {
   final Pet pet;
   final VoidCallback? onAdoptar, onApadrinar;
@@ -34,11 +36,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   // La personalidad vive en otra tabla: se consulta la mascota completa.
   late Future<Pet> _completa = PetsService.obtener(widget.pet.id);
   SolicitudApadrinamiento? _miSolicitud;
+  AdoptionRequest? _miAdopcion;
 
   @override
   void initState() {
     super.initState();
     _consultarMiSolicitud();
+    _consultarMiAdopcion();
   }
 
   Future<void> _consultarMiSolicitud() async {
@@ -51,6 +55,87 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _consultarMiAdopcion() async {
+    if (Session.idUsuario == null) return;
+    try {
+      final lista = await AdoptionService.listMine(petId: widget.pet.id);
+      if (!mounted) return;
+      setState(() => _miAdopcion = lista.isEmpty ? null : lista.first);
+    } catch (_) {}
+  }
+
+  Future<void> _abrirFormularioAdopcion() async {
+    final enviada = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => AdoptionFormScreen(pet: widget.pet)),
+    );
+    if (enviada == true && mounted) _consultarMiAdopcion();
+  }
+
+  void _verEstadoAdopcion() {
+    final s = _miAdopcion;
+    if (s == null) return;
+
+    if (s.isApproved) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.verified, color: Colors.green, size: 48),
+          title: Text('Adopción de ${widget.pet.nombre} aprobada'),
+          content: const Text(
+            'La fundación aprobó tu solicitud. Coordina la entrega por el WhatsApp oficial.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+          ],
+        ),
+      );
+      return;
+    }
+
+    if (s.isPending) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.hourglass_top, color: Colors.orange, size: 48),
+          title: const Text('Solicitud en revisión'),
+          content: Text(
+            s.petAdoptionStatus == 'adoptado'
+                ? '${widget.pet.nombre} ya fue adoptado. La fundación aún debe cerrar tu solicitud.'
+                : 'Tu solicitud para adoptar a ${widget.pet.nombre} fue enviada el ${s.requestedAtLabel}.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido')),
+          ],
+        ),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.info_outline, color: Colors.redAccent, size: 48),
+        title: const Text('Solicitud rechazada'),
+        content: Text(
+          'Tu solicitud anterior para adoptar a ${widget.pet.nombre} no fue aprobada.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+          if (_puedeAdoptar)
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _abrirFormularioAdopcion();
+              },
+              child: const Text('Enviar nueva solicitud'),
+            ),
+        ],
+      ),
+    );
   }
 
   void _abrirFormularioApadrinar() {
@@ -255,10 +340,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         ),
     ];
   }
-
-  void _proximamente(String texto) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(texto)));
 
   @override
   Widget build(BuildContext context) {
@@ -488,13 +569,61 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     ),
   );
 
-  // Botones Adoptar / Apadrinar fijos abajo
-  Widget _acciones() {
-    final tituloAdopcion = switch (_estadoAdopcion) {
+  Widget _botonAdoptar() {
+    final estilo = Theme.of(context).textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    var etiqueta = switch (_estadoAdopcion) {
       'en_proceso' => 'En proceso',
       'adoptado' => 'Adoptado',
       _ => 'Adoptar',
     };
+    var icono = Icons.pets;
+    VoidCallback? accion = _puedeAdoptar
+        ? (widget.onAdoptar ?? _abrirFormularioAdopcion)
+        : null;
+    Color? fondo;
+
+    final mia = _miAdopcion;
+    if (mia != null) {
+      if (mia.isApproved) {
+        etiqueta = 'Aprobada';
+        icono = Icons.verified;
+        accion = _verEstadoAdopcion;
+        fondo = Colors.green.shade700;
+      } else if (mia.isPending) {
+        etiqueta = 'En revisión';
+        icono = Icons.hourglass_top;
+        accion = _verEstadoAdopcion;
+        fondo = Colors.orange.shade700;
+      } else if (mia.isRejected) {
+        etiqueta = 'Rechazada';
+        icono = Icons.info_outline;
+        accion = _verEstadoAdopcion;
+        fondo = Colors.redAccent.shade700;
+      }
+    }
+
+    return Expanded(
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(
+          backgroundColor: fondo ?? Colors.white,
+          foregroundColor: fondo == null ? AppColors.rosa : Colors.white,
+          disabledBackgroundColor: Colors.white24,
+          disabledForegroundColor: Colors.white70,
+          minimumSize: const Size.fromHeight(54),
+          shape: const StadiumBorder(),
+          textStyle: estilo,
+        ),
+        icon: Icon(icono),
+        label: Text(etiqueta, overflow: TextOverflow.ellipsis),
+        onPressed: accion,
+      ),
+    );
+  }
+
+  // Botones Adoptar / Apadrinar fijos abajo
+  Widget _acciones() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
       child: Center(
@@ -502,28 +631,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           constraints: const BoxConstraints(maxWidth: 520),
           child: Row(
             children: [
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.rosa,
-                    disabledBackgroundColor: Colors.white24,
-                    disabledForegroundColor: Colors.white70,
-                    minimumSize: const Size.fromHeight(54),
-                    shape: const StadiumBorder(),
-                    textStyle: Theme.of(context).textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  icon: const Icon(Icons.pets),
-                  label: Text(tituloAdopcion),
-                  onPressed: _puedeAdoptar
-                      ? (widget.onAdoptar ??
-                            () => _proximamente(
-                              'La solicitud de adopción estará disponible pronto',
-                            ))
-                      : null,
-                ),
-              ),
+              _botonAdoptar(),
               const SizedBox(width: 12),
               Expanded(
                 child: Builder(

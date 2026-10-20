@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/screens/adoption/adoption_requests_admin_screen.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
@@ -174,11 +175,7 @@ class _MenuScreenState extends State<MenuScreen> {
   /// Pantalla que se muestra en la pestaña "Gestionar" según la opción elegida.
   Widget _paginaGestion() => switch (_seccion) {
     _Gestion.mascotas => const PetsAdminScreen(),
-    _Gestion.adopcion => const SeccionAdminScreen(
-      titulo: 'Solicitudes de adopción',
-      icono: Icons.favorite_border,
-      detalle: 'Aquí revisarás y responderás las solicitudes de adopción.',
-    ),
+    _Gestion.adopcion => const AdoptionRequestsAdminScreen(),
     _Gestion.apadrinamiento => const ApadrinamientoAdminScreen(),
     _Gestion.seguimiento => const SeccionAdminScreen(
       titulo: 'Seguimiento de adopción',
