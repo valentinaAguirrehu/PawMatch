@@ -14,6 +14,9 @@ class Pet {
   final String estadoAdopcion;
   final String estadoApadrinamiento;
 
+  /// Usuario con la solicitud de adopción aprobada. Vacío si nadie la adoptó.
+  final String? idAdoptante;
+
   // Personalidad: valores de 1 a 5 por cada rasgo.
   final Map<String, dynamic> personalidad;
 
@@ -31,6 +34,7 @@ class Pet {
     this.foto,
     this.estadoAdopcion = 'disponible',
     this.estadoApadrinamiento = 'disponible',
+    this.idAdoptante,
     this.personalidad = const {},
   });
 
@@ -49,6 +53,7 @@ class Pet {
     estadoAdopcion: (j['estado_adopcion'] ?? 'disponible') as String,
     estadoApadrinamiento:
         (j['estado_apadrinamiento'] ?? 'disponible') as String,
+    idAdoptante: _id(j['id_usuario_adoptante']),
 
     // Si el backend devuelve personalidad, la cargamos.
     personalidad: j['personalidad'] is Map
@@ -81,6 +86,25 @@ class Pet {
   String get estadoAdopcionTexto => etiquetaEstadoAdopcion(estadoAdopcion);
 
   bool get estaAdoptada => estadoAdopcion.trim().toLowerCase() == 'adoptado';
+
+  /// True solo si esta mascota adoptada pertenece a quien está consultando.
+  bool adoptadaPor(String? currentUserId) {
+    if (!estaAdoptada) return false;
+    final adoptanteId = idAdoptante?.trim() ?? '';
+    final actual = currentUserId?.trim() ?? '';
+    return adoptanteId.isNotEmpty && actual == adoptanteId;
+  }
+
+  /// Mensaje de la tarjeta y del detalle cuando la mascota ya fue adoptada.
+  String mensajeFamiliaPara(String? currentUserId) {
+    if (adoptadaPor(currentUserId)) return '¡Ya es parte de tu familia! 💖';
+    return '¡Ya es parte de una familia! 💖';
+  }
+}
+
+String? _id(dynamic value) {
+  final texto = value?.toString().trim() ?? '';
+  return texto.isEmpty ? null : texto;
 }
 
 String etiquetaEstadoAdopcion(String e) {

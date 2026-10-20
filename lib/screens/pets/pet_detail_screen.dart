@@ -70,10 +70,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   Future<void> _abrirFormularioAdopcion() async {
     final listo = await perfilListoParaAdoptar(context);
     if (!listo || !mounted) return;
-    final enviada = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (_) => AdoptionFormScreen(pet: widget.pet)),
-    );
+    final enviada = await AdoptionFormScreen.mostrar(context, pet: widget.pet);
     if (enviada == true && mounted) _consultarMiAdopcion();
   }
 
@@ -692,7 +689,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     final sinApadrinamientoActivo =
                         _miSolicitud == null || _miSolicitud!.esRechazada;
                     if (_estadoAdopcion == 'adoptado' && sinApadrinamientoActivo) {
-                      return const _AvisoYaEnFamilia();
+                      return _AvisoYaEnFamilia(
+                        texto: widget.pet.mensajeFamiliaPara(Session.idUsuario),
+                      );
                     }
 
                     String etiqueta = 'Apadrinar';
@@ -768,7 +767,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 }
 
 class _AvisoYaEnFamilia extends StatelessWidget {
-  const _AvisoYaEnFamilia();
+  final String texto;
+  const _AvisoYaEnFamilia({required this.texto});
 
   @override
   Widget build(BuildContext context) {
@@ -780,8 +780,8 @@ class _AvisoYaEnFamilia extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.all(Radius.circular(28)),
       ),
-      child: const Text(
-        '¡Ya es parte de una familia! 💖',
+      child: Text(
+        texto,
         textAlign: TextAlign.center,
         style: TextStyle(
           color: AppColors.rosa,

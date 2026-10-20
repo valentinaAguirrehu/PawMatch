@@ -88,10 +88,8 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
   Future<void> _abrirAdopcion(Pet pet) async {
     final listo = await perfilListoParaAdoptar(context);
     if (!listo || !mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => AdoptionFormScreen(pet: pet)),
-    );
+    final enviada = await AdoptionFormScreen.mostrar(context, pet: pet);
+    if (enviada == true && mounted) _cargarAdopciones();
   }
 
   @override

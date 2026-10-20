@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import '../models/pet.dart';
 import '../services/api_service.dart';
+import '../services/session.dart';
 
 /// En la BD la foto se guarda como ruta relativa (/uploads/mascotas/x.jpg).
 /// Aquí se le antepone el servidor (así funciona en emulador, celular y web).
@@ -113,7 +114,22 @@ class PetCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 6),
-                  EstadoChip(estado: pet.estadoAdopcion),
+                  if (pet.estaAdoptada)
+                    SizedBox(
+                      width: double.infinity,
+                      child: Text(
+                        pet.mensajeFamiliaPara(Session.idUsuario),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        style: t.labelMedium?.copyWith(
+                          color: AppColors.rosa,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
+                      ),
+                    )
+                  else
+                    EstadoChip(estado: pet.estadoAdopcion),
                 ],
               ),
             ),
