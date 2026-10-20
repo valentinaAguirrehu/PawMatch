@@ -125,6 +125,12 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
+  void _abrirMatch() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PerfectMatchScreen()),
+    );
+  }
+
   Future<void> _mostrarMenuGestion() async {
     final tam = MediaQuery.of(context).size;
     final inferior = MediaQuery.of(context).padding.bottom;
@@ -230,8 +236,7 @@ class _MenuScreenState extends State<MenuScreen> {
       ApadrinamientoService.detenerMonitoreo();
       AdoptionService.detenerMonitoreo();
       Session.cerrar();
-      Navigator.pushAndRemoveUntil(
-        context,
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const WelcomeScreen()),
         (_) => false,
       );
@@ -245,6 +250,7 @@ class _MenuScreenState extends State<MenuScreen> {
     final paginas = <Widget>[
       HomeTab(
         onVerMascotas: () => isAdmin ? _abrirListaMascotas() : _irA(1),
+        onVerMatch: () => isAdmin ? _abrirMatch() : _irA(2),
       ),
       if (isAdmin)
         const ProfileScreen()

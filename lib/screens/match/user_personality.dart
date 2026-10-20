@@ -21,8 +21,7 @@ Future<void> abrirDestinoTrasAuth(BuildContext context) async {
     }
   }
   if (!context.mounted) return;
-  Navigator.pushAndRemoveUntil(
-    context,
+  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
     MaterialPageRoute(
       builder: (_) => mostrarCuestionario
           ? const UserPersonalityScreen()
@@ -57,8 +56,7 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen> {
       await PersonalidadUsuarioService.guardar(valores);
       MatchEstado.instancia.publicar(valores);
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
-        context,
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (_) => MenuScreen(indiceInicial: MenuScreen.indiceMatch),
         ),
