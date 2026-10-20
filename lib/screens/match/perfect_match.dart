@@ -5,6 +5,7 @@ import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
@@ -22,11 +23,15 @@ class PerfectMatchScreen extends StatefulWidget {
 class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
   late Future<RankingMatch> _future;
 
+  /// Mascotas cuya solicitud de adopción del usuario actual ya está aprobada.
+  Set<String> _adoptadasPorMi = {};
+
   @override
   void initState() {
     super.initState();
     MatchEstado.instancia.addListener(_alActualizarPersonalidad);
     _future = MatchService.mejores();
+    _cargarAdopciones();
   }
 
   @override
@@ -40,17 +45,37 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     _cargar();
   }
 
+  /// Hay adopción aprobada cuando la solicitud del usuario para esa mascota
+  /// está en estado `aprobada`.
+  bool _yaEsFamilia(String idMascota) => _adoptadasPorMi.contains(idMascota);
+
+  Future<void> _cargarAdopciones() async {
+    try {
+      final solicitudes = await AdoptionService.listMine();
+      if (!mounted) return;
+      setState(() {
+        _adoptadasPorMi = {
+          for (final solicitud in solicitudes)
+            if (solicitud.isApproved) solicitud.petId,
+        };
+      });
+    } catch (_) {}
+  }
+
   Future<void> _cargar() async {
     final futuro = MatchService.mejores();
     setState(() => _future = futuro);
-    await futuro.catchError(
-      (_) => const RankingMatch(
-        tienePersonalidad: false,
-        nombreUsuario: '',
-        usuario: {},
-        mejores: [],
+    await Future.wait([
+      futuro.catchError(
+        (_) => const RankingMatch(
+          tienePersonalidad: false,
+          nombreUsuario: '',
+          usuario: {},
+          mejores: [],
+        ),
       ),
-    );
+      _cargarAdopciones(),
+    ]);
   }
 
   Future<void> _abrirCuestionario() {
@@ -59,7 +84,6 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     ).push(MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()));
   }
 
-  /// Placeholder hasta conectar las solicitudes de adopción y apadrinamiento.
   void _abrirAdopcion(Pet pet) {
     Navigator.push(
       context,
@@ -185,6 +209,8 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
           match: destacado,
           nombreUsuario: ranking.nombreUsuario,
           usuario: ranking.usuario,
+          yaEsFamilia: _yaEsFamilia(destacado.mascota.id),
+          adoptada: destacado.mascota.estaAdoptada,
           onAdoptar: () => _abrirAdopcion(destacado.mascota),
           onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
             context,
@@ -210,6 +236,8 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                     match: siguientes[i],
                     nombreUsuario: ranking.nombreUsuario,
                     usuario: ranking.usuario,
+                    yaEsFamilia: _yaEsFamilia(siguientes[i].mascota.id),
+                    adoptada: siguientes[i].mascota.estaAdoptada,
                     onAdoptar: () => _abrirAdopcion(siguientes[i].mascota),
                     onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
                       context,
@@ -286,6 +314,8 @@ class _TarjetaDestacada extends StatefulWidget {
   final CompatibilidadMatch match;
   final String nombreUsuario;
   final Map<String, int> usuario;
+  final bool yaEsFamilia;
+  final bool adoptada;
   final VoidCallback onAdoptar;
   final VoidCallback onApadrinar;
 
@@ -294,6 +324,8 @@ class _TarjetaDestacada extends StatefulWidget {
     required this.match,
     required this.nombreUsuario,
     required this.usuario,
+    required this.yaEsFamilia,
+    required this.adoptada,
     required this.onAdoptar,
     required this.onApadrinar,
   });
@@ -401,6 +433,8 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
               ),
               const SizedBox(height: 14),
               _BotonesMatch(
+                yaEsFamilia: widget.yaEsFamilia,
+                adoptada: widget.adoptada,
                 onAdoptar: widget.onAdoptar,
                 onApadrinar: widget.onApadrinar,
               ),
@@ -513,6 +547,8 @@ class _TarjetaSecundaria extends StatefulWidget {
   final CompatibilidadMatch match;
   final String nombreUsuario;
   final Map<String, int> usuario;
+  final bool yaEsFamilia;
+  final bool adoptada;
   final VoidCallback onAdoptar;
   final VoidCallback onApadrinar;
 
@@ -522,6 +558,8 @@ class _TarjetaSecundaria extends StatefulWidget {
     required this.match,
     required this.nombreUsuario,
     required this.usuario,
+    required this.yaEsFamilia,
+    required this.adoptada,
     required this.onAdoptar,
     required this.onApadrinar,
   });
@@ -644,6 +682,8 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
               const SizedBox(height: 12),
               _BotonesMatch(
                 compactos: true,
+                yaEsFamilia: widget.yaEsFamilia,
+                adoptada: widget.adoptada,
                 onAdoptar: widget.onAdoptar,
                 onApadrinar: widget.onApadrinar,
               ),
@@ -678,16 +718,22 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
 class _BotonesMatch extends StatelessWidget {
   final VoidCallback onAdoptar;
   final VoidCallback onApadrinar;
+  final bool yaEsFamilia;
+  final bool adoptada;
   final bool compactos;
 
   const _BotonesMatch({
     required this.onAdoptar,
     required this.onApadrinar,
+    required this.yaEsFamilia,
+    required this.adoptada,
     this.compactos = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (yaEsFamilia) return const _ChipFamilia();
+
     final alto = compactos ? 42.0 : 48.0;
     final texto = TextStyle(
       fontSize: compactos ? 13 : 15,
@@ -713,7 +759,12 @@ class _BotonesMatch extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OutlinedButton.icon(
+          child: adoptada
+              ? const _ChipFamilia(
+                  texto: '¡Ya es parte de una familia! 💖',
+                  compacto: true,
+                )
+              : OutlinedButton.icon(
             onPressed: onApadrinar,
             style: OutlinedButton.styleFrom(
               minimumSize: Size.fromHeight(alto),
@@ -728,6 +779,43 @@ class _BotonesMatch extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChipFamilia extends StatelessWidget {
+  final String texto;
+  final bool compacto;
+
+  const _ChipFamilia({
+    this.texto = '¡Ya es parte de tu familia! 💖',
+    this.compacto = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(
+        horizontal: compacto ? 6 : 12,
+        vertical: compacto ? 8 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.blanco,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.bordeRosa),
+      ),
+      child: Text(
+        texto,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: AppColors.rosa,
+          fontWeight: FontWeight.w800,
+          fontSize: compacto ? 11 : null,
+          height: 1.2,
+        ),
+      ),
     );
   }
 }

@@ -3,9 +3,8 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/screens/adoption/adoption_detail_admin_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
-import 'package:paw_match/widgets/pet_card.dart';
 
-/// Solicitudes de adopción separadas en nuevas, aceptadas y rechazadas.
+/// Solicitudes de adopción en nuevas, aprobadas y rechazadas.
 class AdoptionRequestsAdminScreen extends StatefulWidget {
   const AdoptionRequestsAdminScreen({super.key});
 
@@ -20,6 +19,12 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
   late Future<List<AdoptionRequest>> _future = AdoptionService.listForAdmin();
 
   @override
+  void initState() {
+    super.initState();
+    AdoptionService.marcarLeidasAdmin();
+  }
+
+  @override
   void dispose() {
     _tabs.dispose();
     super.dispose();
@@ -30,27 +35,24 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
     await _future.catchError((_) => <AdoptionRequest>[]);
   }
 
-  Future<void> _abrirDetalle(AdoptionRequest solicitud) async {
-    final resultado = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AdoptionDetailAdminScreen(request: solicitud),
+  void _abrirDetalle(AdoptionRequest solicitud) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AdoptionDetailAdminScreen(
+        request: solicitud,
+        onCambioEstado: (nuevoEstado) {
+          Navigator.pop(context);
+          _recargar();
+          if (nuevoEstado == 'aprobada') {
+            _tabs.animateTo(1);
+          } else if (nuevoEstado == 'rechazada') {
+            _tabs.animateTo(2);
+          }
+        },
       ),
     );
-    if (!mounted || resultado == null) return;
-    final aprobada = resultado == 'aprobada';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: aprobada ? Colors.green : Colors.orange,
-        content: Text(
-          aprobada
-              ? 'Solicitud aprobada. La mascota quedó como adoptada.'
-              : 'La solicitud fue rechazada.',
-        ),
-      ),
-    );
-    _tabs.animateTo(aprobada ? 1 : 2);
-    await _recargar();
   }
 
   @override
@@ -65,7 +67,7 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
           indicatorColor: AppColors.rosa,
           tabs: const [
             Tab(icon: Icon(Icons.mark_email_unread_outlined), text: 'Nuevas'),
-            Tab(icon: Icon(Icons.check_circle_outline), text: 'Aceptadas'),
+            Tab(icon: Icon(Icons.check_circle_outline), text: 'Aprobadas'),
             Tab(icon: Icon(Icons.cancel_outlined), text: 'Rechazadas'),
           ],
         ),
@@ -86,7 +88,7 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
                     const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
                     const SizedBox(height: 12),
                     Text(
-                      'No se pudieron cargar las solicitudes.\n${snap.error}',
+                      'Error al cargar solicitudes: ${snap.error}',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
@@ -107,13 +109,13 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
             children: [
               _Lista(
                 solicitudes: todas.where((s) => s.isPending).toList(),
-                vacio: 'No hay solicitudes nuevas por revisar.',
+                vacio: 'No hay solicitudes nuevas pendientes por revisar.',
                 onRefresh: _recargar,
                 onTap: _abrirDetalle,
               ),
               _Lista(
                 solicitudes: todas.where((s) => s.isApproved).toList(),
-                vacio: 'No hay solicitudes aceptadas.',
+                vacio: 'No hay solicitudes de adopción aprobadas aún.',
                 onRefresh: _recargar,
                 onTap: _abrirDetalle,
               ),
@@ -151,13 +153,19 @@ class _Lista extends StatelessWidget {
         onRefresh: onRefresh,
         child: ListView(
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.22),
-            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 12),
-            Text(
-              vacio,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+            Center(
+              child: Column(
+                children: [
+                  Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text(
+                    vacio,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -184,58 +192,80 @@ class _Lista extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               onTap: () => onTap(s),
               child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ClipOval(
-                      child: SizedBox(
-                        width: 56,
-                        height: 56,
-                        child: PetImage(url: s.petPhoto),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            s.applicantFullName,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          Text(
-                            'Quiere adoptar a ${s.petName}',
-                            style: const TextStyle(color: Colors.black54),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${s.housingType.isEmpty ? 'Vivienda sin indicar' : s.housingType} · ${s.requestedAtLabel}',
-                            style: const TextStyle(fontSize: 12, color: Colors.black45),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Column(
+                    Row(
                       children: [
+                        const CircleAvatar(
+                          backgroundColor: AppColors.rosaClaro,
+                          radius: 22,
+                          child: Icon(Icons.favorite, color: AppColors.rosa),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                s.applicantFullName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text(
+                                'Desea adoptar a ${s.petName} (${s.petSpecies})',
+                                style: TextStyle(
+                                  color: Colors.grey.shade700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: color),
                           ),
                           child: Text(
-                            s.statusLabel,
+                            s.status.toUpperCase(),
                             style: TextStyle(
                               color: color,
+                              fontWeight: FontWeight.bold,
                               fontSize: 11,
-                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.black38),
                       ],
+                    ),
+                    const Divider(height: 20),
+                    Text(
+                      'Motivación:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      s.additionalInfo,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '📅 ${s.requestedAtLabel}',
+                      style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
                     ),
                   ],
                 ),

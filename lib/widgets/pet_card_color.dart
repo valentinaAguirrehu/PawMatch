@@ -126,8 +126,27 @@ class PetCardColor extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                // Botones de acción abajo
-                if (_esApadrinada)
+                if (pet.estaAdoptada)
+                  Container(
+                    width: double.infinity,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      '¡Ya es parte de una familia! 💖',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.rosa,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                    ),
+                  )
+                else if (_esApadrinada)
                   // Solo sale el botón por adoptar
                   SizedBox(
                     width: double.infinity,

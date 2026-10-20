@@ -41,6 +41,25 @@ void main() {
       solicitud.answers.firstWhere((a) => a.question == '¿Tiene patio o zona verde?').answer,
       'Sí',
     );
+    expect(solicitud.readByUser, isFalse);
+    expect(solicitud.hasObservations, isFalse);
+  });
+
+  test('guarda observaciones, fecha de inicio y lecturas', () {
+    final solicitud = AdoptionRequest.fromJson({
+      'estado': 'aprobada',
+      'observaciones': 'Coordina la entrega el sábado.',
+      'fecha_inicio_adopcion': '2026-10-20',
+      'leido_admin': true,
+      'leido_usuario': false,
+    });
+
+    expect(solicitud.isApproved, isTrue);
+    expect(solicitud.observations, 'Coordina la entrega el sábado.');
+    expect(solicitud.adoptionStartDateLabel, '20/10/2026');
+    expect(solicitud.readByAdmin, isTrue);
+    expect(solicitud.readByUser, isFalse);
+    expect(solicitud.hasObservations, isTrue);
   });
 
   test('traduce los estados revisados', () {

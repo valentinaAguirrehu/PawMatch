@@ -221,8 +221,8 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 52),
           title: const Text('Solicitud enviada'),
           content: Text(
-            'Tu solicitud para adoptar a ${widget.pet.nombre} quedó en revisión. '
-            'Puedes consultar el estado en Mis adopciones.',
+            'Tu solicitud para adoptar a ${widget.pet.nombre} ha sido enviada a la Fundación Maritza Arévalo.\n\n'
+            'El administrador revisará tus respuestas y datos. Cuando haya una decisión, recibirás una notificación y podrás ver las observaciones en Mis adopciones.',
           ),
           actions: [
             FilledButton(

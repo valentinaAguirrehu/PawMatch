@@ -23,7 +23,11 @@ class AdoptionRequest {
   final bool hasUtilityBill;
   final String requestedAt;
   final String status;
+  final String? observations;
   final String? statusUpdatedAt;
+  final String? adoptionStartDate;
+  final bool readByAdmin;
+  final bool readByUser;
   final String? reviewerId;
 
   final String applicantFirstName;
@@ -56,7 +60,11 @@ class AdoptionRequest {
     this.hasUtilityBill = false,
     this.requestedAt = '',
     this.status = 'pendiente',
+    this.observations,
     this.statusUpdatedAt,
+    this.adoptionStartDate,
+    this.readByAdmin = false,
+    this.readByUser = true,
     this.reviewerId,
     this.applicantFirstName = '',
     this.applicantLastName = '',
@@ -107,6 +115,17 @@ class AdoptionRequest {
   String? get statusUpdatedAtLabel =>
       statusUpdatedAt == null ? null : _fecha(statusUpdatedAt!);
 
+  /// Fecha `YYYY-MM-DD` mostrada como `dd/MM/yyyy`.
+  String? get adoptionStartDateLabel {
+    final texto = adoptionStartDate?.trim() ?? '';
+    if (texto.isEmpty) return null;
+    final fecha = texto.split('-');
+    if (fecha.length != 3) return texto;
+    return '${fecha[2]}/${fecha[1]}/${fecha[0]}';
+  }
+
+  bool get hasObservations => (observations ?? '').trim().isNotEmpty;
+
   List<AdoptionAnswer> get answers => [
     AdoptionAnswer(question: 'Tipo de vivienda', answer: _texto(housingType)),
     AdoptionAnswer(
@@ -154,7 +173,11 @@ class AdoptionRequest {
       hasUtilityBill: json['tiene_foto_recibo'] == true,
       requestedAt: json['fecha_solicitud']?.toString() ?? '',
       status: json['estado']?.toString() ?? 'pendiente',
+      observations: _opcional(json['observaciones']),
       statusUpdatedAt: json['fecha_actualizacion_estado']?.toString(),
+      adoptionStartDate: _opcional(json['fecha_inicio_adopcion']),
+      readByAdmin: json['leido_admin'] == true || json['leido_admin'] == 'true',
+      readByUser: json['leido_usuario'] == true || json['leido_usuario'] == 'true',
       reviewerId: json['id_administrador_revisor']?.toString(),
       applicantFirstName: json['solicitante_nombres']?.toString() ?? '',
       applicantLastName: json['solicitante_apellidos']?.toString() ?? '',
@@ -187,6 +210,11 @@ class AdoptionRequest {
     false => 'No',
     null => 'Sin respuesta',
   };
+
+  static String? _opcional(dynamic value) {
+    final texto = value?.toString().trim() ?? '';
+    return texto.isEmpty ? null : texto;
+  }
 
   static String _texto(String value) =>
       value.trim().isEmpty ? 'Sin respuesta' : value.trim();

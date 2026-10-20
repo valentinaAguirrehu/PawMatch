@@ -6,11 +6,16 @@ import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
-/// Detalle de una solicitud: respuestas, documentos y decisión del administrador.
+/// Detalle de una solicitud de adopción, con la misma revisión que Apadrinamiento.
 class AdoptionDetailAdminScreen extends StatefulWidget {
   final AdoptionRequest request;
+  final ValueChanged<String> onCambioEstado;
 
-  const AdoptionDetailAdminScreen({super.key, required this.request});
+  const AdoptionDetailAdminScreen({
+    super.key,
+    required this.request,
+    required this.onCambioEstado,
+  });
 
   @override
   State<AdoptionDetailAdminScreen> createState() =>
@@ -111,17 +116,137 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     );
   }
 
-  Future<void> _decidir(String estado) async {
-    final aprobar = estado == 'aprobada';
+  Future<void> _aprobar() async {
+    DateTime fechaSeleccionada = DateTime.now();
+    final observacionCtrl = TextEditingController();
     final s = widget.request;
-    final ok = await showDialog<bool>(
+
+    final confirmacion = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.green),
+              SizedBox(width: 8),
+              Expanded(child: Text('Aprobar adopción')),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '¿Confirmas que ${s.applicantFullName} adoptará a ${s.petName}? La mascota quedará marcada como adoptada.',
+                  style: const TextStyle(height: 1.35),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Fecha oficial de inicio de la adopción:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.calendar_today, color: AppColors.rosa),
+                  label: Text(
+                    '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  onPressed: () async {
+                    final elegida = await showDatePicker(
+                      context: context,
+                      initialDate: fechaSeleccionada,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (elegida != null) {
+                      setDialogState(() => fechaSeleccionada = elegida);
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Observaciones para el adoptante (opcional):',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: observacionCtrl,
+                  maxLines: 3,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    hintText: 'Indicaciones, requisitos o recomendaciones...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Se enviará un correo y una notificación en la app al solicitante.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.green),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Confirmar aprobación'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmacion != true) return;
+
+    final fecha =
+        '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}';
+    await _guardar(
+      estado: 'aprobada',
+      fechaInicio: fecha,
+      observaciones: observacionCtrl.text.trim(),
+      mensaje: '¡Solicitud aprobada y notificación enviada con éxito!',
+      color: Colors.green,
+    );
+  }
+
+  Future<void> _rechazar() async {
+    final motivoCtrl = TextEditingController();
+    final s = widget.request;
+    final confirmacion = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(aprobar ? 'Aprobar adopción' : 'Rechazar solicitud'),
-        content: Text(
-          aprobar
-              ? '¿Confirmas que ${s.applicantFullName} adoptará a ${s.petName}? La mascota quedará marcada como adoptada.'
-              : '¿Rechazas la solicitud de ${s.applicantFullName} para adoptar a ${s.petName}?',
+        title: const Text('Rechazar solicitud'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Indica el motivo por el cual se rechaza la solicitud de ${s.applicantFullName}:',
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: motivoCtrl,
+              maxLines: 3,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                hintText: 'Motivo del rechazo u observaciones...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'El solicitante verá este mensaje en su notificación y en el detalle.',
+              style: TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -129,28 +254,49 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: aprobar ? Colors.green : Colors.redAccent,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text(aprobar ? 'Aprobar' : 'Rechazar'),
+            child: const Text('Rechazar'),
           ),
         ],
       ),
     );
-    if (ok != true) return;
 
+    if (confirmacion != true) return;
+    await _guardar(
+      estado: 'rechazada',
+      observaciones: motivoCtrl.text.trim(),
+      mensaje: 'La solicitud ha sido rechazada.',
+      color: Colors.orange,
+    );
+  }
+
+  Future<void> _guardar({
+    required String estado,
+    required String mensaje,
+    required Color color,
+    String? fechaInicio,
+    String? observaciones,
+  }) async {
     setState(() => _procesando = true);
     try {
-      await AdoptionService.updateStatus(id: s.id, status: estado);
+      await AdoptionService.updateStatus(
+        id: widget.request.id,
+        status: estado,
+        startDate: fechaInicio,
+        observations: observaciones,
+      );
       if (!mounted) return;
-      Navigator.pop(context, estado);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: color, content: Text(mensaje)),
+      );
+      widget.onCambioEstado(estado);
     } catch (e) {
       if (!mounted) return;
       setState(() => _procesando = false);
-      final mensaje = e.toString().replaceFirst('Exception: ', '');
+      final texto = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.redAccent, content: Text(mensaje)),
+        SnackBar(backgroundColor: Colors.redAccent, content: Text(texto)),
       );
     }
   }
@@ -158,132 +304,225 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
   @override
   Widget build(BuildContext context) {
     final s = widget.request;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Detalle de la solicitud')),
-      body: Column(
+    final t = Theme.of(context).textTheme;
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.92,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
         children: [
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            width: 44,
+            height: 5,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Detalle de la solicitud',
+                    style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const Divider(),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
+                _Seccion(
+                  titulo: 'Mascota a adoptar',
+                  icono: Icons.pets,
+                  child: Center(
                     child: Column(
                       children: [
-                        _Seccion(
-                          titulo: 'Mascota',
-                          icono: Icons.pets,
-                          child: Row(
-                            children: [
-                              ClipOval(
-                                child: SizedBox(
-                                  width: 72,
-                                  height: 72,
-                                  child: PetImage(url: s.petPhoto),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      s.petName,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    Text(s.petSummary),
-                                  ],
-                                ),
-                              ),
-                            ],
+                        Container(
+                          width: 92,
+                          height: 92,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: AppColors.rosa, width: 2.5),
+                          ),
+                          child: ClipOval(child: PetImage(url: s.petPhoto)),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          s.petName.isEmpty ? 'Mascota' : s.petName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 19,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _Seccion(
-                          titulo: 'Datos del solicitante',
-                          icono: Icons.person_outline,
-                          child: Column(
-                            children: [
-                              _Dato('Nombre', s.applicantFullName),
-                              _Dato('Correo', _vacio(s.applicantEmail)),
-                              _Dato('Teléfono', _vacio(s.applicantPhone)),
-                              _Dato('Dirección', _vacio(s.applicantAddress)),
-                              _Dato(
-                                'Cédula en el perfil',
-                                _vacio(s.applicantIdNumber),
-                              ),
-                              _Dato('Estado', s.statusLabel),
-                              _Dato('Enviada', s.requestedAtLabel),
-                              if (s.statusUpdatedAtLabel != null)
-                                _Dato('Revisada', s.statusUpdatedAtLabel!),
-                            ],
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.rosaSuave,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.bordeRosa),
+                          ),
+                          child: Text(
+                            s.petAgeLabel,
+                            style: const TextStyle(
+                              color: AppColors.rosa,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12.5,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _Seccion(
-                          titulo: 'Respuestas del formulario',
-                          icono: Icons.quiz_outlined,
-                          child: Column(
-                            children: [
-                              for (final respuesta in s.answers) ...[
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    respuesta.question,
-                                    style: const TextStyle(
-                                      color: AppColors.rosa,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: SelectableText(
-                                    respuesta.answer,
-                                    style: const TextStyle(height: 1.4),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _Seccion(
-                          titulo: 'Foto de la cédula',
-                          icono: Icons.badge_outlined,
-                          child: _vistaFoto(
-                            cargando: _cargandoCedula,
-                            error: _errorCedula,
-                            bytes: _cedula,
-                            titulo: 'Cédula',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _Seccion(
-                          titulo: 'Recibo de servicio público',
-                          icono: Icons.receipt_long_outlined,
-                          child: _vistaFoto(
-                            cargando: _cargandoRecibo,
-                            error: _errorRecibo,
-                            bytes: _recibo,
-                            titulo: 'Recibo de servicio público',
-                          ),
+                        const SizedBox(height: 4),
+                        Text(
+                          s.petSummary,
+                          style: TextStyle(color: Colors.grey.shade600),
                         ),
                       ],
                     ),
                   ),
                 ),
+                const SizedBox(height: 14),
+                _Seccion(
+                  titulo: 'Datos del solicitante',
+                  icono: Icons.person,
+                  child: Column(
+                    children: [
+                      _Dato('Nombre completo', s.applicantFullName),
+                      _Dato('Correo electrónico', _vacio(s.applicantEmail)),
+                      _Dato('Teléfono de contacto', _vacio(s.applicantPhone)),
+                      _Dato('Dirección', _vacio(s.applicantAddress)),
+                      if (s.applicantIdNumber.trim().isNotEmpty)
+                        _Dato('Número de cédula (perfil)', s.applicantIdNumber),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _Seccion(
+                  titulo: 'Respuestas del formulario',
+                  icono: Icons.favorite,
+                  colorFondo: AppColors.rosaClaro.withValues(alpha: 0.35),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final respuesta in s.answers) ...[
+                        Text(
+                          respuesta.question,
+                          style: const TextStyle(
+                            color: AppColors.rosa,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        SelectableText(
+                          respuesta.answer,
+                          style: const TextStyle(height: 1.45, fontSize: 15),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _Seccion(
+                  titulo: 'Foto de la cédula (privado)',
+                  icono: Icons.badge_outlined,
+                  child: _vistaFoto(
+                    cargando: _cargandoCedula,
+                    error: _errorCedula,
+                    bytes: _cedula,
+                    titulo: 'Cédula',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _Seccion(
+                  titulo: 'Recibo de servicio público (privado)',
+                  icono: Icons.receipt_long_outlined,
+                  child: _vistaFoto(
+                    cargando: _cargandoRecibo,
+                    error: _errorRecibo,
+                    bytes: _recibo,
+                    titulo: 'Recibo de servicio público',
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _Seccion(
+                  titulo: 'Detalles de la adopción',
+                  icono: Icons.info_outline,
+                  child: Column(
+                    children: [
+                      _Dato('Fecha de envío de solicitud', s.requestedAtLabel),
+                      _Dato('Estado de la solicitud', s.status.toUpperCase()),
+                      if (s.adoptionStartDateLabel != null)
+                        _Dato('Fecha de inicio oficial', s.adoptionStartDateLabel!),
+                      if (s.statusUpdatedAtLabel != null)
+                        _Dato('Fecha de revisión', s.statusUpdatedAtLabel!),
+                      if (s.hasObservations)
+                        _Dato('Observaciones / motivo', s.observations!),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (s.isPending) ...[
+                  if (_procesando)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
+                              side: const BorderSide(color: Colors.redAccent),
+                              minimumSize: const Size.fromHeight(50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: _rechazar,
+                            icon: const Icon(Icons.close),
+                            label: const Text('Rechazar'),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              minimumSize: const Size.fromHeight(50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: _aprobar,
+                            icon: const Icon(Icons.check),
+                            label: const Text('Aprobar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
               ],
             ),
           ),
-          if (s.isPending) _acciones(),
         ],
       ),
     );
@@ -316,67 +555,34 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
             fit: BoxFit.cover,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.rosa,
+            side: const BorderSide(color: AppColors.rosa),
+          ),
           onPressed: () => _verCompleta(bytes, titulo),
           icon: const Icon(Icons.fullscreen),
-          label: const Text('Ver en pantalla completa'),
+          label: const Text('Ver documento en pantalla completa'),
         ),
       ],
     );
   }
 
-  Widget _acciones() {
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-        child: _procesando
-            ? const Center(child: CircularProgressIndicator())
-            : Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.redAccent,
-                        side: const BorderSide(color: Colors.redAccent),
-                        minimumSize: const Size.fromHeight(50),
-                      ),
-                      onPressed: () => _decidir('rechazada'),
-                      icon: const Icon(Icons.close),
-                      label: const Text('Rechazar'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        minimumSize: const Size.fromHeight(50),
-                      ),
-                      onPressed: () => _decidir('aprobada'),
-                      icon: const Icon(Icons.check),
-                      label: const Text('Aprobar'),
-                    ),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  String _vacio(String valor) => valor.trim().isEmpty ? 'No registrado' : valor;
+  String _vacio(String valor) => valor.trim().isEmpty ? 'No especificado' : valor;
 }
 
 class _Seccion extends StatelessWidget {
   final String titulo;
   final IconData icono;
   final Widget child;
+  final Color? colorFondo;
 
   const _Seccion({
     required this.titulo,
     required this.icono,
     required this.child,
+    this.colorFondo,
   });
 
   @override
@@ -385,7 +591,7 @@ class _Seccion extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: colorFondo ?? Colors.grey.shade50,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
@@ -396,7 +602,12 @@ class _Seccion extends StatelessWidget {
             children: [
               Icon(icono, size: 20, color: AppColors.rosa),
               const SizedBox(width: 8),
-              Text(titulo, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -416,21 +627,21 @@ class _Dato extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 140,
+            width: 160,
             child: Text(
-              etiqueta,
-              style: const TextStyle(color: Colors.black54, fontSize: 13),
+              '$etiqueta:',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
             ),
           ),
           Expanded(
             child: Text(
               valor,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
         ],

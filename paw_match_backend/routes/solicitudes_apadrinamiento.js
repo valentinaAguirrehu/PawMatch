@@ -103,10 +103,19 @@ router.post('/', upload.single('documento'), async (req, res) => {
 
   try {
     // Verificar que la mascota existe
-    const petCheck = await pool.query('SELECT id_mascota, nombre FROM mascota WHERE id_mascota = $1', [id_mascota]);
+    const petCheck = await pool.query(
+      'SELECT id_mascota, nombre, estado_adopcion FROM mascota WHERE id_mascota = $1',
+      [id_mascota]
+    );
     if (petCheck.rows.length === 0) {
       if (req.file) fs.unlinkSync(req.file.path);
       return res.status(404).json({ error: 'La mascota seleccionada no existe' });
+    }
+    if (petCheck.rows[0].estado_adopcion === 'adoptado') {
+      if (req.file) fs.unlinkSync(req.file.path);
+      return res.status(409).json({
+        error: 'Esta mascota ya fue adoptada y no se puede apadrinar',
+      });
     }
 
     // Verificar si ya tiene una solicitud pendiente o aprobada para esta mascota
@@ -371,7 +380,7 @@ router.put('/:id/estado', requireAdmin, async (req, res) => {
     const actualRes = await pool.query(
       `SELECT s.id_solicitud_apadrinamiento, s.estado, s.id_usuario, s.id_mascota,
               u.nombres, u.apellidos, u.correo,
-              m.nombre AS nombre_mascota
+              m.nombre AS nombre_mascota, m.estado_adopcion
        FROM solicitudapadrinamiento s
        JOIN usuario u ON u.id_usuario = s.id_usuario
        JOIN mascota m ON m.id_mascota = s.id_mascota
@@ -384,6 +393,12 @@ router.put('/:id/estado', requireAdmin, async (req, res) => {
     }
 
     const sol = actualRes.rows[0];
+
+    if (estado === 'aprobada' && sol.estado_adopcion === 'adoptado') {
+      return res.status(409).json({
+        error: 'Esta mascota ya fue adoptada y no se puede apadrinar',
+      });
+    }
 
     if (sol.estado === 'aprobada' && estado === 'aprobada') {
       return res.json({
