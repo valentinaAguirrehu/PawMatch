@@ -146,20 +146,28 @@ async function enviarCorreoAprobacionAdopcion({
   destinatario,
   nombreUsuario,
   nombreMascota,
+  fechaInicio,
   whatsappFundacion = '573136177747',
+  observaciones,
 }) {
   const nombre = escaparHtml(nombreUsuario);
   const mascota = escaparHtml(nombreMascota);
+  const inicio = escaparHtml(fechaInicio || 'Inmediata');
+  const nota = observaciones ? escaparHtml(observaciones) : '';
   const asunto = `¡Tu solicitud para adoptar a ${nombreMascota} fue aprobada! - Paw Match`;
   const textoPlano = `
 Hola ${nombreUsuario},
 
 Tu solicitud para adoptar a ${nombreMascota} fue APROBADA por la Fundación Maritza Arévalo.
 
+Detalles de la adopción:
+- Mascota: ${nombreMascota}
+- Fecha oficial de inicio: ${fechaInicio || 'Inmediata'}
+${observaciones ? `- Observaciones de la fundación: ${observaciones}\n` : ''}
 Para coordinar la entrega y los últimos requisitos, escríbenos por WhatsApp:
 https://wa.me/${whatsappFundacion}
 
-También puedes ver el estado en la app Paw Match, sección Mis adopciones.
+También puedes ver el estado y las observaciones en la app Paw Match, sección Mis adopciones.
 
 Atentamente,
 Fundación Maritza Arévalo & Equipo Paw Match
@@ -170,6 +178,11 @@ Fundación Maritza Arévalo & Equipo Paw Match
       <h1 style="color: #e91e63; text-align: center;">¡Adopción aprobada!</h1>
       <p>Hola <strong>${nombre}</strong>,</p>
       <p>Tu solicitud para adoptar a <strong>${mascota}</strong> fue <strong style="color:#2e7d32;">APROBADA</strong>.</p>
+      <div style="background-color: #fce4ec; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
+        <p style="margin: 4px 0;"><strong>Mascota:</strong> ${mascota}</p>
+        <p style="margin: 4px 0;"><strong>Fecha oficial de inicio:</strong> ${inicio}</p>
+        ${nota ? `<p style="margin: 8px 0 4px 0; background-color: #e3f2fd; padding: 8px; border-radius: 6px;"><strong>Observaciones:</strong> ${nota}</p>` : ''}
+      </div>
       <p>Contacta a la fundación para coordinar la entrega y los últimos requisitos.</p>
       <p style="text-align:center;">
         <a href="https://wa.me/${whatsappFundacion}" style="background:#25d366;color:white;padding:12px 22px;border-radius:24px;text-decoration:none;font-weight:bold;">

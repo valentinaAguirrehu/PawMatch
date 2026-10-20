@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/services/api_service.dart';
@@ -8,6 +10,10 @@ import 'package:paw_match/services/session.dart';
 
 class AdoptionService {
   AdoptionService._();
+
+  static final ValueNotifier<int> noLeidasAdmin = ValueNotifier<int>(0);
+  static final ValueNotifier<int> noLeidasUsuario = ValueNotifier<int>(0);
+  static Timer? _timerNotificaciones;
 
   static String get _url => '${ApiService.baseUrl}/adoption-requests';
 
@@ -89,15 +95,74 @@ class AdoptionService {
   static Future<void> updateStatus({
     required String id,
     required String status,
+    String? startDate,
+    String? observations,
   }) async {
     final res = await http.put(
       Uri.parse('$_url/$id/status'),
       headers: _headers,
-      body: jsonEncode({'estado': status}),
+      body: jsonEncode({
+        'estado': status,
+        if (startDate != null) 'fecha_inicio_adopcion': startDate,
+        if (observations != null) 'observaciones': observations,
+      }),
     );
     if (res.statusCode != 200) {
       throw Exception(_mensaje(res, 'No se pudo actualizar la solicitud'));
     }
+  }
+
+  /// Consulta cada 12 segundos si hay solicitudes nuevas o respuestas sin leer.
+  static void iniciarMonitoreo() {
+    _timerNotificaciones?.cancel();
+    actualizarNotificaciones();
+    _timerNotificaciones = Timer.periodic(const Duration(seconds: 12), (_) {
+      actualizarNotificaciones();
+    });
+  }
+
+  static void detenerMonitoreo() {
+    _timerNotificaciones?.cancel();
+    _timerNotificaciones = null;
+    noLeidasAdmin.value = 0;
+    noLeidasUsuario.value = 0;
+  }
+
+  static Future<void> actualizarNotificaciones() async {
+    final id = Session.idUsuario;
+    if (id == null || id.isEmpty) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_url/notificaciones/resumen'),
+        headers: _headers,
+      );
+      if (res.statusCode != 200) return;
+      final data = jsonDecode(utf8.decode(res.bodyBytes));
+      if (data is! Map) return;
+      noLeidasAdmin.value = int.tryParse(data['totalAdmin']?.toString() ?? '0') ?? 0;
+      noLeidasUsuario.value =
+          int.tryParse(data['totalUsuario']?.toString() ?? '0') ?? 0;
+    } catch (_) {}
+  }
+
+  static Future<void> marcarLeidasAdmin() async {
+    try {
+      await http.put(
+        Uri.parse('$_url/notificaciones/marcar-admin'),
+        headers: _headers,
+      );
+      noLeidasAdmin.value = 0;
+    } catch (_) {}
+  }
+
+  static Future<void> marcarLeidasUsuario() async {
+    try {
+      await http.put(
+        Uri.parse('$_url/notificaciones/marcar-usuario'),
+        headers: _headers,
+      );
+      noLeidasUsuario.value = 0;
+    } catch (_) {}
   }
 
   static Future<Uint8List> fetchIdCard(String id) =>

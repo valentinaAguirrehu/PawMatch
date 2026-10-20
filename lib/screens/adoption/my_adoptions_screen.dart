@@ -6,7 +6,7 @@ import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
-/// Lista de solicitudes de adopción enviadas por el usuario en sesión.
+/// Solicitudes de adopción del usuario, con el mismo detalle que Apadrinamiento.
 class MyAdoptionsScreen extends StatefulWidget {
   const MyAdoptionsScreen({super.key});
 
@@ -16,6 +16,12 @@ class MyAdoptionsScreen extends StatefulWidget {
 
 class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
   late Future<List<AdoptionRequest>> _future = AdoptionService.listMine();
+
+  @override
+  void initState() {
+    super.initState();
+    AdoptionService.marcarLeidasUsuario();
+  }
 
   Future<void> _recargar() async {
     setState(() => _future = AdoptionService.listMine());
@@ -46,9 +52,27 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snap.hasError) {
-            return _ErrorCarga(
-              mensaje: 'No se pudieron cargar tus solicitudes.',
-              onReintentar: _recargar,
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Error al cargar tus adopciones: ${snap.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                      onPressed: _recargar,
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
             );
           }
 
@@ -65,13 +89,16 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                     Text(
                       'Aún no tienes solicitudes de adopción',
                       textAlign: TextAlign.center,
-                      style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      style: t.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Abre el perfil de un perrito y pulsa Adoptar para enviar tu solicitud.',
+                      'Explora las mascotas disponibles y pulsa «Adoptar» para enviar tu solicitud.',
                       textAlign: TextAlign.center,
-                      style: t.bodyMedium?.copyWith(color: Colors.black54),
+                      style: t.bodyMedium?.copyWith(color: Colors.grey.shade600),
                     ),
                   ],
                 ),
@@ -84,11 +111,263 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: lista.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 14),
-              itemBuilder: (context, i) => _TarjetaSolicitud(
-                solicitud: lista[i],
-                onContactar: () => _contactar(lista[i]),
-              ),
+              separatorBuilder: (_, _) => const SizedBox(height: 16),
+              itemBuilder: (context, i) {
+                final s = lista[i];
+                final color = switch (s.status) {
+                  'aprobada' => Colors.green,
+                  'rechazada' => Colors.redAccent,
+                  _ => Colors.orange,
+                };
+                final whatsapp = FundacionInfo.whatsappNumero.isNotEmpty
+                    ? FundacionInfo.whatsappNumero
+                    : '573136177747';
+
+                return Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    side: BorderSide(color: color.withValues(alpha: 0.35)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: color),
+                            ),
+                            child: Text(
+                              s.status.toUpperCase(),
+                              style: TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Center(
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 94,
+                                height: 94,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.rosa, width: 2.5),
+                                ),
+                                child: ClipOval(child: PetImage(url: s.petPhoto)),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                s.petName.isEmpty ? 'Mascota' : s.petName,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 20,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.rosaSuave,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: AppColors.bordeRosa),
+                                ),
+                                child: Text(
+                                  s.petAgeLabel,
+                                  style: const TextStyle(
+                                    color: AppColors.rosa,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                s.petSummary,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 24),
+                        if (s.isApproved) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.stars, color: Colors.green),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      '¡Adopción aprobada!',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  '📅 Fecha oficial de inicio: ${s.adoptionStartDateLabel ?? 'Activo'}',
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Contacto oficial: Fundación Maritza Arévalo (+$whatsapp)',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                                ),
+                                if (s.hasObservations) ...[
+                                  const SizedBox(height: 8),
+                                  _CajaObservacion(
+                                    titulo: 'Observaciones de la fundación:',
+                                    texto: s.observations!,
+                                    color: Colors.green,
+                                    borde: Colors.green.shade200,
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade200),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.info_outline, size: 16, color: Colors.orange),
+                                      SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          'Debes contactar a la fundación por WhatsApp para coordinar la entrega y los últimos requisitos.',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.deepOrange,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366),
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size.fromHeight(48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () => _contactar(s),
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: const Text(
+                              'Contactar por WhatsApp a la Fundación',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ] else if (s.isPending) ...[
+                          Text(
+                            'Tu solicitud fue enviada el ${s.requestedAtLabel}. El administrador de la fundación está revisando tus respuestas y tus datos.',
+                            style: TextStyle(color: Colors.grey.shade700, height: 1.4),
+                          ),
+                        ] else if (s.isRejected) ...[
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Motivo u observaciones:',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  s.hasObservations
+                                      ? s.observations!
+                                      : 'No se especificó motivo.',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Text(
+                          'Tus respuestas registradas:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        for (final respuesta in s.answers)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  respuesta.question,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.rosa,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                Text(
+                                  respuesta.answer,
+                                  style: const TextStyle(
+                                    fontStyle: FontStyle.italic,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           );
         },
@@ -97,183 +376,49 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
   }
 }
 
-class _TarjetaSolicitud extends StatelessWidget {
-  final AdoptionRequest solicitud;
-  final VoidCallback onContactar;
-
-  const _TarjetaSolicitud({required this.solicitud, required this.onContactar});
-
-  Color get _color => switch (solicitud.status) {
-    'aprobada' => Colors.green,
-    'rechazada' => Colors.redAccent,
-    _ => Colors.orange,
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final s = solicitud;
-    return Card(
-      elevation: 1.5,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: _color.withValues(alpha: 0.35)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ClipOval(
-                  child: SizedBox(
-                    width: 72,
-                    height: 72,
-                    child: PetImage(url: s.petPhoto),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        s.petName.isEmpty ? 'Mascota' : s.petName,
-                        style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(s.petSummary, style: const TextStyle(color: Colors.black54)),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Enviada el ${s.requestedAtLabel}',
-                        style: const TextStyle(fontSize: 12, color: Colors.black45),
-                      ),
-                    ],
-                  ),
-                ),
-                _EstadoChip(texto: s.statusLabel, color: _color),
-              ],
-            ),
-            if (s.isApproved) ...[
-              const SizedBox(height: 12),
-              const Text(
-                'Tu solicitud fue aprobada. Contacta a la fundación para coordinar la entrega.',
-                style: TextStyle(height: 1.35),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
-                  minimumSize: const Size.fromHeight(44),
-                ),
-                onPressed: onContactar,
-                icon: const Icon(Icons.chat),
-                label: const Text('Contactar por WhatsApp'),
-              ),
-            ],
-            if (s.isPending && s.petAdoptionStatus == 'adoptado')
-              const Padding(
-                padding: EdgeInsets.only(top: 10),
-                child: Text(
-                  'Esta mascota ya fue adoptada. La fundación aún puede cerrar tu solicitud.',
-                  style: TextStyle(color: Colors.black54, height: 1.35),
-                ),
-              ),
-            if (s.isRejected)
-              const Padding(
-                padding: EdgeInsets.only(top: 10),
-                child: Text(
-                  'La fundación no aprobó esta solicitud. Si la mascota sigue disponible, puedes enviar una nueva desde su perfil.',
-                  style: TextStyle(color: Colors.black54, height: 1.35),
-                ),
-              ),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: const Text(
-                'Ver respuestas enviadas',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              ),
-              children: [
-                for (final respuesta in s.answers)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            respuesta.question,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.rosa,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(respuesta.answer),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EstadoChip extends StatelessWidget {
+class _CajaObservacion extends StatelessWidget {
+  final String titulo;
   final String texto;
   final Color color;
+  final Color borde;
 
-  const _EstadoChip({required this.texto, required this.color});
+  const _CajaObservacion({
+    required this.titulo,
+    required this.texto,
+    required this.color,
+    required this.borde,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borde),
       ),
-      child: Text(
-        texto,
-        style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 11),
-      ),
-    );
-  }
-}
-
-class _ErrorCarga extends StatelessWidget {
-  final String mensaje;
-  final VoidCallback onReintentar;
-
-  const _ErrorCarga({required this.mensaje, required this.onReintentar});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
-            const SizedBox(height: 12),
-            Text(mensaje, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
-              onPressed: onReintentar,
-              child: const Text('Reintentar'),
-            ),
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.rate_review_outlined, size: 15, color: color),
+              const SizedBox(width: 6),
+              Text(
+                titulo,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(texto, style: const TextStyle(fontSize: 12.5, height: 1.35)),
+        ],
       ),
     );
   }

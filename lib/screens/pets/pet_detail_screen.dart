@@ -83,12 +83,48 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           icon: const Icon(Icons.verified, color: Colors.green, size: 48),
-          title: Text('Adopción de ${widget.pet.nombre} aprobada'),
-          content: const Text(
-            'La fundación aprobó tu solicitud. Coordina la entrega por el WhatsApp oficial.',
+          title: Text('¡Adopción de ${widget.pet.nombre} aprobada!'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '📅 Fecha oficial de inicio: ${s.adoptionStartDateLabel ?? 'Activo'}',
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'La fundación aprobó tu solicitud. Coordina la entrega por el WhatsApp oficial.',
+              ),
+              if (s.hasObservations) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'Observaciones de la fundación:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(s.observations!),
+              ],
+            ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+              icon: const Icon(Icons.chat),
+              label: const Text('Contactar por WhatsApp'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                final num = FundacionInfo.whatsappNumero.isNotEmpty
+                    ? FundacionInfo.whatsappNumero
+                    : '573136177747';
+                final msg =
+                    'Hola Fundación Maritza Arévalo, mi solicitud para adoptar a ${widget.pet.nombre} fue aprobada en Paw Match.';
+                abrirEnlace(
+                  context,
+                  'https://wa.me/$num?text=${Uri.encodeComponent(msg)}',
+                  nombre: 'WhatsApp',
+                );
+              },
+            ),
           ],
         ),
       );
@@ -104,7 +140,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           content: Text(
             s.petAdoptionStatus == 'adoptado'
                 ? '${widget.pet.nombre} ya fue adoptado. La fundación aún debe cerrar tu solicitud.'
-                : 'Tu solicitud para adoptar a ${widget.pet.nombre} fue enviada el ${s.requestedAtLabel}.',
+                : 'Tu solicitud para adoptar a ${widget.pet.nombre} fue enviada el ${s.requestedAtLabel}. Recibirás una notificación cuando sea revisada.',
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido')),
@@ -119,8 +155,21 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.info_outline, color: Colors.redAccent, size: 48),
         title: const Text('Solicitud rechazada'),
-        content: Text(
-          'Tu solicitud anterior para adoptar a ${widget.pet.nombre} no fue aprobada.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tu solicitud anterior para adoptar a ${widget.pet.nombre} no fue aprobada.',
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Motivo u observaciones:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            Text(s.hasObservations ? s.observations! : 'No se especificó motivo.'),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
@@ -139,6 +188,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   void _abrirFormularioApadrinar() {
+    if (_estadoAdopcion == 'adoptado') return;
     SolicitudApadrinamientoDialog.mostrar(
       context,
       pet: widget.pet,
@@ -270,7 +320,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   bool get _apadrinada => _t(widget.pet.estadoApadrinamiento) == 'apadrinado';
   bool get _puedeAdoptar => _estadoAdopcion == 'disponible';
-  bool get _puedeApadrinar => !_apadrinada;
+  bool get _puedeApadrinar => !_apadrinada && _estadoAdopcion != 'adoptado';
 
   /// Fecha de ingreso a la Fundación. Lee `fechaIngreso` del modelo Pet si existe
   /// (DateTime o texto ISO); si el modelo aún no lo tiene, simplemente no se muestra.
@@ -636,6 +686,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               Expanded(
                 child: Builder(
                   builder: (context) {
+                    final sinApadrinamientoActivo =
+                        _miSolicitud == null || _miSolicitud!.esRechazada;
+                    if (_estadoAdopcion == 'adoptado' && sinApadrinamientoActivo) {
+                      return const _AvisoYaEnFamilia();
+                    }
+
                     String etiqueta = 'Apadrinar';
                     IconData icono = Icons.volunteer_activism;
                     VoidCallback? accion = _abrirFormularioApadrinar;
@@ -702,6 +758,33 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AvisoYaEnFamilia extends StatelessWidget {
+  const _AvisoYaEnFamilia();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.center,
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.all(Radius.circular(28)),
+      ),
+      child: const Text(
+        '¡Ya es parte de una familia! 💖',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.rosa,
+          fontWeight: FontWeight.w800,
+          fontSize: 13,
+          height: 1.2,
         ),
       ),
     );

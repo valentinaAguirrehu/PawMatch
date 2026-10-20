@@ -8,6 +8,32 @@ const { enviarCorreoAprobacionAdopcion } = require('../utils/correo');
 
 const router = express.Router();
 
+// Iguala la tabla con Apadrinamiento: observaciones, lecturas y fecha de inicio.
+const esquemaListo = (async () => {
+  await pool.query(`
+    ALTER TABLE solicitudadopcion
+      ADD COLUMN IF NOT EXISTS observaciones TEXT,
+      ADD COLUMN IF NOT EXISTS leido_admin BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS leido_usuario BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS fecha_inicio_adopcion DATE,
+      ADD COLUMN IF NOT EXISTS fecha_actualizacion_estado TIMESTAMP
+  `);
+})().catch((err) => {
+  console.error('No se pudo preparar la tabla solicitudadopcion:', err.message);
+  throw err;
+});
+
+router.use(async (_req, res, next) => {
+  try {
+    await esquemaListo;
+    next();
+  } catch (_) {
+    res.status(500).json({
+      error: 'La tabla SolicitudAdopcion no coincide con el esquema esperado.',
+    });
+  }
+});
+
 const privateUploadsDir = path.join(__dirname, '..', 'private_uploads', 'documentos_adopcion');
 fs.mkdirSync(privateUploadsDir, { recursive: true });
 
@@ -143,7 +169,11 @@ const selectSolicitud = `
     (s.foto_servicios_publicos IS NOT NULL AND btrim(s.foto_servicios_publicos) <> '') AS tiene_foto_recibo,
     to_char(s.fecha_solicitud, 'YYYY-MM-DD HH24:MI:SS') AS fecha_solicitud,
     s.estado,
+    s.observaciones,
     to_char(s.fecha_actualizacion_estado, 'YYYY-MM-DD HH24:MI:SS') AS fecha_actualizacion_estado,
+    to_char(s.fecha_inicio_adopcion, 'YYYY-MM-DD') AS fecha_inicio_adopcion,
+    s.leido_admin,
+    s.leido_usuario,
     s.id_administrador_revisor,
     COALESCE(u.nombres, '') AS solicitante_nombres,
     COALESCE(u.apellidos, '') AS solicitante_apellidos,
@@ -252,8 +282,9 @@ router.post('/', subirArchivos, async (req, res) => {
       `INSERT INTO solicitudadopcion (
         id_usuario, id_mascota, tipo_vivienda, tiene_patio, tiene_ninos,
         tiene_mascotas, otras_mascotas, tiempo_disponible, experiencia_previa,
-        informacion_adicional, foto_cedula, foto_servicios_publicos, estado
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente')
+        informacion_adicional, foto_cedula, foto_servicios_publicos, estado,
+        leido_admin, leido_usuario
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente', false, true)
       RETURNING id_solicitud_adopcion`,
       [
         usuario.id_usuario,
@@ -332,6 +363,72 @@ router.get('/', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/adoption-requests/notificaciones/resumen
+ * Conteos de solicitudes nuevas (admin) y respuestas sin leer (usuario).
+ */
+router.get('/notificaciones/resumen', async (req, res) => {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+
+  try {
+    let totalAdmin = 0;
+    if (usuario.rol === 'administrador') {
+      const adminCount = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM solicitudadopcion WHERE leido_admin = false AND estado = 'pendiente'"
+      );
+      totalAdmin = adminCount.rows[0].total || 0;
+    }
+
+    const userCount = await pool.query(
+      "SELECT COUNT(*)::int AS total FROM solicitudadopcion WHERE id_usuario = $1 AND leido_usuario = false AND estado IN ('aprobada', 'rechazada')",
+      [usuario.id_usuario]
+    );
+
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      totalAdmin,
+      totalUsuario: userCount.rows[0].total || 0,
+    });
+  } catch (err) {
+    return errorDb(res, err, 'Error consultando notificaciones');
+  }
+});
+
+/**
+ * PUT /api/adoption-requests/notificaciones/marcar-admin
+ * El administrador ya vio las solicitudes pendientes.
+ */
+router.put('/notificaciones/marcar-admin', requireAdmin, async (req, res) => {
+  try {
+    await pool.query('UPDATE solicitudadopcion SET leido_admin = true WHERE leido_admin = false');
+    return res.json({ ok: true });
+  } catch (err) {
+    return errorDb(res, err, 'Error al marcar notificaciones');
+  }
+});
+
+/**
+ * PUT /api/adoption-requests/notificaciones/marcar-usuario
+ * El usuario ya vio las respuestas de sus solicitudes.
+ */
+router.put('/notificaciones/marcar-usuario', async (req, res) => {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) return res.status(401).json({ error: 'No autorizado' });
+
+  try {
+    await pool.query(
+      'UPDATE solicitudadopcion SET leido_usuario = true WHERE id_usuario = $1 AND leido_usuario = false',
+      [usuario.id_usuario]
+    );
+    return res.json({ ok: true });
+  } catch (err) {
+    return errorDb(res, err, 'Error al marcar notificaciones');
+  }
+});
+
 async function servirAdjunto(req, res, columna) {
   const usuario = await autenticarUsuario(req);
   if (!usuario) {
@@ -381,6 +478,13 @@ router.get('/:id/utility-bill', (req, res) => servirAdjunto(req, res, 'foto_serv
  * PUT /api/adoption-requests/:id/status
  * El administrador aprueba o rechaza la solicitud.
  */
+function fechaIso(valor) {
+  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valor.trim())) return null;
+  const texto = valor.trim();
+  const fecha = new Date(`${texto}T00:00:00`);
+  return Number.isNaN(fecha.getTime()) ? null : texto;
+}
+
 router.put('/:id/status', requireAdmin, async (req, res) => {
   const estado = (req.body.estado || req.body.status || '').toString().trim();
   if (!['aprobada', 'rechazada'].includes(estado)) {
@@ -388,6 +492,13 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
   }
   if (!esUuid(req.params.id)) {
     return res.status(400).json({ error: 'Solicitud inválida' });
+  }
+
+  const observaciones = (req.body.observaciones || '').toString().trim().slice(0, 500);
+  let fechaInicio = null;
+  if (estado === 'aprobada') {
+    fechaInicio = fechaIso(req.body.fecha_inicio_adopcion || '')
+      || new Date().toISOString().split('T')[0];
   }
 
   const client = await pool.connect();
@@ -438,10 +549,20 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
       `UPDATE solicitudadopcion
        SET estado = $1,
            fecha_actualizacion_estado = NOW(),
-           id_administrador_revisor = $2
-       WHERE id_solicitud_adopcion = $3
-       RETURNING id_solicitud_adopcion, estado`,
-      [estado, req.usuarioActual.id_usuario, req.params.id]
+           id_administrador_revisor = $2,
+           observaciones = $3,
+           fecha_inicio_adopcion = $4,
+           leido_usuario = false
+       WHERE id_solicitud_adopcion = $5
+       RETURNING id_solicitud_adopcion, estado, observaciones,
+                 to_char(fecha_inicio_adopcion, 'YYYY-MM-DD') AS fecha_inicio_adopcion`,
+      [
+        estado,
+        req.usuarioActual.id_usuario,
+        observaciones || null,
+        fechaInicio,
+        req.params.id,
+      ]
     );
 
     if (estado === 'aprobada') {
@@ -481,7 +602,9 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
         destinatario: sol.correo,
         nombreUsuario: `${sol.nombres} ${sol.apellidos}`.trim(),
         nombreMascota: sol.nombre_mascota,
+        fechaInicio,
         whatsappFundacion,
+        observaciones: observaciones || null,
       }).catch((err) => console.error('Error al enviar correo de adopción:', err));
     }
 

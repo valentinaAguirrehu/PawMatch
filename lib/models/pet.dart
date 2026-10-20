@@ -79,6 +79,8 @@ class Pet {
   }
 
   String get estadoAdopcionTexto => etiquetaEstadoAdopcion(estadoAdopcion);
+
+  bool get estaAdoptada => estadoAdopcion.trim().toLowerCase() == 'adoptado';
 }
 
 String etiquetaEstadoAdopcion(String e) {

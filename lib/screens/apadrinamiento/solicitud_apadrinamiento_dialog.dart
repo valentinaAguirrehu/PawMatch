@@ -22,6 +22,30 @@ class SolicitudApadrinamientoDialog extends StatefulWidget {
     required Pet pet,
     VoidCallback? onEnviadaExitosamente,
   }) {
+    if (pet.estaAdoptada) {
+      return showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: const Text(
+            '¡Ya es parte de una familia! 💖',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.rosa,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -113,6 +137,15 @@ class _SolicitudApadrinamientoDialogState
   }
 
   Future<void> _enviar() async {
+    if (widget.pet.estaAdoptada) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('¡Ya es parte de una familia! 💖'),
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_docBytes == null || _docNombre == null) {

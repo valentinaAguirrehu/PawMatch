@@ -12,6 +12,7 @@ import 'package:paw_match/screens/match/perfect_match.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
 import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
@@ -60,11 +61,13 @@ class _MenuScreenState extends State<MenuScreen> {
     final pedido = widget.indiceInicial;
     _index = (pedido >= 0 && pedido <= 3) ? pedido : 0;
     ApadrinamientoService.iniciarMonitoreo();
+    AdoptionService.iniciarMonitoreo();
   }
 
   @override
   void dispose() {
     ApadrinamientoService.detenerMonitoreo();
+    AdoptionService.detenerMonitoreo();
     super.dispose();
   }
 
@@ -134,30 +137,9 @@ class _MenuScreenState extends State<MenuScreen> {
                 const SizedBox(width: 12),
                 Expanded(child: Text(g.etiqueta)),
                 if (g == _Gestion.apadrinamiento)
-                  ValueListenableBuilder<int>(
-                    valueListenable: ApadrinamientoService.noLeidasAdmin,
-                    builder: (context, count, _) {
-                      if (count == 0) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  _ContadorMenu(origen: ApadrinamientoService.noLeidasAdmin),
+                if (g == _Gestion.adopcion)
+                  _ContadorMenu(origen: AdoptionService.noLeidasAdmin),
               ],
             ),
           ),
@@ -167,6 +149,8 @@ class _MenuScreenState extends State<MenuScreen> {
     if (elegida != null && mounted) {
       if (elegida == _Gestion.apadrinamiento) {
         ApadrinamientoService.marcarLeidasAdmin();
+      } else if (elegida == _Gestion.adopcion) {
+        AdoptionService.marcarLeidasAdmin();
       }
       _cambiarA(3, seccion: elegida);
     }
@@ -226,6 +210,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
     if (confirmar == true && mounted) {
       ApadrinamientoService.detenerMonitoreo();
+      AdoptionService.detenerMonitoreo();
       Session.cerrar();
       Navigator.pushAndRemoveUntil(
         context,
@@ -292,15 +277,22 @@ class _MenuScreenState extends State<MenuScreen> {
             if (isAdmin) ...[
               const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
               NavItem(
-                ValueListenableBuilder<int>(
-                  valueListenable: ApadrinamientoService.noLeidasAdmin,
-                  builder: (context, count, child) => Badge(
-                    isLabelVisible: count > 0,
-                    label: Text('$count'),
-                    backgroundColor: Colors.redAccent,
-                    textColor: Colors.white,
-                    child: child!,
-                  ),
+                AnimatedBuilder(
+                  animation: Listenable.merge([
+                    ApadrinamientoService.noLeidasAdmin,
+                    AdoptionService.noLeidasAdmin,
+                  ]),
+                  builder: (context, child) {
+                    final count = ApadrinamientoService.noLeidasAdmin.value +
+                        AdoptionService.noLeidasAdmin.value;
+                    return Badge(
+                      isLabelVisible: count > 0,
+                      label: Text('$count'),
+                      backgroundColor: Colors.redAccent,
+                      textColor: Colors.white,
+                      child: child,
+                    );
+                  },
                   child: const FeatureIcon.gestionar(),
                 ),
                 'Gestionar',
@@ -321,6 +313,37 @@ class _MenuScreenState extends State<MenuScreen> {
 
 /// Cuenta cuántas pantallas hay abiertas encima de la principal de la pestaña
 /// (ignora diálogos, menús emergentes y bottom sheets).
+class _ContadorMenu extends StatelessWidget {
+  final ValueNotifier<int> origen;
+
+  const _ContadorMenu({required this.origen});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: origen,
+      builder: (context, count, _) {
+        if (count == 0) return const SizedBox.shrink();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.redAccent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            '$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ObservadorPaginas extends NavigatorObserver {
   _ObservadorPaginas(this.onCambio);
 

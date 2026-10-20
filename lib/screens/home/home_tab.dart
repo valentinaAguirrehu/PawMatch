@@ -7,6 +7,7 @@ import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -74,6 +75,7 @@ class _HomeTabState extends State<HomeTab> {
   );
 
   void _abrirApadrinamiento(Pet pet) {
+    if (pet.estaAdoptada) return;
     SolicitudApadrinamientoDialog.mostrar(
       context,
       pet: pet,
@@ -116,6 +118,7 @@ class _HomeTabState extends State<HomeTab> {
 
     if (confirmar == true && mounted) {
       ApadrinamientoService.detenerMonitoreo();
+      AdoptionService.detenerMonitoreo();
       Session.cerrar();
       Navigator.pushAndRemoveUntil(
         context,
@@ -221,18 +224,28 @@ class _HomeTabState extends State<HomeTab> {
               child: Wrap(
                 spacing: 4,
                 children: [
-                  TextButton.icon(
-                    style: TextButton.styleFrom(foregroundColor: AppColors.rosa),
-                    icon: const Icon(Icons.favorite_border, size: 16),
-                    label: const Text('Mis adopciones'),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MyAdoptionsScreen(),
-                        ),
-                      );
-                    },
+                  ValueListenableBuilder<int>(
+                    valueListenable: AdoptionService.noLeidasUsuario,
+                    builder: (context, count, child) => Badge(
+                      isLabelVisible: count > 0,
+                      label: Text(count > 1 ? '$count' : 'Nuevo'),
+                      backgroundColor: Colors.redAccent,
+                      textColor: Colors.white,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(foregroundColor: AppColors.rosa),
+                        icon: const Icon(Icons.favorite_border, size: 16),
+                        label: const Text('Mis adopciones'),
+                        onPressed: () {
+                          AdoptionService.marcarLeidasUsuario();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const MyAdoptionsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                   ValueListenableBuilder<int>(
                     valueListenable: ApadrinamientoService.noLeidasUsuario,
