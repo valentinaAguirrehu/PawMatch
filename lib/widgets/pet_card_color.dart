@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 
 /// Tarjeta grande con fondo de color para el carrusel del inicio.
@@ -135,8 +136,8 @@ class PetCardColor extends StatelessWidget {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Text(
-                      '¡Ya es parte de una familia! 💖',
+                    child: Text(
+                      pet.mensajeFamiliaPara(Session.idUsuario),
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: AppColors.rosa,

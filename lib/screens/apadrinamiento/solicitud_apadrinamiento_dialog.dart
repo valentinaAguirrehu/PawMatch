@@ -26,10 +26,10 @@ class SolicitudApadrinamientoDialog extends StatefulWidget {
       return showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          content: const Text(
-            '¡Ya es parte de una familia! 💖',
+          content: Text(
+            pet.mensajeFamiliaPara(Session.idUsuario),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: AppColors.rosa,
               fontWeight: FontWeight.w800,
               fontSize: 16,
@@ -139,8 +139,8 @@ class _SolicitudApadrinamientoDialogState
   Future<void> _enviar() async {
     if (widget.pet.estaAdoptada) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Ya es parte de una familia! 💖'),
+        SnackBar(
+          content: Text(widget.pet.mensajeFamiliaPara(Session.idUsuario)),
         ),
       );
       return;

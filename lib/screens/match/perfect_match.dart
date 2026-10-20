@@ -3,6 +3,7 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
+import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
 import 'package:paw_match/services/adoption_service.dart';
@@ -84,11 +85,11 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     ).push(MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()));
   }
 
-  void _abrirAdopcion(Pet pet) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => AdoptionFormScreen(pet: pet)),
-    );
+  Future<void> _abrirAdopcion(Pet pet) async {
+    final listo = await perfilListoParaAdoptar(context);
+    if (!listo || !mounted) return;
+    final enviada = await AdoptionFormScreen.mostrar(context, pet: pet);
+    if (enviada == true && mounted) _cargarAdopciones();
   }
 
   @override

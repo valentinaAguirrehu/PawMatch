@@ -8,16 +8,29 @@ import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 /// Formulario para solicitar la adopción de una mascota.
+/// Se muestra como ventana flotante sobre la pantalla actual.
 class AdoptionFormScreen extends StatefulWidget {
   final Pet pet;
 
   const AdoptionFormScreen({super.key, required this.pet});
+
+  /// Abre el formulario en un modal, sin cambiar de pantalla.
+  static Future<bool?> mostrar(BuildContext context, {required Pet pet}) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AdoptionFormScreen(pet: pet),
+    );
+  }
 
   @override
   State<AdoptionFormScreen> createState() => _AdoptionFormScreenState();
 }
 
 class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
+  static const _avisoMotivacion =
+      'Cuéntenos un poco más (mínimo 20 caracteres).';
   static const _viviendas = ['Casa', 'Apartamento', 'Finca', 'Habitación'];
   static const _tiempos = [
     'Menos de 2 horas al día',
@@ -32,6 +45,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   int _paso = 0;
   bool _revisando = true;
   bool _enviando = false;
+  bool _mostrarError = false;
   String? _error;
 
   String? _vivienda;
@@ -101,7 +115,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       if (_ninos == null) return 'Indica si hay niños en el hogar.';
       if (_otrasMascotas == null) return 'Indica si tienes otras mascotas.';
       if (_otrasMascotas == true && _otrasCtrl.text.trim().isEmpty) {
-        return 'Describe las otras mascotas del hogar.';
+        return 'Cuéntenos un poco sobre sus otras mascotas.';
       }
       if (_otrasCtrl.text.trim().length > 200) {
         return 'La descripción de las otras mascotas no puede pasar de 200 caracteres.';
@@ -110,9 +124,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     if (_paso == 1) {
       if (_tiempo == null) return 'Indica cuánto tiempo puedes dedicarle.';
       if (_experiencia == null) return 'Indica si has tenido mascotas antes.';
-      if (_infoCtrl.text.trim().length < 20) {
-        return 'Cuéntanos un poco más (mínimo 20 caracteres).';
-      }
+      if (_motivacionCorta) return _avisoMotivacion;
     }
     if (_paso == 2) {
       if (_cedulaBytes == null) return 'Adjunta la foto de tu cédula.';
@@ -121,14 +133,26 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     return null;
   }
 
+  bool get _motivacionCorta => _infoCtrl.text.trim().length < 20;
+
+  void _alEscribirMotivacion(String _) {
+    if (_mostrarError && !_motivacionCorta) {
+      setState(() => _mostrarError = false);
+    }
+  }
+
   void _continuar() {
     final error = _validarPaso();
     if (error != null) {
-      setState(() => _error = error);
+      setState(() {
+        if (_motivacionCorta) _mostrarError = true;
+        _error = error == _avisoMotivacion ? null : error;
+      });
       return;
     }
     setState(() {
       _error = null;
+      _mostrarError = false;
       _paso += 1;
     });
   }
@@ -189,7 +213,10 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   Future<void> _enviar() async {
     final error = _validarPaso();
     if (error != null) {
-      setState(() => _error = error);
+      setState(() {
+        if (_motivacionCorta) _mostrarError = true;
+        _error = error == _avisoMotivacion ? null : error;
+      });
       return;
     }
 
@@ -248,76 +275,133 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+
     return PopScope(
       canPop: !_enviando,
-      child: Scaffold(
-        appBar: AppBar(title: Text('Adoptar a ${widget.pet.nombre}')),
-        body: _revisando
-            ? const Center(child: CircularProgressIndicator())
-            : Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 640),
-                  child: Column(
-                    children: [
-                      _Pasos(paso: _paso),
-                      Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                          children: [
-                            _MascotaResumen(pet: widget.pet),
-                            const SizedBox(height: 16),
-                            if (_paso == 0) ..._pasoHogar(t),
-                            if (_paso == 1) ..._pasoExperiencia(t),
-                            if (_paso == 2) ..._pasoDocumentos(t),
-                            if (_error != null) ...[
-                              const SizedBox(height: 12),
-                              Text(
-                                _error!,
-                                style: const TextStyle(
-                                  color: Colors.redAccent,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      _botones(),
-                    ],
-                  ),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 12, 0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.pets, color: AppColors.rosa, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Adoptar a ${widget.pet.nombre}',
+                        style: t.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.texto,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Cerrar',
+                      onPressed: _enviando ? null : () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 16),
+              if (_revisando)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 48),
+                  child: CircularProgressIndicator(color: AppColors.rosa),
+                )
+              else
+                Flexible(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _Pasos(paso: _paso),
+                          Flexible(
+                            child: ListView(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                              children: [
+                                _MascotaResumen(pet: widget.pet),
+                                const SizedBox(height: 16),
+                                if (_paso == 0) ..._pasoHogar(t),
+                                if (_paso == 1) ..._pasoExperiencia(t),
+                                if (_paso == 2) ..._pasoDocumentos(t),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _error!,
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          _botones(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   List<Widget> _pasoHogar(TextTheme t) => [
     Text(
-      'Cuéntanos sobre tu hogar',
+      'Su hogar',
       style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
     ),
     const SizedBox(height: 14),
     _Opciones(
-      titulo: '¿En qué tipo de vivienda vives?',
+      titulo: '¿En qué tipo de hogar vivirá el peludito?',
       opciones: _viviendas,
       valor: _vivienda,
       onChanged: (v) => setState(() => _vivienda = v),
     ),
     const SizedBox(height: 16),
     _SiNo(
-      titulo: '¿La vivienda tiene patio o zona verde?',
+      titulo: '¿Su hogar cuenta con patio o zona verde?',
       valor: _patio,
       onChanged: (v) => setState(() => _patio = v),
     ),
     const SizedBox(height: 16),
     _SiNo(
-      titulo: '¿Viven niños en el hogar?',
+      titulo: '¿Hay niños viviendo en su hogar?',
       valor: _ninos,
       onChanged: (v) => setState(() => _ninos = v),
     ),
     const SizedBox(height: 16),
     _SiNo(
-      titulo: '¿Tienes otras mascotas actualmente?',
+      titulo: '¿Tiene actualmente otras mascotas?',
       valor: _otrasMascotas,
       onChanged: (v) => setState(() => _otrasMascotas = v),
     ),
@@ -328,7 +412,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
         maxLength: 200,
         textCapitalization: TextCapitalization.sentences,
         decoration: const InputDecoration(
-          labelText: '¿Cuáles?',
+          labelText: 'Cuéntenos un poco sobre sus otras mascotas',
           hintText: 'Por ejemplo: un gato adulto y un perro pequeño',
           border: OutlineInputBorder(),
         ),
@@ -338,34 +422,46 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
 
   List<Widget> _pasoExperiencia(TextTheme t) => [
     Text(
-      'Tu tiempo y experiencia',
+      'Tiempo y experiencia',
       style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
     ),
     const SizedBox(height: 14),
     _Opciones(
-      titulo: '¿Cuánto tiempo al día puedes dedicarle?',
+      titulo: '¿Cuánto tiempo al día compartirá con su nuevo compañero?',
       opciones: _tiempos,
       valor: _tiempo,
       onChanged: (v) => setState(() => _tiempo = v),
     ),
     const SizedBox(height: 16),
     _SiNo(
-      titulo: '¿Has tenido mascotas antes?',
+      titulo:
+          '¿Ha tenido procesos de adopción anteriormente con nosotros?',
       valor: _experiencia,
       onChanged: (v) => setState(() => _experiencia = v),
     ),
     const SizedBox(height: 16),
+    const Text(
+      '¿Por qué desea adoptar a este compañerito?',
+      style: TextStyle(fontWeight: FontWeight.w700),
+    ),
+    const SizedBox(height: 8),
     TextField(
       controller: _infoCtrl,
       minLines: 4,
       maxLines: 7,
       maxLength: 2000,
       textCapitalization: TextCapitalization.sentences,
+      onChanged: _alEscribirMotivacion,
       decoration: InputDecoration(
-        labelText: '¿Por qué quieres adoptar a ${widget.pet.nombre}?',
-        hintText: 'Cuéntanos cómo sería su día a día en tu hogar.',
+        hintText:
+            'Cuéntenos qué lo motivó a elegirlo y por qué considera que su hogar es el lugar ideal para él.',
         alignLabelWithHint: true,
         border: const OutlineInputBorder(),
+        errorText: _mostrarError && _motivacionCorta ? _avisoMotivacion : null,
+        errorStyle: const TextStyle(
+          color: Colors.redAccent,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
   ];
@@ -375,20 +471,19 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       'Documentos de verificación',
       style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
     ),
-    const SizedBox(height: 6),
-    Text(
-      'Estas fotos solo las puede ver el personal de la fundación.',
-      style: t.bodyMedium?.copyWith(color: Colors.black54),
-    ),
     const SizedBox(height: 14),
     _FotoCampo(
-      titulo: 'Foto de la cédula',
+      titulo: 'Cédula',
+      descripcion:
+          'No olvides adjuntar la foto de tu documento de identidad para validar la solicitud.',
       bytes: _cedulaBytes,
       onElegir: () => _elegirFoto(cedula: true),
     ),
     const SizedBox(height: 14),
     _FotoCampo(
-      titulo: 'Foto de un recibo de servicio público',
+      titulo: 'Recibo',
+      descripcion:
+          'Por favor adjunta la foto de un recibo de servicio público para verificar tu dirección.',
       bytes: _reciboBytes,
       onElegir: () => _elegirFoto(cedula: false),
     ),
@@ -407,6 +502,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                   onPressed: _enviando ? null : () => setState(() {
                     _paso -= 1;
                     _error = null;
+                    _mostrarError = false;
                   }),
                   child: const Text('Atrás'),
                 ),
@@ -444,7 +540,7 @@ class _Pasos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const etiquetas = ['Hogar', 'Experiencia', 'Documentos'];
+    const etiquetas = ['Su hogar', 'Tiempo', 'Documentos'];
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(
@@ -629,11 +725,13 @@ class _SiNo extends StatelessWidget {
 
 class _FotoCampo extends StatelessWidget {
   final String titulo;
+  final String? descripcion;
   final Uint8List? bytes;
   final VoidCallback onElegir;
 
   const _FotoCampo({
     required this.titulo,
+    this.descripcion,
     required this.bytes,
     required this.onElegir,
   });
@@ -650,6 +748,16 @@ class _FotoCampo extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700)),
+          if (descripcion != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              descripcion!,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.black54,
+                height: 1.35,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           if (bytes != null)
             ClipRRect(

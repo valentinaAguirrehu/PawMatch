@@ -40,6 +40,9 @@ class FeatureIcon extends StatelessWidget {
   const FeatureIcon.compatibilidad({super.key, this.tamano = 24, this.color})
     : icono = Icons.favorite_outline;
 
+  const FeatureIcon.favorito({super.key, this.tamano = 24, this.color})
+    : icono = Icons.favorite_rounded;
+
   const FeatureIcon.iniciarSesion({super.key, this.tamano = 20, this.color})
     : icono = Icons.login_rounded;
 
@@ -83,7 +86,7 @@ class FeatureIcon extends StatelessWidget {
     : icono = Icons.logout;
 
   const FeatureIcon.gestionar({super.key, this.tamano = 24, this.color})
-    : icono = Icons.edit_note;
+    : icono = Icons.menu;
 
   const FeatureIcon.buscar({super.key, this.tamano = 24, this.color})
     : icono = Icons.search;
