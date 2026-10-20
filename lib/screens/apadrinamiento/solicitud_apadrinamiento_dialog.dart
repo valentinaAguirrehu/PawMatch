@@ -607,13 +607,14 @@ class _SolicitudApadrinamientoDialogState
                   const SizedBox(height: 20),
 
                   // Acuerdo de responsabilidad (inicia en false)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _aceptoAcuerdo
-                          ? Colors.green.shade50
-                          : Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
+                  Material(
+                    color: _aceptoAcuerdo
+                        ? Colors.green.shade50
+                        : Colors.grey.shade50,
+                    clipBehavior: Clip.antiAlias,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14.0),
+                      side: BorderSide(
                         color: _aceptoAcuerdo
                             ? Colors.green.shade300
                             : Colors.grey.shade300,
