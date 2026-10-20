@@ -83,7 +83,7 @@ class FeatureIcon extends StatelessWidget {
     : icono = Icons.logout;
 
   const FeatureIcon.gestionar({super.key, this.tamano = 24, this.color})
-    : icono = Icons.edit_note;
+    : icono = Icons.menu;
 
   const FeatureIcon.buscar({super.key, this.tamano = 24, this.color})
     : icono = Icons.search;

@@ -47,6 +47,10 @@ class MenuScreen extends StatefulWidget {
 }
 
 class _MenuScreenState extends State<MenuScreen> {
+  /// Última pestaña del administrador: abre el menú desplegable.
+  /// Inicio = 0, Perfil = 1, menú = 2. Mascotas no entra en esta barra.
+  static const int _indiceGestionAdmin = 2;
+
   late int _index;
   _Gestion _seccion = _Gestion.mascotas;
 
@@ -59,7 +63,8 @@ class _MenuScreenState extends State<MenuScreen> {
   void initState() {
     super.initState();
     final pedido = widget.indiceInicial;
-    _index = (pedido >= 0 && pedido <= 3) ? pedido : 0;
+    final maximo = Session.isAdmin ? _indiceGestionAdmin : 3;
+    _index = (pedido >= 0 && pedido <= maximo) ? pedido : 0;
     ApadrinamientoService.iniciarMonitoreo();
     AdoptionService.iniciarMonitoreo();
   }
@@ -93,7 +98,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   void _alTocarPestana(int i) {
     // Último ícono (solo administrador): abre el menú desplegable
-    if (Session.isAdmin && i == 3) {
+    if (Session.isAdmin && i == _indiceGestionAdmin) {
       _mostrarMenuGestion();
       return;
     }
@@ -106,6 +111,19 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   void _irA(int i) => _alTocarPestana(i);
+
+  /// El administrador no tiene la pestaña Mascotas. Desde Inicio, la búsqueda
+  /// abre la misma lista en una pantalla aparte.
+  void _abrirListaMascotas() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Mascotas')),
+          body: const PetScreen(),
+        ),
+      ),
+    );
+  }
 
   Future<void> _mostrarMenuGestion() async {
     final tam = MediaQuery.of(context).size;
@@ -152,7 +170,7 @@ class _MenuScreenState extends State<MenuScreen> {
       } else if (elegida == _Gestion.adopcion) {
         AdoptionService.marcarLeidasAdmin();
       }
-      _cambiarA(3, seccion: elegida);
+      _cambiarA(_indiceGestionAdmin, seccion: elegida);
     }
   }
 
@@ -226,16 +244,15 @@ class _MenuScreenState extends State<MenuScreen> {
 
     final paginas = <Widget>[
       HomeTab(
-        onVerMascotas: () => _irA(1),
+        onVerMascotas: () => isAdmin ? _abrirListaMascotas() : _irA(1),
       ),
-      const PetScreen(),
-      if (isAdmin) ...[
-        const ProfileScreen(),
-        _paginaGestion(),
-      ] else ...[
+      if (isAdmin)
+        const ProfileScreen()
+      else ...[
+        const PetScreen(),
         const PerfectMatchScreen(),
-        const ProfileScreen(),
       ],
+      if (isAdmin) _paginaGestion() else const ProfileScreen(),
     ];
     final paginaActual = paginas[_index];
 
@@ -273,9 +290,16 @@ class _MenuScreenState extends State<MenuScreen> {
           onTap: _alTocarPestana,
           items: [
             const NavItem(FeatureIcon.inicio(), 'Inicio'),
-            const NavItem(FeatureIcon.mascota(tamano: 24), 'Mascotas'),
-            if (isAdmin) ...[
-              const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
+            if (isAdmin)
+              const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil')
+            else ...[
+              const NavItem(FeatureIcon.mascota(tamano: 24), 'Mascotas'),
+              const NavItem(
+                FeatureIcon.compatibilidad(tamano: 24),
+                'Match perfecto',
+              ),
+            ],
+            if (isAdmin)
               NavItem(
                 AnimatedBuilder(
                   animation: Listenable.merge([
@@ -296,14 +320,9 @@ class _MenuScreenState extends State<MenuScreen> {
                   child: const FeatureIcon.gestionar(),
                 ),
                 'Gestionar',
-              ),
-            ] else ...[
-              const NavItem(
-                FeatureIcon.compatibilidad(tamano: 24),
-                'Match perfecto',
-              ),
+              )
+            else
               const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
-            ],
           ],
         ),
       ),

@@ -7,6 +7,7 @@ import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
+import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
@@ -67,6 +68,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   Future<void> _abrirFormularioAdopcion() async {
+    final listo = await perfilListoParaAdoptar(context);
+    if (!listo || !mounted) return;
     final enviada = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => AdoptionFormScreen(pet: widget.pet)),

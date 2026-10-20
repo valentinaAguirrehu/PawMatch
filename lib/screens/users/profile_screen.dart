@@ -14,7 +14,10 @@ const _pendiente = 'Sin completar';
 const _colorPendiente = Color(0xFFC62828);
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  /// Abre el formulario de edición en cuanto carga el perfil.
+  final bool iniciarEnEdicion;
+
+  const ProfileScreen({super.key, this.iniciarEnEdicion = false});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -52,6 +55,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _editando = widget.iniciarEnEdicion;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _cargar();
     });
@@ -407,20 +411,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
-        Text(
-          'Personalidad',
-          style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()),
+        if (!Session.isAdmin) ...[
+          const SizedBox(height: 28),
+          Text(
+            'Personalidad',
+            style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
-          icon: const FeatureIcon.compatibilidad(color: AppColors.rosa),
-          label: const Text('Mi personalidad'),
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
-        ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()),
+            ),
+            icon: const FeatureIcon.compatibilidad(color: AppColors.rosa),
+            label: const Text('Mi personalidad'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+          ),
+        ],
         const SizedBox(height: 28),
       Text(
         'Contraseña',
