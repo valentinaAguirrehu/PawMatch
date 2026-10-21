@@ -4,7 +4,10 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
-const { enviarCorreoAprobacionApadrinamiento } = require('../utils/correo');
+const {
+  enviarCorreoAprobacionApadrinamiento,
+  enviarCorreoRechazoApadrinamiento,
+} = require('../utils/correo');
 
 const router = express.Router();
 
@@ -16,11 +19,12 @@ fs.mkdirSync(privateUploadsDir, { recursive: true });
 const contratosDir = path.join(__dirname, '..', 'private_uploads', 'contratos_apadrinamiento');
 fs.mkdirSync(contratosDir, { recursive: true });
 
-// Garantiza las columnas contrato_apadrinamiento_archivo y veces_rechazada en PostgreSQL
+// Garantiza las columnas contrato_apadrinamiento_archivo, veces_rechazada y correo_contacto en PostgreSQL
 pool.query(`
   ALTER TABLE solicitudapadrinamiento
     ADD COLUMN IF NOT EXISTS contrato_apadrinamiento_archivo TEXT,
-    ADD COLUMN IF NOT EXISTS veces_rechazada INTEGER DEFAULT 1
+    ADD COLUMN IF NOT EXISTS veces_rechazada INTEGER DEFAULT 1,
+    ADD COLUMN IF NOT EXISTS correo_contacto TEXT
 `).catch(err => console.error('Error preparando tabla solicitudapadrinamiento:', err.message));
 
 const upload = multer({
@@ -103,7 +107,7 @@ router.post('/', upload.single('documento'), async (req, res) => {
     return res.status(401).json({ error: 'Debes iniciar sesión para apadrinar' });
   }
 
-  const { id_mascota, monto_aporte, frecuencia_aporte, informacion_adicional, acuerdo_responsabilidad } = req.body;
+  const { id_mascota, monto_aporte, frecuencia_aporte, informacion_adicional, acuerdo_responsabilidad, correo_contacto } = req.body;
 
   if (!id_mascota) {
     if (req.file) fs.unlinkSync(req.file.path);
@@ -169,6 +173,7 @@ router.post('/', upload.single('documento'), async (req, res) => {
     const monto = monto_aporte ? parseInt(monto_aporte, 10) : null;
     const frecuencia = (frecuencia_aporte || 'mensual').trim();
     const archivoDoc = req.file.filename;
+    const correoFinal = (correo_contacto || usuario.correo || '').trim();
 
     const insercion = await pool.query(
       `INSERT INTO solicitudapadrinamiento (
@@ -182,10 +187,11 @@ router.post('/', upload.single('documento'), async (req, res) => {
         fecha_acuerdo_responsabilidad,
         estado,
         leido_admin,
-        leido_usuario
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), 'pendiente', false, true)
+        leido_usuario,
+        correo_contacto
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), 'pendiente', false, true, $8)
       RETURNING *`,
-      [usuario.id_usuario, id_mascota, monto, frecuencia, motivacion, archivoDoc, true]
+      [usuario.id_usuario, id_mascota, monto, frecuencia, motivacion, archivoDoc, true, correoFinal]
     );
 
     res.status(201).json({
@@ -313,7 +319,8 @@ router.get('/', async (req, res) => {
         ) AS veces_rechazada,
         u.nombres AS solicitante_nombres,
         u.apellidos AS solicitante_apellidos,
-        u.correo AS solicitante_correo,
+        COALESCE(s.correo_contacto, u.correo) AS solicitante_correo,
+        s.correo_contacto,
         u.telefono AS solicitante_telefono,
         u.direccion AS solicitante_direccion,
         u.documento_identidad AS solicitante_cedula,
@@ -577,6 +584,7 @@ router.get('/:id/documento', async (req, res) => {
       // Verificar solicitud actual
       const actualRes = await pool.query(
         `SELECT s.id_solicitud_apadrinamiento, s.estado, s.id_usuario, s.id_mascota,
+                s.correo_contacto,
                 u.nombres, u.apellidos, u.correo,
                 m.nombre AS nombre_mascota, m.estado_adopcion
          FROM solicitudapadrinamiento s
@@ -629,31 +637,50 @@ router.get('/:id/documento', async (req, res) => {
         [estado, fechaInicioFinal, observaciones || null, req.params.id]
       );
 
-      // Si se aprueba, marcar mascota como apadrinada
+      // Obtener teléfono/whatsapp oficial de la fundación
+      let whatsappFundacion = '573136177747';
+      try {
+        const fundRes = await pool.query('SELECT telefono FROM informacionfundacion LIMIT 1');
+        if (fundRes.rows.length > 0 && fundRes.rows[0].telefono) {
+          whatsappFundacion = fundRes.rows[0].telefono.replace(/\D/g, '');
+        }
+      } catch (_) {}
+
+      // Correo del destinatario (prioriza el correo confirmado en la solicitud si existe)
+      const correoDestino = (sol.correo_contacto && sol.correo_contacto.trim().length > 0)
+        ? sol.correo_contacto.trim()
+        : sol.correo;
+      const nombreUsuario = `${sol.nombres} ${sol.apellidos}`.trim() || 'Estimado/a Padrino';
+
+      // Si se aprueba, marcar mascota como apadrinada y notificar por correo
       if (estado === 'aprobada') {
         await pool.query(
           "UPDATE mascota SET estado_apadrinamiento = 'apadrinado' WHERE id_mascota = $1",
           [sol.id_mascota]
         );
 
-        // Obtener teléfono/whatsapp oficial de la fundación
-        let whatsappFundacion = '573136177747';
-        try {
-          const fundRes = await pool.query('SELECT telefono FROM informacionfundacion LIMIT 1');
-          if (fundRes.rows.length > 0 && fundRes.rows[0].telefono) {
-            whatsappFundacion = fundRes.rows[0].telefono.replace(/\D/g, '');
-          }
-        } catch (_) {}
-
-        // Enviar correo de notificación (solo tras guardarse en BD y sin duplicar)
-        enviarCorreoAprobacionApadrinamiento({
-          destinatario: sol.correo,
-          nombreUsuario: `${sol.nombres} ${sol.apellidos}`.trim(),
-          nombreMascota: sol.nombre_mascota,
-          fechaInicio: fechaInicioFinal,
-          whatsappFundacion,
-          observaciones: observaciones || null,
-        }).catch(err => console.error('Error al enviar correo en background:', err));
+        // Enviar correo de aprobación
+        if (correoDestino) {
+          enviarCorreoAprobacionApadrinamiento({
+            destinatario: correoDestino,
+            nombreUsuario,
+            nombreMascota: sol.nombre_mascota,
+            fechaInicio: fechaInicioFinal,
+            whatsappFundacion,
+            observaciones: observaciones || null,
+          }).catch(err => console.error('Error al enviar correo de aprobación:', err));
+        }
+      } else if (estado === 'rechazada') {
+        // Enviar correo de rechazo informando la decisión y motivo
+        if (correoDestino) {
+          enviarCorreoRechazoApadrinamiento({
+            destinatario: correoDestino,
+            nombreUsuario,
+            nombreMascota: sol.nombre_mascota,
+            whatsappFundacion,
+            observaciones: observaciones || null,
+          }).catch(err => console.error('Error al enviar correo de rechazo:', err));
+        }
       } else if (estado === 'cancelada') {
         // Al cancelar, verificar si la mascota todavía tiene alguna otra solicitud aprobada
         const otrasAprobadas = await pool.query(

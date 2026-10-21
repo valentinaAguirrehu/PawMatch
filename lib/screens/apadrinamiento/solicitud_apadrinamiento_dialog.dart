@@ -72,6 +72,7 @@ class _SolicitudApadrinamientoDialogState
   final _formKey = GlobalKey<FormState>();
   final _motivacionCtrl = TextEditingController();
   final _montoCtrl = TextEditingController(text: '30000');
+  final _correoCtrl = TextEditingController(text: Session.correo);
   String _frecuencia = 'mensual';
 
   int _paso = 0;
@@ -80,11 +81,14 @@ class _SolicitudApadrinamientoDialogState
 
   bool _aceptoAcuerdo = false;
   bool _enviando = false;
+  bool _correoPerfilConfirmado = true;
+  bool _actualizandoCorreo = false;
 
   @override
   void dispose() {
     _motivacionCtrl.dispose();
     _montoCtrl.dispose();
+    _correoCtrl.dispose();
     super.dispose();
   }
 
@@ -257,7 +261,8 @@ class _SolicitudApadrinamientoDialogState
     }
   }
 
-  Future<void> _enviar() async {
+  /// Valida los requisitos y ejecuta el envío de la solicitud
+  Future<void> _solicitarConfirmacionCorreoYEnviar() async {
     if (widget.pet.estaAdoptada) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -292,13 +297,163 @@ class _SolicitudApadrinamientoDialogState
       return;
     }
 
+    final correoFinal = _correoCtrl.text.trim();
+    if (correoFinal.isEmpty || !correoFinal.contains('@') || !correoFinal.contains('.')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Por favor, verifica que tu correo electrónico sea válido.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!_correoPerfilConfirmado) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text(
+            'Por favor confirma tu correo electrónico en la sección inferior.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _ejecutarEnvioFinal(correoFinal);
+  }
+
+  /// Diálogo para editar el correo del perfil del usuario y persistirlo en la base de datos
+  Future<void> _dialogoEditarCorreoPerfil() async {
+    final nuevoCtrl = TextEditingController(text: _correoCtrl.text.trim());
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          contentPadding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          title: const Row(
+            children: [
+              Icon(Icons.edit_note_rounded, color: AppColors.rosa, size: 28),
+              SizedBox(width: 10),
+              Text('Editar Correo de tu Perfil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ingresa tu correo correcto. Se actualizará en tu perfil de Paw Match y en la base de datos para que recibas allí todas tus notificaciones:',
+                  style: TextStyle(fontSize: 13, height: 1.4, color: Colors.black87),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: nuevoCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Nuevo correo electrónico *',
+                    labelStyle: const TextStyle(color: AppColors.rosa),
+                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.rosa),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+                    ),
+                  ),
+                  validator: (v) {
+                    final t = (v ?? '').trim();
+                    if (t.isEmpty) return 'El correo es obligatorio';
+                    if (!t.contains('@') || !t.contains('.')) return 'Ingresa un correo electrónico válido';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: _actualizandoCorreo ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.black54)),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.rosa,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _actualizandoCorreo
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      final nuevo = nuevoCtrl.text.trim();
+                      setModalState(() => _actualizandoCorreo = true);
+                      setState(() => _actualizandoCorreo = true);
+
+                      try {
+                        if (Session.idUsuario != null && Session.idUsuario!.isNotEmpty) {
+                          await ApiService.actualizarCorreoUsuario(
+                            idUsuario: Session.idUsuario!,
+                            nuevoCorreo: nuevo,
+                          );
+                        } else {
+                          await Session.actualizarCorreo(nuevo);
+                        }
+
+                        if (!mounted) return;
+                        setState(() {
+                          _correoCtrl.text = nuevo;
+                          _correoPerfilConfirmado = true;
+                          _actualizandoCorreo = false;
+                        });
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            backgroundColor: Colors.green,
+                            content: Text('¡Correo actualizado en tu perfil y base de datos con éxito!'),
+                          ),
+                        );
+                      } catch (e) {
+                        setModalState(() => _actualizandoCorreo = false);
+                        setState(() => _actualizandoCorreo = false);
+                        final msg = e.toString().replaceFirst('Exception: ', '');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(backgroundColor: Colors.redAccent, content: Text(msg)),
+                        );
+                      }
+                    },
+              child: _actualizandoCorreo
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text('Guardar y Actualizar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _ejecutarEnvioFinal(String correoConfirmado) async {
     setState(() => _enviando = true);
 
     try {
       final monto = int.tryParse(_montoCtrl.text.replaceAll(RegExp(r'\D'), ''));
       final motivacion = _motivacionCtrl.text.trim();
 
-      // 1. Enviar a base de datos en el backend
+      // 1. Enviar a base de datos en el backend (incluyendo el correo confirmado)
       final SolicitudApadrinamiento? solicitudCreada =
           await ApadrinamientoService.enviarSolicitud(
         idMascota: widget.pet.id,
@@ -307,6 +462,7 @@ class _SolicitudApadrinamientoDialogState
         frecuenciaAporte: _frecuencia,
         bytesDocumento: _docBytes!,
         nombreArchivo: _docNombre!,
+        correoContacto: correoConfirmado,
       );
 
       final fechaAhora = DateTime.now();
@@ -336,7 +492,7 @@ class _SolicitudApadrinamientoDialogState
         documentoUsuario: Session.documentoIdentidad.trim().isNotEmpty
             ? Session.documentoIdentidad.trim()
             : null,
-        correoUsuario: Session.correo.isNotEmpty ? Session.correo : 'No especificado',
+        correoUsuario: correoConfirmado.isNotEmpty ? correoConfirmado : (Session.correo.isNotEmpty ? Session.correo : 'No especificado'),
         telefonoUsuario: Session.telefono.isNotEmpty ? Session.telefono : null,
         nombreMascota: widget.pet.nombre,
         especieMascota: widget.pet.especie,
@@ -409,6 +565,27 @@ class _SolicitudApadrinamientoDialogState
                             style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                           ),
                         ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.mail_outline, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Notificación: Te llegará un correo a $correoConfirmado cuando la fundación apruebe o rechace tu solicitud.',
+                        style: TextStyle(fontSize: 11.5, color: Colors.blue.shade900),
                       ),
                     ),
                   ],
@@ -681,10 +858,84 @@ class _SolicitudApadrinamientoDialogState
                     : '${Session.nombre} ${Session.apellidos}',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              if (Session.correo.isNotEmpty)
-                Text('Correo: ${Session.correo}', style: t.bodySmall),
               if (Session.telefono.isNotEmpty)
                 Text('Teléfono: ${Session.telefono}', style: t.bodySmall),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        // Confirmación o modificación del correo para recibir respuesta
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.rosa.withValues(alpha: 0.35)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.rosa.withValues(alpha: 0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.mark_email_read_outlined, size: 20, color: AppColors.rosa),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Correo para recibir la respuesta *',
+                    style: t.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.rosa,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Confirma o modifica el correo electrónico donde la Fundación te informará si tu solicitud fue aprobada o rechazada:',
+                style: t.bodySmall?.copyWith(color: Colors.grey.shade700, height: 1.3),
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _correoCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  hintText: 'ejemplo@correo.com',
+                  prefixIcon: const Icon(Icons.email_outlined, color: AppColors.rosa),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+                  ),
+                ),
+                validator: (v) {
+                  final correo = (v ?? '').trim();
+                  if (correo.isEmpty) {
+                    return 'Ingresa tu correo para recibir la notificación.';
+                  }
+                  if (!correo.contains('@') || !correo.contains('.')) {
+                    return 'Ingresa un correo electrónico válido.';
+                  }
+                  return null;
+                },
+              ),
             ],
           ),
         ),
@@ -933,6 +1184,8 @@ class _SolicitudApadrinamientoDialogState
                   : '${Session.nombre} ${Session.apellidos}',
             ),
             const Divider(height: 14),
+            _resumenFila('Notificación al correo:', _correoCtrl.text.trim()),
+            const Divider(height: 14),
             _resumenFila('Aporte voluntario:', '$montoTexto ($_frecuencia)'),
             const Divider(height: 14),
             _resumenFila('Documento:', _docNombre ?? 'Adjuntado'),
@@ -1009,7 +1262,164 @@ class _SolicitudApadrinamientoDialogState
           ],
         ),
       ),
+
+      const SizedBox(height: 18),
+
+      // Confirmación del correo del perfil del usuario (después de leer el acuerdo)
+      _tarjetaConfirmacionCorreoPerfil(t),
     ];
+  }
+
+  /// Tarjeta que muestra el correo actual del perfil con opción de confirmarlo o editarlo en la BD
+  Widget _tarjetaConfirmacionCorreoPerfil(TextTheme t) {
+    final correoPerfil = _correoCtrl.text.trim().isNotEmpty
+        ? _correoCtrl.text.trim()
+        : (Session.correo.isNotEmpty ? Session.correo : 'No especificado');
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: _correoPerfilConfirmado ? Colors.green.shade400 : AppColors.rosa,
+          width: 1.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (_correoPerfilConfirmado ? Colors.green : AppColors.rosa).withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _correoPerfilConfirmado ? Colors.green.shade50 : AppColors.rosaSuave,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _correoPerfilConfirmado ? Icons.mark_email_read_rounded : Icons.mail_outline_rounded,
+                  color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Correo electrónico de tu perfil',
+                      style: t.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    Text(
+                      'Confirmación requerida para notificación',
+                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Este es el correo electrónico de tu perfil. Por favor confirmar ya que recibirás una notificación con tu solicitud:',
+            style: TextStyle(fontSize: 13, height: 1.38, color: Colors.black87),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppColors.rosaSuave.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.bordeRosa),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.email, color: AppColors.rosa, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    correoPerfil,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: AppColors.texto),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (_correoPerfilConfirmado)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle, size: 14, color: Colors.green.shade800),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Confirmado',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey.shade800,
+                    side: BorderSide(color: Colors.grey.shade400),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
+                  label: const Text('No es / Cambiar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  onPressed: _dialogoEditarCorreoPerfil,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _correoPerfilConfirmado ? Colors.green.shade600 : AppColors.rosa,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  icon: const Icon(Icons.check, size: 17),
+                  label: Text(
+                    _correoPerfilConfirmado ? '✓ Correo Confirmado' : 'Sí, confirmar correo',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                  ),
+                  onPressed: () {
+                    setState(() => _correoPerfilConfirmado = true);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 2),
+                        content: Text('Correo $correoPerfil confirmado para recibir la notificación.'),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _resumenFila(String etiqueta, String valor) {
@@ -1053,7 +1463,7 @@ class _SolicitudApadrinamientoDialogState
                 ),
                 onPressed: _enviando
                     ? null
-                    : (_paso < 2 ? _continuar : _enviar),
+                    : (_paso < 2 ? _continuar : _solicitarConfirmacionCorreoYEnviar),
                 child: _enviando
                     ? const SizedBox(
                         width: 22,
@@ -1063,11 +1473,20 @@ class _SolicitudApadrinamientoDialogState
                           color: Colors.white,
                         ),
                       )
-                    : Text(
-                        _paso < 2
-                            ? 'Continuar'
-                            : 'Confirmar y descargar acuerdo',
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_paso >= 2) ...[
+                            const Icon(Icons.send_rounded, size: 18),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            _paso < 2
+                                ? 'Continuar'
+                                : 'Enviar Solicitud de Apadrinamiento',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                          ),
+                        ],
                       ),
               ),
             ),
