@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
-import 'package:paw_match/screens/admin/pets_admin_screen.dart';
 import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
@@ -18,7 +17,6 @@ import 'package:paw_match/widgets/nav_flotante.dart';
 
 /// Opciones del menú desplegable del administrador (último ícono de la barra).
 enum _Gestion {
-  mascotas('Mascotas', Icons.pets),
   seguimiento('Seguimiento de adopción', Icons.timeline),
   usuarios('Usuarios', Icons.people_outline),
   administradores('Administradores', Icons.admin_panel_settings_outlined),
@@ -48,7 +46,7 @@ class _MenuScreenState extends State<MenuScreen> {
   static const int _indiceGestionAdmin = 1;
 
   late int _index;
-  _Gestion _seccion = _Gestion.mascotas;
+  _Gestion _seccion = _Gestion.seguimiento;
 
   late GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
@@ -166,7 +164,6 @@ class _MenuScreenState extends State<MenuScreen> {
 
   /// Pantalla que se muestra en la pestaña "Gestionar" según la opción elegida.
   Widget _paginaGestion() => switch (_seccion) {
-    _Gestion.mascotas => const PetsAdminScreen(),
     _Gestion.seguimiento => const SeccionAdminScreen(
       titulo: 'Seguimiento de adopción',
       icono: Icons.timeline,

@@ -5,10 +5,12 @@ import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
+import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/pet_card.dart';
@@ -438,6 +440,7 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
                 adoptada: widget.adoptada,
                 onAdoptar: widget.onAdoptar,
                 onApadrinar: widget.onApadrinar,
+                mascota: pet,
               ),
             ],
           ),
@@ -687,6 +690,7 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
                 adoptada: widget.adoptada,
                 onAdoptar: widget.onAdoptar,
                 onApadrinar: widget.onApadrinar,
+                mascota: pet,
               ),
             ],
           ),
@@ -722,6 +726,7 @@ class _BotonesMatch extends StatelessWidget {
   final bool yaEsFamilia;
   final bool adoptada;
   final bool compactos;
+  final Pet? mascota;
 
   const _BotonesMatch({
     required this.onAdoptar,
@@ -729,10 +734,41 @@ class _BotonesMatch extends StatelessWidget {
     required this.yaEsFamilia,
     required this.adoptada,
     this.compactos = false,
+    this.mascota,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (Session.esAdmin) {
+      final alto = compactos ? 42.0 : 48.0;
+      final texto = TextStyle(
+        fontSize: compactos ? 13 : 15,
+        fontWeight: FontWeight.w700,
+      );
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            if (mascota != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => PetDetailScreen(pet: mascota!)),
+              );
+            }
+          },
+          style: OutlinedButton.styleFrom(
+            minimumSize: Size.fromHeight(alto),
+            foregroundColor: AppColors.rosa,
+            side: const BorderSide(color: AppColors.rosa, width: 1.5),
+            shape: const StadiumBorder(),
+            textStyle: texto,
+          ),
+          icon: const Icon(Icons.tune_rounded, size: 18),
+          label: const Text('Gestionar Mascota'),
+        ),
+      );
+    }
+
     if (yaEsFamilia) return const _ChipFamilia();
 
     final alto = compactos ? 42.0 : 48.0;

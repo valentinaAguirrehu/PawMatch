@@ -554,12 +554,17 @@ class _PetScreenState extends State<PetScreen> {
                           itemCount: pets.length,
                           itemBuilder: (_, i) => PetCard(
                             pet: pets[i],
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PetDetailScreen(pet: pets[i]),
-                              ),
-                            ),
+                            onTap: () async {
+                              final cambio = await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PetDetailScreen(pet: pets[i]),
+                                ),
+                              );
+                              if (cambio == true && mounted) {
+                                _recargar();
+                              }
+                            },
                           ),
                         ),
                       ),
