@@ -5,6 +5,7 @@ class Pet {
   final String especie;
   final String? raza;
   final int? edad;
+  final String unidadEdad; // 'meses' o 'anos'
   final String? sexo;
   final String? tamano;
   final String? descripcion;
@@ -26,6 +27,7 @@ class Pet {
     required this.especie,
     this.raza,
     this.edad,
+    this.unidadEdad = 'anos',
     this.sexo,
     this.tamano,
     this.descripcion,
@@ -44,6 +46,7 @@ class Pet {
     especie: j['especie'] as String,
     raza: j['raza'] as String?,
     edad: j['edad'] as int?,
+    unidadEdad: (j['unidad_edad'] ?? 'anos') as String,
     sexo: j['sexo'] as String?,
     tamano: j['tamano'] as String?,
     descripcion: j['descripcion'] as String?,
@@ -67,6 +70,7 @@ class Pet {
     'especie': especie,
     'raza': raza,
     'edad': edad,
+    'unidad_edad': unidadEdad,
     'sexo': sexo,
     'tamano': tamano,
     'descripcion': descripcion,
@@ -80,7 +84,16 @@ class Pet {
 
   String get edadTexto {
     if (edad == null) return 'Edad no registrada';
+    if (unidadEdad == 'meses' || unidadEdad == 'mes') {
+      return edad == 1 ? '1 mes' : '$edad meses';
+    }
     return edad == 1 ? '1 año' : '$edad años';
+  }
+
+  bool get esCachorro {
+    if (edad == null) return false;
+    if (unidadEdad == 'meses' || unidadEdad == 'mes') return true;
+    return edad! <= 1;
   }
 
   String get estadoAdopcionTexto => etiquetaEstadoAdopcion(estadoAdopcion);

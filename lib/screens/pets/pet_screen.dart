@@ -93,17 +93,28 @@ class _PetScreenState extends State<PetScreen> {
       if (_edad != 'Todos' && _edad != 'Todas') {
         final edad = p.edad;
         if (edad == null) return false;
+        final enMeses = p.unidadEdad == 'meses' || p.unidadEdad == 'mes';
         switch (_edad) {
           case 'Cachorro':
-            if (edad > 1) return false;
+            if (enMeses) {
+              if (edad > 12) return false;
+            } else {
+              if (edad > 1) return false;
+            }
             break;
           case 'Joven':
-            if (edad < 1 || edad > 3) return false;
+            if (enMeses) {
+              if (edad <= 12 || edad > 36) return false;
+            } else {
+              if (edad < 1 || edad > 3) return false;
+            }
             break;
           case 'Adulto':
+            if (enMeses) return false;
             if (edad < 4 || edad > 7) return false;
             break;
           case 'Senior':
+            if (enMeses) return false;
             if (edad < 8) return false;
             break;
         }

@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -29,12 +28,17 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   );
 
   late String _especie = widget.pet?.especie ?? 'Perro';
+  late String _unidadEdad =
+      (widget.pet?.unidadEdad == 'meses' || widget.pet?.unidadEdad == 'mes')
+          ? 'meses'
+          : 'anos';
   late String? _sexo = widget.pet?.sexo;
   late String? _tamano = widget.pet?.tamano;
   late bool _esterilizado = widget.pet?.esterilizado ?? false;
   late bool _vacunas = widget.pet?.vacunas ?? false;
-  late String _estadoAdopcion = widget.pet?.estadoAdopcion ?? 'disponible';
-  late String _estadoApadrinamiento =
+  late final String _estadoAdopcion =
+      widget.pet?.estadoAdopcion ?? 'disponible';
+  late final String _estadoApadrinamiento =
       widget.pet?.estadoApadrinamiento ?? 'disponible';
 
   // Foto: la que ya tenía (ruta en el servidor) o una nueva elegida del equipo
@@ -142,6 +146,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
+    _formKey.currentState!.save();
     setState(() => _guardando = true);
 
     try {
@@ -158,6 +163,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
         especie: _especie,
         raza: _raza.text.trim(),
         edad: int.tryParse(_edad.text.trim()),
+        unidadEdad: _unidadEdad,
         sexo: _sexo,
         tamano: _tamano,
         descripcion: _descripcion.text.trim(),
@@ -399,29 +405,6 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _campo(
-                            'Edad (años)',
-                            TextFormField(
-                              controller: _edad,
-                              decoration: _deco('Ej: 2'),
-                              keyboardType: TextInputType.number,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return null;
-                                final n = int.tryParse(v.trim());
-                                if (n == null || n < 0 || n > 40) {
-                                  return '0 a 40';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _campo(
                             'Raza',
                             TextFormField(
                               controller: _raza,
@@ -429,7 +412,72 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                      ],
+                    ),
+                    _campo(
+                      'Edad',
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: TextFormField(
+                              controller: _edad,
+                              decoration: _deco('Cantidad (ej: 2)'),
+                              keyboardType: TextInputType.number,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return null;
+                                final n = int.tryParse(v.trim());
+                                if (n == null || n < 0) {
+                                  return 'Número inválido';
+                                }
+                                if (_unidadEdad == 'meses' && n > 24) {
+                                  return 'Máx. 24 meses';
+                                }
+                                if (_unidadEdad == 'anos' && n > 35) {
+                                  return 'Máx. 35 años';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 4,
+                            child: DropdownButtonFormField<String>(
+                              initialValue:
+                                  _unidadEdad == 'meses' ? 'Meses' : 'Años',
+                              decoration: _deco('Unidad'),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'Meses',
+                                  child: Text('Meses'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Años',
+                                  child: Text('Años'),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                setState(() {
+                                  _unidadEdad =
+                                      (v == 'Meses') ? 'meses' : 'anos';
+                                });
+                              },
+                              onSaved: (v) {
+                                if (v != null) {
+                                  _unidadEdad =
+                                      (v == 'Meses') ? 'meses' : 'anos';
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Expanded(
                           child: _campo(
                             'Sexo',
@@ -441,16 +489,19 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                             ),
                           ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _campo(
+                            'Tamaño',
+                            DropdownButtonFormField<String>(
+                              initialValue: _tamano,
+                              decoration: _deco('Elegir'),
+                              items: _items(_tamanos, _tamano),
+                              onChanged: (v) => setState(() => _tamano = v),
+                            ),
+                          ),
+                        ),
                       ],
-                    ),
-                    _campo(
-                      'Tamaño',
-                      DropdownButtonFormField<String>(
-                        initialValue: _tamano,
-                        decoration: _deco('Elegir'),
-                        items: _items(_tamanos, _tamano),
-                        onChanged: (v) => setState(() => _tamano = v),
-                      ),
                     ),
                     const SizedBox(height: 6),
                     DogPersonality(
@@ -478,52 +529,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                       value: _esterilizado,
                       onChanged: (v) => setState(() => _esterilizado = v),
                     ),
-                    const SizedBox(height: 8),
-                    _campo(
-                      'Estado de adopción',
-                      DropdownButtonFormField<String>(
-                        initialValue: _estadoAdopcion,
-                        decoration: _deco(''),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'disponible',
-                            child: Text('Disponible'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'en_proceso',
-                            child: Text('En proceso'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'adoptado',
-                            child: Text('Adoptado'),
-                          ),
-                        ],
-                        onChanged: (v) => setState(
-                          () => _estadoAdopcion = v ?? _estadoAdopcion,
-                        ),
-                      ),
-                    ),
-                    _campo(
-                      'Estado de apadrinamiento',
-                      DropdownButtonFormField<String>(
-                        initialValue: _estadoApadrinamiento,
-                        decoration: _deco(''),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'disponible',
-                            child: Text('Disponible'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'apadrinado',
-                            child: Text('Apadrinado'),
-                          ),
-                        ],
-                        onChanged: (v) => setState(
-                          () => _estadoApadrinamiento =
-                              v ?? _estadoApadrinamiento,
-                        ),
-                      ),
-                    ),
+
                     const SizedBox(height: 12),
                     FilledButton(
                       style: FilledButton.styleFrom(

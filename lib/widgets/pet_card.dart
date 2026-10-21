@@ -83,7 +83,7 @@ class PetCard extends StatelessWidget {
     final especie = pet.especie.toLowerCase();
     final edadTxt = pet.edad == null
         ? 'edad no reg.'
-        : (pet.edad! <= 1 ? 'cachorro' : pet.edadTexto);
+        : pet.edadTexto.toLowerCase();
     final subtituloFoto = '$edadTxt · $especie';
 
     final descripcionCorta = (pet.descripcion != null && pet.descripcion!.trim().isNotEmpty)

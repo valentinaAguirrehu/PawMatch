@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
@@ -862,7 +863,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                   ],
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 24, 22, 100),
+                  padding: const EdgeInsets.fromLTRB(22, 24, 22, 36),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -900,84 +901,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 18),
+                      const SizedBox(height: 20),
 
-                      // ───────── TARJETA DE ATRIBUTOS (PET ATTRIBUTES) ─────────
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF7F8FC),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(
-                            color: Colors.grey.withValues(alpha: 0.12),
-                            width: 1,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Atributos de la mascota:',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2D3436),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                if (_t(p.sexo).isNotEmpty)
-                                  _atributoPildora(
-                                    p.sexo!.toLowerCase().startsWith('m')
-                                        ? Icons.male_rounded
-                                        : Icons.female_rounded,
-                                    p.sexo!,
-                                    Colors.orange.shade700,
-                                  ),
-                                _atributoPildora(
-                                  Icons.vaccines_outlined,
-                                  p.vacunas ? 'Vacunado/a' : 'Vacunas pend.',
-                                  Colors.teal.shade700,
-                                ),
-                                _atributoPildora(
-                                  Icons.medical_services_outlined,
-                                  p.esterilizado ? 'Esterilizado/a' : 'Sin esterilizar',
-                                  Colors.indigo.shade700,
-                                ),
-                                if (p.edad != null)
-                                  _atributoPildora(
-                                    Icons.cake_outlined,
-                                    p.edadTexto,
-                                    Colors.purple.shade700,
-                                  ),
-                                if (_t(p.tamano).isNotEmpty)
-                                  _atributoPildora(
-                                    Icons.straighten_rounded,
-                                    p.tamano!,
-                                    Colors.blue.shade700,
-                                  ),
-                                _atributoPildora(
-                                  Icons.pets_rounded,
-                                  p.raza ?? p.especie,
-                                  AppColors.rosa,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 22),
-
-                      // ───────── SECCIÓN: SOBRE LA MASCOTA ─────────
+                      // ───────── SECCIÓN: SOBRE LA MASCOTA (IGUAL A FOTO 2) ─────────
                       Text(
                         'Sobre ${_pet.nombre}',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF1E272E),
                         ),
@@ -985,18 +915,58 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       const SizedBox(height: 8),
                       Text(
                         descripcion.isEmpty
-                            ? 'Este hermoso peludito fue rescatado con amor por la Fundación Maritza Arévalo. Es cariñoso, sociable y está esperando a una familia responsable que le brinde un futuro lleno de protección y felicidad.'
+                            ? 'Hermoso ${p.especie.toLowerCase()} rescatado con amor por la Fundación Maritza Arévalo. Es cariñoso, sociable y está esperando a una familia responsable que le brinde un futuro lleno de protección y felicidad.'
                             : descripcion,
                         style: TextStyle(
-                          fontSize: 14,
-                          height: 1.55,
+                          fontSize: 14.5,
+                          height: 1.5,
                           color: Colors.grey.shade700,
                         ),
                       ),
 
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 18),
 
-                      // ───────── SECCIÓN: PERSONALIDAD ─────────
+                      // ───────── CUADRÍCULA 2x2 EN ROSADO (IGUAL A LA FOTO 2) ─────────
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _tarjetaDato(
+                              'Edad:',
+                              p.edad == null
+                                  ? 'no registrada'
+                                  : p.edadTexto.toLowerCase(),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _tarjetaDato(
+                              'Sexo:',
+                              (_t(p.sexo).isEmpty ? 'no registrado' : p.sexo!).toLowerCase(),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _tarjetaDato(
+                              'Tamaño:',
+                              (_t(p.tamano).isEmpty ? 'mediano' : p.tamano!).toLowerCase(),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _tarjetaDato(
+                              'Especie:',
+                              p.especie.toLowerCase(),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      // ───────── SECCIÓN: PERSONALIDAD Y COMPORTAMIENTO (ARRIBA DE BOTONES) ─────────
+                      const SizedBox(height: 22),
                       const Text(
                         'Personalidad y Comportamiento',
                         style: TextStyle(
@@ -1040,6 +1010,23 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                           ),
                         ),
                       ],
+
+                      const SizedBox(height: 26),
+
+                      // ───────── BOTONES DE ACCIÓN (DE ÚLTIMO) ─────────
+                      _botonesAccion(p),
+
+                      const SizedBox(height: 14),
+
+                      // Texto explicativo al final
+                      Text(
+                        'Al enviar la solicitud estarás manifestando tu interés para que nuestro equipo te contacte y así evaluar juntos la adopción de ${_pet.nombre}.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.45,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1123,27 +1110,42 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             ),
           ),
 
-          // ───────── BOTONES DE ACCIÓN FIJOS ABAJO ─────────
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                top: false,
-                child: _acciones(),
-              ),
+        ],
+      ),
+    );
+  }
+
+  // Tarjeta de dato individual redondeada en rosado suave (igual a foto de referencia)
+  Widget _tarjetaDato(String etiqueta, String valor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.rosaSuave,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.bordeRosa.withValues(alpha: 0.7),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            etiqueta,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.rosa,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            valor,
+            style: const TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF2E2A2C),
             ),
           ),
         ],
@@ -1151,37 +1153,246 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     );
   }
 
-  // Píldora individual de atributo con icono y texto
-  Widget _atributoPildora(IconData icono, String texto, Color colorIcono) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.12)),
+  void _compartirMascota() {
+    final texto =
+        '¡Conoce a ${_pet.nombre} en Paw Match! Está buscando una familia o padrino en la Fundación Maritza Arévalo 🐾';
+    Clipboard.setData(ClipboardData(text: texto));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: AppColors.rosa,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(child: Text('¡Información de ${_pet.nombre} copiada al portapapeles!')),
+          ],
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+    );
+  }
+
+  Widget _botonesAccion(Pet p) {
+    if (Session.esAdmin) {
+      return Row(
         children: [
-          Icon(icono, size: 15, color: colorIcono),
-          const SizedBox(width: 6),
-          Text(
-            texto,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF374151),
+          Expanded(
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red.shade700,
+                side: BorderSide(color: Colors.red.shade300, width: 1.5),
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+              ),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: const Text('Eliminar', overflow: TextOverflow.ellipsis),
+              onPressed: _eliminarMascotaAdmin,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.rosa,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                elevation: 2,
+              ),
+              icon: const Icon(Icons.edit_rounded, size: 18),
+              label: const Text('Modificar datos', overflow: TextOverflow.ellipsis),
+              onPressed: _editarMascotaAdmin,
             ),
           ),
         ],
-      ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final esEstrecho = constraints.maxWidth < 460;
+
+        // 1. Botón Adoptar
+        var etiquetaAdoptar = switch (_estadoAdopcion) {
+          'en_proceso' => 'En proceso',
+          'adoptado' => 'Adoptado',
+          _ => 'Adoptar a ${p.nombre}',
+        };
+        var iconoAdoptar = Icons.favorite_rounded;
+        VoidCallback? accionAdoptar = _puedeAdoptar
+            ? (widget.onAdoptar ?? _abrirFormularioAdopcion)
+            : null;
+        Color? fondoAdoptar;
+
+        final mia = _miAdopcion;
+        if (mia != null) {
+          if (mia.isApproved) {
+            etiquetaAdoptar = 'Aprobada';
+            iconoAdoptar = Icons.verified;
+            accionAdoptar = _verEstadoAdopcion;
+            fondoAdoptar = Colors.green.shade700;
+          } else if (mia.isPending) {
+            etiquetaAdoptar = 'En revisión';
+            iconoAdoptar = Icons.hourglass_top;
+            accionAdoptar = _verEstadoAdopcion;
+            fondoAdoptar = Colors.orange.shade700;
+          } else if (mia.isRejected) {
+            etiquetaAdoptar = 'Rechazada';
+            iconoAdoptar = Icons.info_outline;
+            accionAdoptar = _verEstadoAdopcion;
+            fondoAdoptar = Colors.redAccent.shade700;
+          }
+        }
+
+        final botonAdoptar = FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: fondoAdoptar ?? AppColors.rosa,
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: Colors.grey.shade300,
+            disabledForegroundColor: Colors.grey.shade500,
+            minimumSize: const Size.fromHeight(48),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+            elevation: 1,
+          ),
+          icon: Icon(iconoAdoptar, size: 17),
+          label: Text(etiquetaAdoptar, maxLines: 1, overflow: TextOverflow.ellipsis),
+          onPressed: accionAdoptar,
+        );
+
+        // 2. Botón Apadrinar
+        Widget botonApadrinar;
+        final sinApadrinamientoActivo = _miSolicitud == null || _miSolicitud!.esRechazada;
+        if (_estadoAdopcion == 'adoptado' && sinApadrinamientoActivo) {
+          botonApadrinar = _AvisoYaEnFamilia(texto: _pet.mensajeFamiliaPara(Session.idUsuario));
+        } else {
+          String etiquetaApadrinar = 'Apadrinar a ${p.nombre}';
+          VoidCallback? accionApadrinar = _abrirFormularioApadrinar;
+          Color colorFondoApadrinar = Colors.white;
+          Color colorTextoApadrinar = AppColors.rosa;
+          Color colorBordeApadrinar = AppColors.rosa;
+
+          if (_miSolicitud != null) {
+            if (_miSolicitud!.esAprobada) {
+              if (_miSolicitud!.tieneContrato) {
+                etiquetaApadrinar = 'Padrino Oficial';
+                accionApadrinar = _verEstadoSolicitud;
+                colorFondoApadrinar = Colors.green.shade700;
+                colorTextoApadrinar = Colors.white;
+                colorBordeApadrinar = Colors.green.shade700;
+              } else {
+                etiquetaApadrinar = 'Falta Contrato';
+                accionApadrinar = _verEstadoSolicitud;
+                colorFondoApadrinar = Colors.amber.shade800;
+                colorTextoApadrinar = Colors.white;
+                colorBordeApadrinar = Colors.amber.shade800;
+              }
+            } else if (_miSolicitud!.esCancelada) {
+              etiquetaApadrinar = 'Cancelada';
+              accionApadrinar = _verEstadoSolicitud;
+              colorFondoApadrinar = Colors.blueGrey.shade700;
+              colorTextoApadrinar = Colors.white;
+              colorBordeApadrinar = Colors.blueGrey.shade700;
+            } else if (_miSolicitud!.esPendiente) {
+              etiquetaApadrinar = 'En Revisión';
+              accionApadrinar = _verEstadoSolicitud;
+              colorFondoApadrinar = Colors.orange.shade700;
+              colorTextoApadrinar = Colors.white;
+              colorBordeApadrinar = Colors.orange.shade700;
+            } else if (_miSolicitud!.esRechazada) {
+              etiquetaApadrinar = 'Rechazada';
+              accionApadrinar = _verEstadoSolicitud;
+              colorFondoApadrinar = Colors.redAccent.shade700;
+              colorTextoApadrinar = Colors.white;
+              colorBordeApadrinar = Colors.redAccent.shade700;
+            }
+          } else if (_apadrinada) {
+            etiquetaApadrinar = 'Apadrinada';
+            accionApadrinar = null;
+            colorBordeApadrinar = Colors.grey.shade300;
+            colorTextoApadrinar = Colors.grey.shade400;
+          }
+
+          if (colorFondoApadrinar != Colors.white) {
+            botonApadrinar = FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colorFondoApadrinar,
+                foregroundColor: colorTextoApadrinar,
+                minimumSize: const Size.fromHeight(48),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+              ),
+              onPressed: accionApadrinar,
+              child: Text(etiquetaApadrinar, maxLines: 1, overflow: TextOverflow.ellipsis),
+            );
+          } else {
+            botonApadrinar = OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: colorTextoApadrinar,
+                backgroundColor: Colors.white,
+                disabledForegroundColor: Colors.grey.shade400,
+                side: BorderSide(
+                  color: _puedeApadrinar ? colorBordeApadrinar : Colors.grey.shade300,
+                  width: 1.5,
+                ),
+                minimumSize: const Size.fromHeight(48),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+              ),
+              onPressed: _puedeApadrinar ? accionApadrinar : null,
+              child: Text(etiquetaApadrinar, maxLines: 1, overflow: TextOverflow.ellipsis),
+            );
+          }
+        }
+
+        // 3. Botón Compartir
+        final botonCompartir = OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.rosa,
+            backgroundColor: AppColors.rosaSuave,
+            side: const BorderSide(color: AppColors.bordeRosa, width: 1.2),
+            minimumSize: const Size.fromHeight(48),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+          ),
+          icon: const Icon(Icons.share_outlined, size: 17, color: AppColors.rosa),
+          label: const Text('Compartir', maxLines: 1, overflow: TextOverflow.ellipsis),
+          onPressed: _compartirMascota,
+        );
+
+        if (esEstrecho) {
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(flex: 3, child: botonAdoptar),
+                  const SizedBox(width: 8),
+                  Expanded(flex: 3, child: botonApadrinar),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SizedBox(width: double.infinity, child: botonCompartir),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(flex: 4, child: botonAdoptar),
+            const SizedBox(width: 10),
+            Expanded(flex: 4, child: botonApadrinar),
+            const SizedBox(width: 10),
+            Expanded(flex: 3, child: botonCompartir),
+          ],
+        );
+      },
     );
   }
 
@@ -1252,207 +1463,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       ],
     ),
   );
-
-  Widget _botonAdoptar() {
-    final estilo = const TextStyle(
-      fontWeight: FontWeight.w800,
-      fontSize: 15,
-    );
-    var etiqueta = switch (_estadoAdopcion) {
-      'en_proceso' => 'En proceso',
-      'adoptado' => 'Adoptado',
-      _ => 'Adoptar Mascota',
-    };
-    var icono = Icons.pets;
-    VoidCallback? accion = _puedeAdoptar
-        ? (widget.onAdoptar ?? _abrirFormularioAdopcion)
-        : null;
-    Color? fondo;
-
-    final mia = _miAdopcion;
-    if (mia != null) {
-      if (mia.isApproved) {
-        etiqueta = 'Aprobada';
-        icono = Icons.verified;
-        accion = _verEstadoAdopcion;
-        fondo = Colors.green.shade700;
-      } else if (mia.isPending) {
-        etiqueta = 'En revisión';
-        icono = Icons.hourglass_top;
-        accion = _verEstadoAdopcion;
-        fondo = Colors.orange.shade700;
-      } else if (mia.isRejected) {
-        etiqueta = 'Rechazada';
-        icono = Icons.info_outline;
-        accion = _verEstadoAdopcion;
-        fondo = Colors.redAccent.shade700;
-      }
-    }
-
-    return Expanded(
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(
-          backgroundColor: fondo ?? AppColors.rosa,
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: Colors.grey.shade300,
-          disabledForegroundColor: Colors.grey.shade500,
-          minimumSize: const Size.fromHeight(52),
-          shape: const StadiumBorder(),
-          textStyle: estilo,
-          elevation: 2,
-        ),
-        icon: Icon(icono, size: 18),
-        label: Text(etiqueta, overflow: TextOverflow.ellipsis),
-        onPressed: accion,
-      ),
-    );
-  }
-
-  Widget _acciones() {
-    if (Session.esAdmin) {
-      return Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red.shade700,
-                    side: BorderSide(color: Colors.red.shade300, width: 1.5),
-                    minimumSize: const Size.fromHeight(52),
-                    shape: const StadiumBorder(),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
-                  ),
-                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
-                  label: const Text('Eliminar', overflow: TextOverflow.ellipsis),
-                  onPressed: _eliminarMascotaAdmin,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.rosa,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: const StadiumBorder(),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
-                    elevation: 2,
-                  ),
-                  icon: const Icon(Icons.edit_rounded, size: 20),
-                  label: const Text('Modificar datos', overflow: TextOverflow.ellipsis),
-                  onPressed: _editarMascotaAdmin,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Row(
-          children: [
-            _botonAdoptar(),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final sinApadrinamientoActivo =
-                      _miSolicitud == null || _miSolicitud!.esRechazada;
-                  if (_estadoAdopcion == 'adoptado' && sinApadrinamientoActivo) {
-                    return _AvisoYaEnFamilia(
-                      texto: _pet.mensajeFamiliaPara(Session.idUsuario),
-                    );
-                  }
-
-                  String etiqueta = 'Apadrinar';
-                  IconData icono = Icons.volunteer_activism;
-                  VoidCallback? accion = _abrirFormularioApadrinar;
-                  Color colorFondo = Colors.transparent;
-                  Color colorTexto = AppColors.rosa;
-
-                  if (_miSolicitud != null) {
-                    if (_miSolicitud!.esAprobada) {
-                      if (_miSolicitud!.tieneContrato) {
-                        etiqueta = 'Padrino Oficial';
-                        icono = Icons.stars;
-                        accion = _verEstadoSolicitud;
-                        colorFondo = Colors.green.shade700;
-                        colorTexto = Colors.white;
-                      } else {
-                        etiqueta = 'Falta Contrato';
-                        icono = Icons.hourglass_top_rounded;
-                        accion = _verEstadoSolicitud;
-                        colorFondo = Colors.amber.shade800;
-                        colorTexto = Colors.white;
-                      }
-                    } else if (_miSolicitud!.esCancelada) {
-                      etiqueta = 'Cancelada';
-                      icono = Icons.highlight_off;
-                      accion = _verEstadoSolicitud;
-                      colorFondo = Colors.blueGrey.shade700;
-                      colorTexto = Colors.white;
-                    } else if (_miSolicitud!.esPendiente) {
-                      etiqueta = 'En Revisión';
-                      icono = Icons.hourglass_top;
-                      accion = _verEstadoSolicitud;
-                      colorFondo = Colors.orange.shade700;
-                      colorTexto = Colors.white;
-                    } else if (_miSolicitud!.esRechazada) {
-                      etiqueta = 'Rechazada';
-                      icono = Icons.info_outline;
-                      accion = _verEstadoSolicitud;
-                      colorFondo = Colors.redAccent.shade700;
-                      colorTexto = Colors.white;
-                    }
-                  } else if (_apadrinada) {
-                    etiqueta = 'Apadrinada';
-                    accion = null;
-                  }
-
-                  if (colorFondo != Colors.transparent) {
-                    return FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colorFondo,
-                        foregroundColor: colorTexto,
-                        minimumSize: const Size.fromHeight(52),
-                        shape: const StadiumBorder(),
-                        textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                      ),
-                      icon: Icon(icono, size: 18),
-                      label: Text(etiqueta, overflow: TextOverflow.ellipsis),
-                      onPressed: accion,
-                    );
-                  }
-
-                  return OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.rosa,
-                      disabledForegroundColor: Colors.grey.shade400,
-                      side: BorderSide(
-                        color: _puedeApadrinar ? AppColors.rosa : Colors.grey.shade300,
-                        width: 1.5,
-                      ),
-                      minimumSize: const Size.fromHeight(52),
-                      shape: const StadiumBorder(),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                    ),
-                    icon: Icon(icono, size: 18),
-                    label: Text(etiqueta, overflow: TextOverflow.ellipsis),
-                    onPressed: _puedeApadrinar ? accion : null,
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _AvisoYaEnFamilia extends StatelessWidget {
