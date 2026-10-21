@@ -23,6 +23,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final _contrasenaCtrl = TextEditingController();
 
   bool _cargando = false;
+  bool _recordarContrasena = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarCredenciales();
+  }
+
+  Future<void> _cargarCredenciales() async {
+    final creds = await Session.obtenerCredencialesRecordadas();
+    if (!mounted) return;
+    setState(() {
+      _recordarContrasena = creds.recordar;
+      if (creds.recordar) {
+        if (creds.correo.isNotEmpty) _correoCtrl.text = creds.correo;
+        if (creds.contrasena.isNotEmpty) _contrasenaCtrl.text = creds.contrasena;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -38,7 +57,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final usuario = await ApiService.iniciarSesion(
-        correo: _correoCtrl.text,
+        correo: _correoCtrl.text.trim(),
+        contrasena: _contrasenaCtrl.text,
+      );
+
+      if (!mounted) return;
+
+      // Guarda o elimina las credenciales según la preferencia seleccionada
+      await Session.guardarCredenciales(
+        recordar: _recordarContrasena,
+        correo: _correoCtrl.text.trim(),
         contrasena: _contrasenaCtrl.text,
       );
 
@@ -104,18 +132,64 @@ class _LoginScreenState extends State<LoginScreen> {
               onEnviar: _iniciarSesion,
               validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
             ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                style: blanco,
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const ForgotPasswordScreen(),
+            const SizedBox(height: 8),
+            // Fila: Recordar contraseña & ¿Olvidaste tu contraseña?
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                InkWell(
+                  onTap: () {
+                    setState(() => _recordarContrasena = !_recordarContrasena);
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: Checkbox(
+                            value: _recordarContrasena,
+                            activeColor: Colors.white,
+                            checkColor: AppColors.rosa,
+                            side: const BorderSide(color: Colors.white, width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            onChanged: (val) {
+                              setState(() => _recordarContrasena = val ?? false);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Recordar contraseña',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                child: const Text('¿Olvidaste tu contraseña?'),
-              ),
+                TextButton(
+                  style: blanco,
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ForgotPasswordScreen(),
+                    ),
+                  ),
+                  child: const Text(
+                    '¿Olvidaste tu contraseña?',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             BotonBlanco(
