@@ -28,6 +28,7 @@ class ApadrinamientoService {
     String frecuenciaAporte = 'mensual',
     required Uint8List bytesDocumento,
     required String nombreArchivo,
+    String? correoContacto,
   }) async {
     final uri = Uri.parse(_url);
     final req = http.MultipartRequest('POST', uri);
@@ -39,6 +40,9 @@ class ApadrinamientoService {
     req.fields['frecuencia_aporte'] = frecuenciaAporte;
     if (montoAporte != null && montoAporte > 0) {
       req.fields['monto_aporte'] = montoAporte.toString();
+    }
+    if (correoContacto != null && correoContacto.trim().isNotEmpty) {
+      req.fields['correo_contacto'] = correoContacto.trim();
     }
 
     req.files.add(

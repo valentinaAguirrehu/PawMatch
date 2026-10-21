@@ -41,6 +41,22 @@ class Session {
     }).catchError((_) {});
   }
 
+  /// Actualiza el correo de la sesión y en la persistencia local
+  static Future<void> actualizarCorreo(String nuevoCorreo) async {
+    correo = nuevoCorreo.trim();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final str = prefs.getString(_kKeyUsuario);
+      if (str != null && str.isNotEmpty) {
+        final map = jsonDecode(str);
+        if (map is Map<String, dynamic>) {
+          map['correo'] = correo;
+          await prefs.setString(_kKeyUsuario, jsonEncode(map));
+        }
+      }
+    } catch (_) {}
+  }
+
   /// Restaura la sesión guardada previamente si existe
   static Future<bool> restaurar() async {
     try {

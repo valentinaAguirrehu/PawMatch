@@ -244,6 +244,39 @@ router.put('/:id/contrasena', async (req, res) => {
   }
 });
 
+router.patch('/:id/correo', async (req, res) => {
+  const { correo } = req.body;
+  if (!correo || !correo.trim() || !correo.includes('@') || !correo.includes('.')) {
+    return res.status(400).json({ error: 'Debes proporcionar un correo electrónico válido' });
+  }
+
+  const correoLimpio = correo.trim().toLowerCase();
+
+  try {
+    const repetido = await pool.query(
+      'SELECT id_usuario FROM usuario WHERE LOWER(correo) = $1 AND id_usuario <> $2',
+      [correoLimpio, req.params.id]
+    );
+    if (repetido.rows.length > 0) {
+      return res.status(409).json({ error: 'Ese correo ya está registrado en otra cuenta' });
+    }
+
+    const resultado = await pool.query(
+      'UPDATE usuario SET correo = $1 WHERE id_usuario = $2 RETURNING id_usuario, correo, nombres, apellidos',
+      [correoLimpio, req.params.id]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.json({ mensaje: 'Correo actualizado exitosamente', usuario: resultado.rows[0] });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo actualizar el correo' });
+  }
+});
+
 router.put('/:id', async (req, res) => {
   const { nombres, apellidos, correo, telefono, direccion, documento_identidad, fecha_nacimiento, foto_perfil } = req.body;
 

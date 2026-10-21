@@ -212,4 +212,31 @@ class ApiService {
     }
     throw Exception(data['error'] ?? 'No se pudo subir la foto');
   }
+
+  static Future<void> actualizarCorreoUsuario({
+    required String idUsuario,
+    required String nuevoCorreo,
+  }) async {
+    final response = await http.patch(
+      Uri.parse('$baseUrl/usuarios/$idUsuario/correo'),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-usuario-id': idUsuario,
+      },
+      body: jsonEncode({'correo': nuevoCorreo.trim()}),
+    );
+
+    if (response.statusCode != 200) {
+      String msg = 'No se pudo actualizar el correo';
+      try {
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        if (data is Map && data['error'] != null) {
+          msg = data['error'].toString();
+        }
+      } catch (_) {}
+      throw Exception(msg);
+    }
+
+    await Session.actualizarCorreo(nuevoCorreo.trim());
+  }
 }

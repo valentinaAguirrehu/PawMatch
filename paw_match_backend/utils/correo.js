@@ -1,31 +1,74 @@
 const nodemailer = require('nodemailer');
 
-function obtenerTransporter() {
-  // Soporte directo para Gmail con contraseña de aplicación
-  if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_PASS,
-      },
-    });
+let testTransporter = null;
+
+function escaparHtml(texto) {
+  return String(texto ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function obtenerTransporter() {
+  // 1. Soporte directo para Gmail con contraseña de aplicación de Google
+  if (process.env.GMAIL_USER && process.env.GMAIL_PASS && process.env.GMAIL_USER.trim() && process.env.GMAIL_PASS.trim()) {
+    return {
+      transporter: nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_USER.trim(),
+          pass: process.env.GMAIL_PASS.trim(),
+        },
+      }),
+      remitente: process.env.SMTP_FROM || process.env.GMAIL_USER.trim(),
+      tipo: 'gmail',
+    };
   }
 
-  // Soporte estándar SMTP
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+  // 2. Soporte estándar SMTP (Outlook, Mailgun, Sendgrid, etc.)
+  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_HOST.trim()) {
+    const port = Number(process.env.SMTP_PORT) || 587;
+    return {
+      transporter: nodemailer.createTransport({
+        host: process.env.SMTP_HOST.trim(),
+        port: port,
+        secure: port === 465,
+        auth: {
+          user: process.env.SMTP_USER.trim(),
+          pass: process.env.SMTP_PASS.trim(),
+        },
+      }),
+      remitente: process.env.SMTP_FROM || process.env.SMTP_USER.trim(),
+      tipo: 'smtp',
+    };
   }
 
-  return null;
+  // 3. Fallback inteligente: Ethereal Email para pruebas locales (genera URL web para ver el correo)
+  try {
+    if (!testTransporter) {
+      console.log('[CORREO] No se detectaron credenciales en .env. Creando buzón de pruebas Ethereal...');
+      const testAccount = await nodemailer.createTestAccount();
+      testTransporter = {
+        transporter: nodemailer.createTransport({
+          host: testAccount.smtp.host,
+          port: testAccount.smtp.port,
+          secure: testAccount.smtp.secure,
+          auth: {
+            user: testAccount.user,
+            pass: testAccount.pass,
+          },
+        }),
+        remitente: `"Paw Match Notificaciones" <${testAccount.user}>`,
+        tipo: 'ethereal',
+      };
+      console.log(`[CORREO] Cuenta de prueba lista: ${testAccount.user}`);
+    }
+    return testTransporter;
+  } catch (err) {
+    console.warn('[CORREO] No se pudo crear cuenta de prueba Ethereal:', err.message);
+    return null;
+  }
 }
 
 /**
@@ -39,7 +82,13 @@ async function enviarCorreoAprobacionApadrinamiento({
   whatsappFundacion = '573136177747',
   observaciones,
 }) {
+  const nombre = escaparHtml(nombreUsuario);
+  const mascota = escaparHtml(nombreMascota);
+  const inicio = escaparHtml(fechaInicio || 'Inmediata');
+  const nota = observaciones ? escaparHtml(observaciones) : '';
+
   const asunto = `¡Tu solicitud para apadrinar a ${nombreMascota} ha sido aprobada! 🎉 - Paw Match`;
+
   const textoPlano = `
 Hola ${nombreUsuario},
 
@@ -51,7 +100,7 @@ Detalles del apadrinamiento:
 ${observaciones ? `- Observaciones de la fundación: ${observaciones}\n` : ''}
 
 IMPORTANTE:
-Para continuar con el proceso y formalizar tu apadrinamiento, debes ponerte en contacto directamente con la Fundación Maritza Arévalo para revisar los últimos permisos, requerimientos y compromisos que pide la fundación.
+Para continuar con el proceso y formalizar tu apadrinamiento, debes ponerte en contacto directamente con la Fundación Maritza Arévalo para coordinar los últimos requerimientos y compromisos.
 
 Canales de contacto oficial:
 - WhatsApp oficial: +${whatsappFundacion} (enlace: https://wa.me/${whatsappFundacion})
@@ -64,79 +113,189 @@ Fundación Maritza Arévalo & Equipo Paw Match
 `;
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ffccd5; border-radius: 12px; background-color: #fffafb;">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h1 style="color: #e91e63; margin-bottom: 8px;">¡Solicitud de Apadrinamiento Aprobada! 🎉</h1>
-        <p style="color: #555; font-size: 16px;">Fundación Maritza Arévalo - Paw Match</p>
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 22px; border: 1px solid #ffccd5; border-radius: 14px; background-color: #fffafb;">
+      <div style="text-align: center; margin-bottom: 22px;">
+        <h1 style="color: #e91e63; margin-bottom: 6px; font-size: 24px;">¡Solicitud de Apadrinamiento Aprobada! 🎉</h1>
+        <p style="color: #666; font-size: 15px; margin: 0;">Fundación Maritza Arévalo • Paw Match</p>
       </div>
-      <div style="background-color: #ffffff; padding: 22px; border-radius: 8px; border: 1px solid #f0f0f0;">
-        <p style="font-size: 16px; color: #333;">Hola <strong>${nombreUsuario}</strong>,</p>
+      
+      <div style="background-color: #ffffff; padding: 24px; border-radius: 12px; border: 1px solid #f2e2e6; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+        <p style="font-size: 16px; color: #333; margin-top: 0;">Hola <strong>${nombre}</strong>,</p>
         <p style="font-size: 15px; color: #444; line-height: 1.5;">
-          Nos complace informarte que tu solicitud para apadrinar a <strong>${nombreMascota}</strong> ha sido <span style="color: #2e7d32; font-weight: bold;">APROBADA</span> exitosamente.
+          Nos complace informarte que tu solicitud para apadrinar a <strong>${mascota}</strong> ha sido <span style="color: #2e7d32; font-weight: bold; background-color: #e8f5e9; padding: 2px 8px; border-radius: 4px;">APROBADA</span> exitosamente.
         </p>
         
-        <div style="background-color: #fce4ec; padding: 14px 18px; border-radius: 8px; margin: 20px 0;">
-          <p style="margin: 4px 0; color: #880e4f; font-size: 15px;"><strong>🐾 Mascota apadrinada:</strong> ${nombreMascota}</p>
-          <p style="margin: 4px 0; color: #880e4f; font-size: 15px;"><strong>📅 Fecha oficial de inicio:</strong> ${fechaInicio || 'Inmediata'}</p>
-          ${observaciones ? `<p style="margin: 8px 0 4px 0; color: #0d47a1; font-size: 14px; background-color: #e3f2fd; padding: 8px; border-radius: 6px;"><strong>📝 Observaciones:</strong> ${observaciones}</p>` : ''}
+        <div style="background-color: #fce4ec; padding: 14px 18px; border-radius: 10px; margin: 20px 0;">
+          <p style="margin: 4px 0; color: #880e4f; font-size: 15px;"><strong>🐾 Mascota apadrinada:</strong> ${mascota}</p>
+          <p style="margin: 4px 0; color: #880e4f; font-size: 15px;"><strong>📅 Fecha oficial de inicio:</strong> ${inicio}</p>
+          ${nota ? `<p style="margin: 8px 0 4px 0; color: #0d47a1; font-size: 14px; background-color: #e3f2fd; padding: 8px 12px; border-radius: 6px;"><strong>📝 Observaciones de la fundación:</strong> ${nota}</p>` : ''}
         </div>
 
-        <div style="background-color: #fff3e0; border-left: 4px solid #ff9800; padding: 12px 16px; border-radius: 4px; margin: 18px 0;">
+        <div style="background-color: #fff3e0; border-left: 4px solid #ff9800; padding: 12px 16px; border-radius: 6px; margin: 18px 0;">
           <p style="margin: 0; color: #e65100; font-size: 14px; line-height: 1.5;">
-            <strong>⚠️ Paso indispensable:</strong> Debes contactarte directamente con la fundación para revisar y acordar los <strong>últimos permisos, requerimientos y compromisos oficiales</strong> que pide la fundación para el cuidado de la mascota.
+            <strong>⚠️ Paso indispensable:</strong> Debes contactarte directamente con la fundación para revisar y acordar los <strong>últimos requerimientos y compromisos oficiales</strong> para el cuidado de la mascota.
           </p>
         </div>
 
         <p style="font-size: 14px; color: #555; line-height: 1.5;">
-          Puedes coordinar todos los detalles de inmediato escribiéndonos por WhatsApp o iniciando sesión en la aplicación <strong>Paw Match</strong>.
+          Puedes coordinar todos los detalles de inmediato escribiéndonos por WhatsApp o consultando tu solicitud en la aplicación <strong>Paw Match</strong>.
         </p>
         
-        <div style="text-align: center; margin-top: 25px; margin-bottom: 10px;">
-          <a href="https://wa.me/${whatsappFundacion}?text=${encodeURIComponent(`Hola Fundación Maritza Arévalo, mi solicitud para apadrinar a ${nombreMascota} fue aprobada en Paw Match y quiero coordinar los últimos requerimientos.`)}" 
-             style="background-color: #25d366; color: white; padding: 13px 26px; text-decoration: none; font-weight: bold; border-radius: 25px; display: inline-block; font-size: 15px;">
+        <div style="text-align: center; margin-top: 25px; margin-bottom: 12px;">
+          <a href="https://wa.me/${whatsappFundacion}?text=${encodeURIComponent(`Hola Fundación Maritza Arévalo, mi solicitud para apadrinar a ${nombreMascota} fue aprobada en Paw Match y quiero coordinar los últimos detalles.`)}" 
+             style="background-color: #25d366; color: white; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 25px; display: inline-block; font-size: 15px; box-shadow: 0 4px 10px rgba(37,211,102,0.3);">
             💬 Contactar por WhatsApp a la Fundación
           </a>
         </div>
       </div>
-      <p style="text-align: center; font-size: 12px; color: #888; margin-top: 20px;">
+      
+      <p style="text-align: center; font-size: 12px; color: #999; margin-top: 20px;">
         Este es un correo automático generado por Paw Match para la Fundación Maritza Arévalo (San Juan de Pasto).
       </p>
     </div>
   `;
 
-  const transporter = obtenerTransporter();
+  return enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Aprobación apadrinamiento (${nombreMascota})`,
+  });
+}
 
-  if (transporter) {
+/**
+ * Notifica al usuario que su solicitud de apadrinamiento fue rechazada.
+ */
+async function enviarCorreoRechazoApadrinamiento({
+  destinatario,
+  nombreUsuario,
+  nombreMascota,
+  whatsappFundacion = '573136177747',
+  observaciones,
+}) {
+  const nombre = escaparHtml(nombreUsuario);
+  const mascota = escaparHtml(nombreMascota);
+  const nota = observaciones ? escaparHtml(observaciones) : '';
+
+  const asunto = `Información sobre tu solicitud de apadrinamiento para ${nombreMascota} - Paw Match`;
+
+  const textoPlano = `
+Hola ${nombreUsuario},
+
+Agradecemos profundamente tu interés y el amor que demostraste al postularte para apadrinar a ${nombreMascota} en la Fundación Maritza Arévalo.
+
+Queremos informarte que, tras evaluar las solicitudes recibidas y los requerimientos del refugio, en esta ocasión tu solicitud no ha podido ser aprobada.
+
+${observaciones ? `Motivo u observaciones de la fundación:\n${observaciones}\n\n` : ''}
+¡No te desanimes! Aún hay muchos otros peluditos en Paw Match que esperan por un padrino o una familia. Te invitamos a ingresar a la aplicación para conocer a otros compañeros que necesitan de tu apoyo.
+
+Si tienes dudas o deseas más detalles, puedes escribirnos por WhatsApp:
+- WhatsApp oficial: +${whatsappFundacion} (enlace: https://wa.me/${whatsappFundacion})
+
+¡Gracias por tu empatía y compromiso con el bienestar animal!
+
+Atentamente,
+Fundación Maritza Arévalo & Equipo Paw Match
+`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 22px; border: 1px solid #ffd1d9; border-radius: 14px; background-color: #fffafb;">
+      <div style="text-align: center; margin-bottom: 22px;">
+        <h2 style="color: #c2185b; margin-bottom: 6px; font-size: 22px;">Respuesta a tu Solicitud de Apadrinamiento</h2>
+        <p style="color: #666; font-size: 15px; margin: 0;">Fundación Maritza Arévalo • Paw Match</p>
+      </div>
+
+      <div style="background-color: #ffffff; padding: 24px; border-radius: 12px; border: 1px solid #f2e2e6; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+        <p style="font-size: 16px; color: #333; margin-top: 0;">Hola <strong>${nombre}</strong>,</p>
+        <p style="font-size: 15px; color: #444; line-height: 1.5;">
+          Agradecemos de corazón tu interés y la noble intención de querer apoyar a <strong>${mascota}</strong> a través de nuestro programa de apadrinamiento.
+        </p>
+        <p style="font-size: 15px; color: #444; line-height: 1.5;">
+          Queremos informarte que, tras evaluar cuidadosamente las solicitudes recibidas y las necesidades de la fundación, en esta ocasión tu solicitud <span style="color: #c62828; font-weight: bold; background-color: #ffebee; padding: 2px 8px; border-radius: 4px;">NO HA SIDO APROBADA</span>.
+        </p>
+
+        ${nota ? `
+        <div style="background-color: #fff8e1; border-left: 4px solid #ffb300; padding: 14px 16px; border-radius: 6px; margin: 18px 0;">
+          <p style="margin: 0 0 6px 0; color: #f57f17; font-weight: bold; font-size: 14px;">Motivo / Observaciones de la Fundación:</p>
+          <p style="margin: 0; color: #5d4037; font-size: 14px; line-height: 1.45;">${nota}</p>
+        </div>
+        ` : ''}
+
+        <div style="background-color: #fce4ec; padding: 14px 18px; border-radius: 10px; margin: 18px 0;">
+          <p style="margin: 0; color: #880e4f; font-size: 14px; line-height: 1.5;">
+            🐾 <strong>¡Tu ayuda sigue siendo muy valiosa!</strong> En la Fundación aún tenemos muchos otros perritos rescatados esperando por un padrino solidario o una segunda oportunidad. Te animamos a seguir explorando la app <strong>Paw Match</strong>.
+          </p>
+        </div>
+
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          Si deseas conocer más información o tienes alguna consulta, puedes escribirnos con confianza a nuestra línea de atención:
+        </p>
+
+        <div style="text-align: center; margin-top: 22px; margin-bottom: 10px;">
+          <a href="https://wa.me/${whatsappFundacion}" 
+             style="background-color: #25d366; color: white; padding: 13px 26px; text-decoration: none; font-weight: bold; border-radius: 25px; display: inline-block; font-size: 14px;">
+            💬 Contactar por WhatsApp a la Fundación
+          </a>
+        </div>
+      </div>
+
+      <p style="text-align: center; font-size: 12px; color: #999; margin-top: 20px;">
+        Este es un correo informativo generado por Paw Match para la Fundación Maritza Arévalo (San Juan de Pasto).
+      </p>
+    </div>
+  `;
+
+  return enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Rechazo apadrinamiento (${nombreMascota})`,
+  });
+}
+
+/**
+ * Función centralizada y segura para el despacho de correos.
+ */
+async function enviarEmailGenerico({ destinatario, asunto, textoPlano, html, tipoNotificacion }) {
+  if (!destinatario || !destinatario.includes('@')) {
+    console.warn(`[CORREO ERROR] Destinatario no válido: '${destinatario}'`);
+    return { enviado: false, error: 'Correo no válido' };
+  }
+
+  const transportInfo = await obtenerTransporter();
+
+  if (transportInfo && transportInfo.transporter) {
     try {
-      const remitente = process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.SMTP_USER;
-      await transporter.sendMail({
-        from: `"Fundación Maritza Arévalo - Paw Match" <${remitente}>`,
+      const remitente = transportInfo.remitente || `"Fundación Maritza Arévalo - Paw Match" <no-reply@pawmatch.com>`;
+      const info = await transportInfo.transporter.sendMail({
+        from: remitente.includes('<') ? remitente : `"Fundación Maritza Arévalo - Paw Match" <${remitente}>`,
         to: destinatario,
         subject: asunto,
         text: textoPlano,
         html: html,
       });
-      console.log(`[CORREO ENVIADO] Notificación enviada con éxito a ${destinatario}`);
-      return { enviado: true };
+
+      console.log(`[CORREO ENVIADO] (${tipoNotificacion}) a ${destinatario} [Servicio: ${transportInfo.tipo}]`);
+
+      // Si fue Ethereal, mostrar URL de previsualización web en terminal
+      if (transportInfo.tipo === 'ethereal') {
+        const urlPreview = nodemailer.getTestMessageUrl(info);
+        console.log(`[CORREO VISTA PREVIA WEB]: ${urlPreview}`);
+      }
+
+      return { enviado: true, messageId: info.messageId };
     } catch (error) {
-      console.error('[CORREO ERROR] No se pudo enviar el correo vía SMTP:', error.message);
+      console.error(`[CORREO ERROR] Falló envío a ${destinatario}:`, error.message);
       return { enviado: false, error: error.message };
     }
   } else {
     console.log(`[CORREO SIMULADO] Destinatario: ${destinatario}`);
     console.log(`  Asunto: ${asunto}`);
-    console.log(`  Mascota: ${nombreMascota} | Inicio: ${fechaInicio}`);
-    console.log('  (Para enviar correos reales por internet, configura GMAIL_USER y GMAIL_PASS o SMTP_* en tu archivo .env)');
+    console.log('  (Configura GMAIL_USER y GMAIL_PASS en .env para envíos reales)');
     return { enviado: true, simulado: true };
   }
-}
-
-function escaparHtml(texto) {
-  return String(texto ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 /**
@@ -192,30 +351,19 @@ Fundación Maritza Arévalo & Equipo Paw Match
     </div>
   `;
 
-  const transporter = obtenerTransporter();
-  if (!transporter) {
-    console.log(`[CORREO SIMULADO] Adopción aprobada para ${destinatario} (${nombreMascota})`);
-    return { enviado: true, simulado: true };
-  }
-
-  try {
-    const remitente = process.env.SMTP_FROM || process.env.GMAIL_USER || process.env.SMTP_USER;
-    await transporter.sendMail({
-      from: `"Fundación Maritza Arévalo - Paw Match" <${remitente}>`,
-      to: destinatario,
-      subject: asunto,
-      text: textoPlano,
-      html,
-    });
-    console.log(`[CORREO ENVIADO] Adopción aprobada notificada a ${destinatario}`);
-    return { enviado: true };
-  } catch (error) {
-    console.error('[CORREO ERROR] No se pudo enviar la aprobación de adopción:', error.message);
-    return { enviado: false, error: error.message };
-  }
+  return enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Aprobación adopción (${nombreMascota})`,
+  });
 }
 
 module.exports = {
   enviarCorreoAprobacionApadrinamiento,
+  enviarCorreoRechazoApadrinamiento,
   enviarCorreoAprobacionAdopcion,
+  obtenerTransporter,
 };
+
