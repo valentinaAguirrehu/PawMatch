@@ -973,10 +973,10 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
                       const SizedBox(height: 22),
 
-                      // ───────── SECCIÓN: DESCRIPCIÓN ─────────
-                      const Text(
-                        'Descripción',
-                        style: TextStyle(
+                      // ───────── SECCIÓN: SOBRE LA MASCOTA ─────────
+                      Text(
+                        'Sobre ${_pet.nombre}',
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFF1E272E),
