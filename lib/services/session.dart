@@ -8,9 +8,11 @@ class Session {
   static String apellidos = '';
   static String correo = '';
   static String telefono = '';
+  static String documentoIdentidad = '';
   static String rol = 'usuario';
 
   static bool get isAdmin => rol == 'administrador';
+  static bool get esAdmin => isAdmin;
 
   /// Recibe el JSON que devuelve POST /api/usuarios/login
   static void iniciar(Map<String, dynamic> usuario) {
@@ -19,6 +21,11 @@ class Session {
     apellidos = (usuario['apellidos'] ?? '').toString();
     correo = (usuario['correo'] ?? '').toString();
     telefono = (usuario['telefono'] ?? '').toString();
+    documentoIdentidad = (usuario['documento_identidad'] ??
+            usuario['documentoIdentidad'] ??
+            usuario['cedula'] ??
+            '')
+        .toString();
     rol = (usuario['rol'] ?? 'usuario').toString();
   }
 
@@ -29,6 +36,7 @@ class Session {
     apellidos = '';
     correo = '';
     telefono = '';
+    documentoIdentidad = '';
     rol = 'usuario';
   }
 }

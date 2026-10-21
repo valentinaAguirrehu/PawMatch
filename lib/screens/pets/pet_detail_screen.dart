@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
@@ -196,51 +197,222 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     );
   }
 
+  Future<void> _verContrato(SolicitudApadrinamiento s) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final bytes = await ApadrinamientoService.obtenerBytesContrato(s.id);
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      final esPdf = bytes.length >= 4 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46; // %PDF
+
+      if (esPdf) {
+        await Printing.layoutPdf(
+          onLayout: (_) => bytes,
+          name: 'Contrato_Apadrinamiento_${widget.pet.nombre}.pdf',
+        );
+        return;
+      }
+
+      showDialog(
+        context: context,
+        builder: (ctx) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              title: Text('Contrato de Apadrinamiento - ${widget.pet.nombre}'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            body: Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al cargar contrato: $e'),
+        ),
+      );
+    }
+  }
+
   void _verEstadoSolicitud() {
     final s = _miSolicitud;
     if (s == null) return;
 
     if (s.esAprobada) {
+      if (s.tieneContrato) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.stars, color: Colors.green, size: 48),
+            title: Text('¡Eres Padrino Oficial de ${widget.pet.nombre}! 🎉'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('📅 Fecha oficial de inicio: ${s.fechaInicioApadrinamiento ?? 'Activo'}'),
+                const SizedBox(height: 8),
+                const Text('Gracias por tu compromiso con la Fundación Maritza Arévalo.'),
+                const SizedBox(height: 10),
+                if (s.observaciones != null && s.observaciones!.trim().isNotEmpty) ...[
+                  Text('Observaciones: ${s.observaciones}'),
+                  const SizedBox(height: 10),
+                ],
+                const Text('Coordina directamente por el WhatsApp oficial de la fundación:'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cerrar'),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                icon: const Icon(Icons.assignment_turned_in),
+                label: const Text('Ver Contrato'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _verContrato(s);
+                },
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+                icon: const Icon(Icons.chat),
+                label: const Text('WhatsApp'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  final num = FundacionInfo.whatsappNumero.isNotEmpty ? FundacionInfo.whatsappNumero : '573136177747';
+                  final msg = 'Hola Fundación Maritza Arévalo, soy el padrino de ${widget.pet.nombre} y vengo de Paw Match.';
+                  abrirEnlace(context, 'https://wa.me/$num?text=${Uri.encodeComponent(msg)}', nombre: 'WhatsApp');
+                },
+              ),
+            ],
+          ),
+        );
+      } else {
+        // Aún no tiene contrato subido por el admin
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 48),
+            title: const Text('¡Solicitud Aprobada! Falta 1 paso'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '¡Tu solicitud para apadrinar a ${widget.pet.nombre} fue aprobada por la fundación!',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.assignment_outlined, color: Colors.amber.shade900, size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Aún falta un paso: Debes esperar a que el administrador suba el contrato oficial de apadrinamiento firmado. Una vez lo suba, serás formalmente el padrino de ${widget.pet.nombre} y podrás consultarlo aquí.',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.amber.shade900,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (s.observaciones != null && s.observaciones!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Indicaciones de la fundación: ${s.observaciones}',
+                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      }
+    } else if (s.esCancelada) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.stars, color: Colors.green, size: 48),
-          title: Text('¡Eres Padrino de ${widget.pet.nombre}! 🎉'),
+          icon: const Icon(Icons.cancel, color: Colors.redAccent, size: 48),
+          title: const Text('Apadrinamiento Cancelado'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('📅 Fecha oficial de inicio: ${s.fechaInicioApadrinamiento ?? 'Activo'}'),
-              const SizedBox(height: 8),
-              const Text('Gracias por tu compromiso con la Fundación Maritza Arévalo.'),
+              Text('El apadrinamiento para ${widget.pet.nombre} fue cancelado por la administración.'),
               const SizedBox(height: 10),
+              const Text('Motivo de la cancelación:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.orange.shade200),
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade200),
                 ),
-                child: const Text(
-                  'Debes ponerte en contacto con la fundación para ver los últimos permisos y requerimientos que pide la fundación.',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.deepOrange),
+                child: Text(
+                  s.observaciones?.trim().isNotEmpty == true
+                      ? s.observaciones!
+                      : 'Sin motivo especificado.',
+                  style: const TextStyle(fontSize: 13),
                 ),
               ),
-              const SizedBox(height: 12),
-              const Text('Coordina directamente por el WhatsApp oficial de la fundación:'),
             ],
           ),
           actions: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
-              icon: const Icon(Icons.chat),
-              label: const Text('Contactar por WhatsApp'),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
               onPressed: () {
                 Navigator.pop(ctx);
-                final num = FundacionInfo.whatsappNumero.isNotEmpty ? FundacionInfo.whatsappNumero : '573136177747';
-                final msg = 'Hola Fundación Maritza Arévalo, soy el padrino de ${widget.pet.nombre} y vengo de Paw Match.';
-                abrirEnlace(context, 'https://wa.me/$num?text=${Uri.encodeComponent(msg)}', nombre: 'WhatsApp');
+                _abrirFormularioApadrinar();
               },
+              child: const Text('Enviar Nueva Solicitud'),
             ),
           ],
         ),
@@ -702,10 +874,22 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
                     if (_miSolicitud != null) {
                       if (_miSolicitud!.esAprobada) {
-                        etiqueta = 'Padrino Oficial';
-                        icono = Icons.stars;
+                        if (_miSolicitud!.tieneContrato) {
+                          etiqueta = 'Padrino Oficial';
+                          icono = Icons.stars;
+                          accion = _verEstadoSolicitud;
+                          colorFondo = Colors.green.shade700;
+                        } else {
+                          etiqueta = 'Aprobada (Falta Contrato)';
+                          icono = Icons.hourglass_top_rounded;
+                          accion = _verEstadoSolicitud;
+                          colorFondo = Colors.amber.shade800;
+                        }
+                      } else if (_miSolicitud!.esCancelada) {
+                        etiqueta = 'Cancelada';
+                        icono = Icons.highlight_off;
                         accion = _verEstadoSolicitud;
-                        colorFondo = Colors.green.shade700;
+                        colorFondo = Colors.blueGrey.shade700;
                       } else if (_miSolicitud!.esPendiente) {
                         etiqueta = 'En Revisión';
                         icono = Icons.hourglass_top;

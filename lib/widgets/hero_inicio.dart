@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
@@ -24,8 +25,8 @@ class HeroInicio extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alto = (MediaQuery.of(context).size.height * 0.80)
-        .clamp(560.0, 680.0)
+    final alto = (MediaQuery.of(context).size.height * 0.58)
+        .clamp(420.0, 500.0)
         .toDouble();
 
     return SizedBox(
@@ -69,6 +70,9 @@ class HeroInicio extends StatelessWidget {
                     _BarraSuperior(
                       nombre: nombre,
                       onCerrarSesion: onCerrarSesion,
+                      onVerMascotas: onVerMascotas,
+                      onAdopciones: onAdopciones,
+                      onApadrinamientos: onApadrinamientos,
                     ),
                     const Spacer(),
                     TweenAnimationBuilder<double>(
@@ -104,56 +108,6 @@ class HeroInicio extends StatelessWidget {
                               height: 1.45,
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          _AvisoBoton(
-                            avisos: AdoptionService.noLeidasUsuario,
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: AppColors.rosa,
-                                minimumSize: const Size.fromHeight(52),
-                                shape: const StadiumBorder(),
-                                textStyle: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              onPressed: onAdopciones,
-                              icon: const FeatureIcon.mascota(
-                                tamano: 18,
-                                color: AppColors.rosa,
-                              ),
-                              label: const Text('Ver mis Adopciones'),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          _AvisoBoton(
-                            avisos: ApadrinamientoService.noLeidasUsuario,
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                backgroundColor: Colors.white.withValues(
-                                  alpha: 0.14,
-                                ),
-                                side: const BorderSide(
-                                  color: Colors.white,
-                                  width: 1.5,
-                                ),
-                                minimumSize: const Size.fromHeight(52),
-                                shape: const StadiumBorder(),
-                                textStyle: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              onPressed: onApadrinamientos,
-                              icon: const FeatureIcon.apadrinar(
-                                tamano: 18,
-                                color: Colors.white,
-                              ),
-                              label: const Text('Ver mis apadrinaciones'),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -171,8 +125,121 @@ class HeroInicio extends StatelessWidget {
 class _BarraSuperior extends StatelessWidget {
   final String nombre;
   final VoidCallback onCerrarSesion;
+  final VoidCallback onVerMascotas;
+  final VoidCallback onAdopciones;
+  final VoidCallback onApadrinamientos;
 
-  const _BarraSuperior({required this.nombre, required this.onCerrarSesion});
+  const _BarraSuperior({
+    required this.nombre,
+    required this.onCerrarSesion,
+    required this.onVerMascotas,
+    required this.onAdopciones,
+    required this.onApadrinamientos,
+  });
+
+  void _mostrarMenuSolicitudes(BuildContext context) {
+    final bool esAdmin = Session.esAdmin;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  esAdmin ? Icons.inbox_outlined : Icons.assignment_outlined,
+                  color: AppColors.rosa,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  esAdmin ? 'Solicitudes Recibidas' : 'Mis Solicitudes',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.rosaClaro,
+                child: const Icon(Icons.volunteer_activism, color: AppColors.rosa),
+              ),
+              title: Text(
+                esAdmin ? 'Solicitudes de Apadrinamiento' : 'Mis Apadrinamientos',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                esAdmin
+                    ? 'Revisar solicitudes enviadas por usuarios'
+                    : 'Consulta estado de apadrinamiento y contratos',
+              ),
+              trailing: ValueListenableBuilder<int>(
+                valueListenable: esAdmin
+                    ? ApadrinamientoService.noLeidasAdmin
+                    : ApadrinamientoService.noLeidasUsuario,
+                builder: (context, count, child) => count > 0
+                    ? Badge(label: Text('$count'), backgroundColor: Colors.redAccent)
+                    : const Icon(Icons.chevron_right),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onApadrinamientos();
+              },
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.rosaClaro,
+                child: const Icon(Icons.pets, color: AppColors.rosa),
+              ),
+              title: Text(
+                esAdmin ? 'Solicitudes de Adopción' : 'Mis Adopciones',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              subtitle: Text(
+                esAdmin
+                    ? 'Revisar solicitudes enviadas por usuarios'
+                    : 'Consulta si tu adopción fue aprobada',
+              ),
+              trailing: ValueListenableBuilder<int>(
+                valueListenable: esAdmin
+                    ? AdoptionService.noLeidasAdmin
+                    : AdoptionService.noLeidasUsuario,
+                builder: (context, count, child) => count > 0
+                    ? Badge(label: Text('$count'), backgroundColor: Colors.redAccent)
+                    : const Icon(Icons.chevron_right),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                onAdopciones();
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +266,52 @@ class _BarraSuperior extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
+        IconButton.filled(
+          tooltip: 'Ver Mascotas',
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.88),
+            foregroundColor: AppColors.rosa,
+          ),
+          onPressed: onVerMascotas,
+          icon: const Icon(Icons.pets, color: AppColors.rosa, size: 21),
+        ),
+        const SizedBox(width: 8),
+        IconButton.filled(
+          tooltip: Session.esAdmin
+              ? 'Solicitudes recibidas y notificaciones'
+              : 'Mis solicitudes y notificaciones',
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.white.withValues(alpha: 0.88),
+            foregroundColor: AppColors.rosa,
+          ),
+          onPressed: () => _mostrarMenuSolicitudes(context),
+          icon: AnimatedBuilder(
+            animation: Listenable.merge([
+              Session.esAdmin
+                  ? ApadrinamientoService.noLeidasAdmin
+                  : ApadrinamientoService.noLeidasUsuario,
+              Session.esAdmin
+                  ? AdoptionService.noLeidasAdmin
+                  : AdoptionService.noLeidasUsuario,
+            ]),
+            builder: (context, child) {
+              final total = Session.esAdmin
+                  ? (ApadrinamientoService.noLeidasAdmin.value +
+                      AdoptionService.noLeidasAdmin.value)
+                  : (ApadrinamientoService.noLeidasUsuario.value +
+                      AdoptionService.noLeidasUsuario.value);
+              return Badge(
+                isLabelVisible: total > 0,
+                label: Text('$total'),
+                backgroundColor: Colors.redAccent,
+                textColor: Colors.white,
+                child: const Icon(Icons.notifications_outlined, color: AppColors.rosa, size: 22),
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
         IconButton.filled(
           tooltip: 'Cerrar sesión',
           style: IconButton.styleFrom(
@@ -210,28 +322,6 @@ class _BarraSuperior extends StatelessWidget {
           icon: const FeatureIcon.cerrarSesion(color: AppColors.rosa),
         ),
       ],
-    );
-  }
-}
-
-class _AvisoBoton extends StatelessWidget {
-  final ValueNotifier<int> avisos;
-  final Widget child;
-
-  const _AvisoBoton({required this.avisos, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: avisos,
-      builder: (context, count, _) => Badge(
-        isLabelVisible: count > 0,
-        alignment: const Alignment(0.86, -0.9),
-        label: Text(count > 1 ? '$count' : 'Nuevo'),
-        backgroundColor: Colors.redAccent,
-        textColor: Colors.white,
-        child: child,
-      ),
     );
   }
 }
