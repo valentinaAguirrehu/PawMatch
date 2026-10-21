@@ -7,8 +7,10 @@ import 'package:paw_match/core/layout.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/screens/auth/login_screen.dart';
 import 'package:paw_match/screens/auth/register_screen.dart';
+import 'package:paw_match/screens/match/user_personality.dart';
 import 'package:paw_match/services/fundacion_service.dart';
 import 'package:paw_match/services/pets_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/bloque_landing.dart';
 import 'package:paw_match/widgets/boton_landing.dart';
 import 'package:paw_match/widgets/fundacion_imagen.dart';
@@ -51,8 +53,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   void initState() {
     super.initState();
+    _verificarSesionExistente();
     FundacionService.cargar();
     _cargar();
+  }
+
+  Future<void> _verificarSesionExistente() async {
+    final tieneSesion = await Session.restaurar();
+    if (tieneSesion && mounted) {
+      await abrirDestinoTrasAuth(context);
+    }
   }
 
   Future<void> _cargar() async {
@@ -183,7 +193,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Expanded(
             child: ValueListenableBuilder<int>(
               valueListenable: FundacionInfo.cambios,
-              builder: (context, _, __) => SingleChildScrollView(
+              builder: (context, _, _) => SingleChildScrollView(
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(
