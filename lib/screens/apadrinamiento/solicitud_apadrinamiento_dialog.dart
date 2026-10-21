@@ -1,8 +1,13 @@
 import 'dart:typed_data';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/models/solicitud_apadrinamiento.dart';
+import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
+import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
@@ -22,6 +27,30 @@ class SolicitudApadrinamientoDialog extends StatefulWidget {
     required Pet pet,
     VoidCallback? onEnviadaExitosamente,
   }) {
+    if (pet.estaAdoptada) {
+      return showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          content: Text(
+            pet.mensajeFamiliaPara(Session.idUsuario),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.rosa,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Entendido'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -45,10 +74,11 @@ class _SolicitudApadrinamientoDialogState
   final _montoCtrl = TextEditingController(text: '30000');
   String _frecuencia = 'mensual';
 
+  int _paso = 0;
   Uint8List? _docBytes;
   String? _docNombre;
 
-  bool _aceptoAcuerdo = false; // Inicia en false por requisito de auditoría
+  bool _aceptoAcuerdo = false;
   bool _enviando = false;
 
   @override
@@ -80,30 +110,125 @@ class _SolicitudApadrinamientoDialogState
     }
   }
 
+  /// Muestra el texto breve, claro y completo del acuerdo en un diálogo modal responsive.
   void _verTerminosAcuerdo() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        title: Row(
           children: [
-            Icon(Icons.gavel, color: AppColors.rosa),
-            SizedBox(width: 8),
-            Text('Acuerdo de Responsabilidad'),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.rosaSuave,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.handshake_outlined, color: AppColors.rosa, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Acuerdo de Compromiso',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  Text(
+                    'Fundación Maritza Arévalo',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
-        content: const SingleChildScrollView(
-          child: Text(
-            'Al solicitar el apadrinamiento de esta mascota en la Fundación Maritza Arévalo, te comprometes a:\n\n'
-            '1. Brindar apoyo voluntario constante para la alimentación, cuidados médicos y bienestar de la mascota apadrinada.\n\n'
-            '2. Proporcionar información veraz y comprobable mediante tu documento de identidad oficial.\n\n'
-            '3. Mantener una comunicación respetuosa con la fundación a través de los canales oficiales (WhatsApp / presencial).\n\n'
-            '4. Respetar las decisiones de la fundación sobre la salud y eventual adopción permanente de la mascota.\n\n'
-            'Tu documento de identidad será protegido de forma confidencial y solo accesible por el personal autorizado.',
-            style: TextStyle(height: 1.45),
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 420),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Text(
+                  'Al solicitar el apadrinamiento de ${widget.pet.nombre}, aceptas libre y voluntariamente los siguientes puntos:',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                ...AcuerdoApadrinamientoPdfService.clausulasAcuerdo.map(
+                  (c) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        CircleAvatar(
+                          radius: 10,
+                          backgroundColor: AppColors.rosaSuave,
+                          child: Text(
+                            c['num']!,
+                            style: const TextStyle(
+                              color: AppColors.rosa,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.black87,
+                                    height: 1.38,
+                                  ),
+                              children: [
+                                TextSpan(
+                                  text: '${c['titulo']}: ',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                TextSpan(text: c['cuerpo']),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.verified_outlined, color: Colors.green, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Al confirmar, el sistema registrará tu constancia electrónica y generará el PDF descargable.',
+                          style: TextStyle(fontSize: 11.5, color: Colors.black87),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
-          TextButton(
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.rosa,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Entendido'),
           ),
@@ -112,16 +237,31 @@ class _SolicitudApadrinamientoDialogState
     );
   }
 
-  Future<void> _enviar() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (_docBytes == null || _docNombre == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.redAccent,
-          content: Text(
-            'Por favor, adjunta la fotografía de tu documento de identidad.',
+  void _continuar() {
+    if (_paso == 0) {
+      if (!_formKey.currentState!.validate()) return;
+      setState(() => _paso = 1);
+    } else if (_paso == 1) {
+      if (_docBytes == null || _docNombre == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text(
+              'Por favor, adjunta la fotografía de tu documento de identidad.',
+            ),
           ),
+        );
+        return;
+      }
+      setState(() => _paso = 2);
+    }
+  }
+
+  Future<void> _enviar() async {
+    if (widget.pet.estaAdoptada) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(widget.pet.mensajeFamiliaPara(Session.idUsuario)),
         ),
       );
       return;
@@ -139,17 +279,81 @@ class _SolicitudApadrinamientoDialogState
       return;
     }
 
+    if (_docBytes == null || _docNombre == null) {
+      setState(() => _paso = 1);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Por favor, adjunta la fotografía de tu documento de identidad.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() => _enviando = true);
 
     try {
       final monto = int.tryParse(_montoCtrl.text.replaceAll(RegExp(r'\D'), ''));
-      await ApadrinamientoService.enviarSolicitud(
+      final motivacion = _motivacionCtrl.text.trim();
+
+      // 1. Enviar a base de datos en el backend
+      final SolicitudApadrinamiento? solicitudCreada =
+          await ApadrinamientoService.enviarSolicitud(
         idMascota: widget.pet.id,
-        motivacion: _motivacionCtrl.text.trim(),
+        motivacion: motivacion,
         montoAporte: monto,
         frecuenciaAporte: _frecuencia,
         bytesDocumento: _docBytes!,
         nombreArchivo: _docNombre!,
+      );
+
+      final fechaAhora = DateTime.now();
+      final idRadicado = solicitudCreada != null && solicitudCreada.id.isNotEmpty
+          ? solicitudCreada.id
+          : 'APAD-${fechaAhora.millisecondsSinceEpoch}';
+
+      final nombreCompletoUsuario =
+          '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
+              ? 'Usuario Registrado'
+              : '${Session.nombre} ${Session.apellidos}'.trim();
+
+      // Asegurar que el documento de identidad esté cargado
+      if (Session.documentoIdentidad.trim().isEmpty && Session.idUsuario != null) {
+        try {
+          final u = await ApiService.obtenerUsuario(Session.idUsuario!);
+          if (u.documentoIdentidad.trim().isNotEmpty) {
+            Session.documentoIdentidad = u.documentoIdentidad.trim();
+          }
+        } catch (_) {}
+      }
+
+      // 2. Generar el PDF oficial del Acuerdo breve con datos reales
+      final datosAcuerdo = DatosAcuerdoApadrinamiento(
+        idSolicitud: idRadicado,
+        nombreUsuario: nombreCompletoUsuario,
+        documentoUsuario: Session.documentoIdentidad.trim().isNotEmpty
+            ? Session.documentoIdentidad.trim()
+            : null,
+        correoUsuario: Session.correo.isNotEmpty ? Session.correo : 'No especificado',
+        telefonoUsuario: Session.telefono.isNotEmpty ? Session.telefono : null,
+        nombreMascota: widget.pet.nombre,
+        especieMascota: widget.pet.especie,
+        razaMascota: widget.pet.raza,
+        edadMascota: widget.pet.edadTexto,
+        montoAporte: monto,
+        frecuenciaAporte: _frecuencia,
+        motivacion: motivacion,
+        fechaAceptacion: fechaAhora,
+      );
+
+      final pdfBytes = await AcuerdoApadrinamientoPdfService.generarPdfBytes(datosAcuerdo);
+
+      // 3. Descarga y guardado automático del PDF
+      await AcuerdoApadrinamientoPdfService.descargarYGuardarPdf(
+        bytes: pdfBytes,
+        nombreMascota: widget.pet.nombre,
       );
 
       if (!mounted) return;
@@ -157,21 +361,80 @@ class _SolicitudApadrinamientoDialogState
 
       widget.onEnviadaExitosamente?.call();
 
+      // 4. Diálogo de confirmación con opción de volver a descargar
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           icon: const Icon(
             Icons.check_circle_outline,
             color: Colors.green,
-            size: 54,
+            size: 56,
           ),
-          title: const Text('¡Solicitud Enviada!'),
-          content: Text(
-            'Tu solicitud para apadrinar a ${widget.pet.nombre} ha sido enviada a la Fundación Maritza Arévalo.\n\n'
-            'El administrador revisará tu motivación y datos. Una vez aprobada, recibirás una notificación y podrás ver la fecha de inicio y contactar a la fundación por WhatsApp.',
-            style: const TextStyle(height: 1.4),
+          title: const Text(
+            '¡Solicitud Enviada y Acuerdo Descargado!',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Tu solicitud para apadrinar a ${widget.pet.nombre} ha sido registrada exitosamente en la Fundación Maritza Arévalo.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(height: 1.4, fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.rosaSuave,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.bordeRosa),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.picture_as_pdf, color: AppColors.rosa, size: 28),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Acuerdo en PDF generado',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                          ),
+                          Text(
+                            'Se descargó el comprobante con tu constancia de aceptación electrónica.',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Radicado: #$idRadicado',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.black54),
+              ),
+            ],
           ),
           actions: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Descargar copia'),
+              onPressed: () {
+                AcuerdoApadrinamientoPdfService.descargarYGuardarPdf(
+                  bytes: pdfBytes,
+                  nombreMascota: widget.pet.nombre,
+                );
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Descargando copia del acuerdo...')),
+                );
+              },
+            ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
               onPressed: () => Navigator.pop(ctx),
@@ -197,7 +460,7 @@ class _SolicitudApadrinamientoDialogState
 
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.9,
+        maxHeight: MediaQuery.of(context).size.height * 0.92,
       ),
       padding: EdgeInsets.only(bottom: bottomInset),
       decoration: const BoxDecoration(
@@ -206,7 +469,7 @@ class _SolicitudApadrinamientoDialogState
       ),
       child: Column(
         children: [
-          // Barra de arrastre
+          // Barra de arrastre superior
           Container(
             margin: const EdgeInsets.symmetric(vertical: 12),
             width: 44,
@@ -216,9 +479,10 @@ class _SolicitudApadrinamientoDialogState
               borderRadius: BorderRadius.circular(10),
             ),
           ),
-          // Encabezado superior con botón de cerrar
+
+          // Encabezado con título e icono de cerrar
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 12, 0),
+            padding: const EdgeInsets.fromLTRB(20, 2, 12, 0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -242,460 +506,624 @@ class _SolicitudApadrinamientoDialogState
                 IconButton(
                   icon: const Icon(Icons.close),
                   tooltip: 'Cerrar',
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: _enviando ? null : () => Navigator.pop(context),
                 ),
               ],
             ),
           ),
-          const Divider(height: 16),
-          // Contenido con scroll
+
+          const Divider(height: 12),
+
+          // Indicador de pasos idéntico al de Adopción
+          _Pasos(paso: _paso),
+
+          const SizedBox(height: 4),
+
+          // Contenido del paso actual con scroll
           Expanded(
             child: Form(
               key: _formKey,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
                 children: [
-                  // Presentación destacada y centrada del perro: Foto, Nombre y Edad
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 104,
-                          height: 104,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: AppColors.rosa, width: 3),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.rosa.withValues(alpha: 0.22),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipOval(
-                            child: PetImage(url: widget.pet.foto),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          widget.pet.nombre,
-                          textAlign: TextAlign.center,
-                          style: t.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.texto,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.rosaSuave,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.bordeRosa),
-                          ),
-                          child: Text(
-                            widget.pet.edadTexto,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppColors.rosa,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${widget.pet.especie} • ${(widget.pet.raza == null || widget.pet.raza!.isEmpty) ? 'Mestizo' : widget.pet.raza}',
-                          textAlign: TextAlign.center,
-                          style: t.bodySmall?.copyWith(color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  // Datos del solicitante (precargados)
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.rosaClaro.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppColors.rosa.withOpacity(0.2),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.person_outline,
-                              size: 20,
-                              color: AppColors.rosa,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Datos del solicitante',
-                              style: t.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.rosa,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
-                              ? 'Usuario registrado'
-                              : '${Session.nombre} ${Session.apellidos}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        if (Session.correo.isNotEmpty)
-                          Text('Correo: ${Session.correo}', style: t.bodySmall),
-                        if (Session.telefono.isNotEmpty)
-                          Text(
-                            'Teléfono: ${Session.telefono}',
-                            style: t.bodySmall,
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // PREGUNTA OBLIGATORIA: Motivación (máx 500 caracteres)
-                  Text(
-                    '¿Por qué quieres apadrinar a esta mascota? *',
-                    style: t.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.texto,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Cuéntanos por qué quieres apadrinar a esta mascota. ¿Qué te gustó de ella? ¿Qué te motivó a elegirla? ¿Por qué deseas ayudarla?',
-                    style: t.bodySmall?.copyWith(
-                      color: Colors.grey.shade600,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextFormField(
-                    controller: _motivacionCtrl,
-                    maxLines: 4,
-                    maxLength: 500,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'Escribe aquí tu motivación...',
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                          color: AppColors.rosa,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    validator: (v) {
-                      final txt = (v ?? '').trim();
-                      if (txt.isEmpty) {
-                        return 'Este campo es obligatorio para evaluar tu solicitud.';
-                      }
-                      if (txt.length > 500) {
-                        return 'Solo se aceptan un máximo de 500 caracteres.';
-                      }
-                      return null;
-                    },
-                  ),
-
+                  _resumenMascota(t),
                   const SizedBox(height: 14),
 
-                  // Aporte voluntario
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Aporte voluntario (COP)',
-                              style: t.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _montoCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: InputDecoration(
-                                prefixText: '\$ ',
-                                filled: true,
-                                fillColor: Colors.grey.shade50,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Frecuencia',
-                              style: t.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            DropdownButtonFormField<String>(
-                              value: _frecuencia,
-                              decoration: InputDecoration(
-                                filled: true,
-                                fillColor: Colors.grey.shade50,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'mensual',
-                                  child: Text('Mensual'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'quincenal',
-                                  child: Text('Quincenal'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'unica_vez',
-                                  child: Text('Única vez'),
-                                ),
-                              ],
-                              onChanged: (v) =>
-                                  setState(() => _frecuencia = v ?? 'mensual'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  // Fotografía del documento de identidad
-                  Text(
-                    'Fotografía del documento de identidad *',
-                    style: t.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.texto,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Sube una foto clara de tu documento de identidad (cédula). Será almacenada de forma privada.',
-                    style: t.bodySmall?.copyWith(color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _docBytes == null
-                            ? Colors.grey.shade300
-                            : Colors.green.shade400,
-                        width: _docBytes == null ? 1 : 1.5,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        if (_docBytes != null) ...[
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.memory(
-                              _docBytes!,
-                              width: 60,
-                              height: 60,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Documento adjuntado',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                                Text(
-                                  _docNombre ?? 'foto_documento.jpg',
-                                  style: t.bodySmall?.copyWith(
-                                    color: Colors.grey.shade700,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          TextButton.icon(
-                            icon: const Icon(Icons.refresh, size: 18),
-                            label: const Text('Cambiar'),
-                            onPressed: _seleccionarDocumento,
-                          ),
-                        ] else ...[
-                          CircleAvatar(
-                            backgroundColor: Colors.grey.shade200,
-                            child: const Icon(
-                              Icons.badge_outlined,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Text(
-                              'Ningún archivo seleccionado',
-                              style: TextStyle(color: Colors.black54),
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.rosa,
-                              side: const BorderSide(color: AppColors.rosa),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.camera_alt_outlined,
-                              size: 18,
-                            ),
-                            label: const Text('Subir foto'),
-                            onPressed: _seleccionarDocumento,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Acuerdo de responsabilidad (inicia en false)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _aceptoAcuerdo
-                          ? Colors.green.shade50
-                          : Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _aceptoAcuerdo
-                            ? Colors.green.shade300
-                            : Colors.grey.shade300,
-                      ),
-                    ),
-                    child: CheckboxListTile(
-                      value: _aceptoAcuerdo,
-                      activeColor: Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      title: RichText(
-                        text: TextSpan(
-                          style: t.bodyMedium?.copyWith(color: AppColors.texto),
-                          children: const [
-                            TextSpan(text: 'He leído y acepto el '),
-                            TextSpan(
-                              text: 'acuerdo de responsabilidad y compromiso',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.rosa,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                            TextSpan(
-                              text:
-                                  ' para el apadrinamiento de esta mascota.',
-                            ),
-                          ],
-                        ),
-                      ),
-                      onChanged: (val) {
-                        setState(() => _aceptoAcuerdo = val ?? false);
-                      },
-                      secondary: IconButton(
-                        icon: const Icon(
-                          Icons.info_outline,
-                          color: AppColors.rosa,
-                        ),
-                        tooltip: 'Ver acuerdo completo',
-                        onPressed: _verTerminosAcuerdo,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 26),
-
-                  // Botón enviar
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.rosa,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(54),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    icon: _enviando
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Icon(Icons.send),
-                    label: Text(
-                      _enviando
-                          ? 'Enviando solicitud...'
-                          : 'Enviar Solicitud de Apadrinamiento',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 16,
-                      ),
-                    ),
-                    onPressed: _enviando ? null : _enviar,
-                  ),
+                  if (_paso == 0) ..._pasoMotivacion(t),
+                  if (_paso == 1) ..._pasoDocumento(t),
+                  if (_paso == 2) ..._pasoCompromiso(t),
                 ],
               ),
             ),
           ),
+
+          // Barra inferior de navegación con botones Atrás y Continuar / Enviar
+          _barraBotones(),
+        ],
+      ),
+    );
+  }
+
+  /// Tarjeta de presentación de la mascota
+  Widget _resumenMascota(TextTheme t) {
+    if (_paso > 0) {
+      // Formato compacto para los pasos 2 y 3 para aprovechar mejor el espacio
+      return Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.rosaSuave,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.bordeRosa),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.rosa, width: 2),
+              ),
+              child: ClipOval(child: PetImage(url: widget.pet.foto)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.pet.nombre,
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                  ),
+                  Text(
+                    '${widget.pet.especie} • ${(widget.pet.raza == null || widget.pet.raza!.isEmpty) ? 'Mestizo' : widget.pet.raza} • ${widget.pet.edadTexto}',
+                    style: const TextStyle(fontSize: 11.5, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Paso 0: Presentación destacada y centrada del perro
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.rosa, width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.rosa.withValues(alpha: 0.22),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipOval(child: PetImage(url: widget.pet.foto)),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            widget.pet.nombre,
+            textAlign: TextAlign.center,
+            style: t.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: AppColors.texto,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.rosaSuave,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.bordeRosa),
+            ),
+            child: Text(
+              widget.pet.edadTexto,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.rosa,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${widget.pet.especie} • ${(widget.pet.raza == null || widget.pet.raza!.isEmpty) ? 'Mestizo' : widget.pet.raza}',
+            textAlign: TextAlign.center,
+            style: t.bodySmall?.copyWith(color: Colors.black54),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Paso 1: Motivación y Aporte
+  List<Widget> _pasoMotivacion(TextTheme t) => [
+        // Datos del solicitante
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.rosaClaro.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.rosa.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.person_outline, size: 20, color: AppColors.rosa),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Datos del solicitante',
+                    style: t.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.rosa,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
+                    ? 'Usuario registrado'
+                    : '${Session.nombre} ${Session.apellidos}',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              if (Session.correo.isNotEmpty)
+                Text('Correo: ${Session.correo}', style: t.bodySmall),
+              if (Session.telefono.isNotEmpty)
+                Text('Teléfono: ${Session.telefono}', style: t.bodySmall),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 18),
+
+        // Pregunta obligatoria de motivación
+        Text(
+          '¿Por qué quieres apadrinar a esta mascota? *',
+          style: t.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: AppColors.texto,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Cuéntanos por qué quieres apadrinar a esta mascota. ¿Qué te gustó de ella? ¿Qué te motivó a elegirla? ¿Por qué deseas ayudarla?',
+          style: t.bodySmall?.copyWith(
+            color: Colors.grey.shade600,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _motivacionCtrl,
+          maxLines: 4,
+          maxLength: 500,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: 'Escribe aquí tu motivación...',
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+            ),
+          ),
+          validator: (v) {
+            final txt = (v ?? '').trim();
+            if (txt.isEmpty) {
+              return 'Este campo es obligatorio para evaluar tu solicitud.';
+            }
+            if (txt.length > 500) {
+              return 'Solo se aceptan un máximo de 500 caracteres.';
+            }
+            return null;
+          },
+        ),
+
+        const SizedBox(height: 14),
+
+        // Aporte voluntario y frecuencia
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Aporte voluntario (COP)',
+                    style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _montoCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      prefixText: '\$ ',
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Frecuencia',
+                    style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: _frecuencia,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'mensual', child: Text('Mensual')),
+                      DropdownMenuItem(value: 'quincenal', child: Text('Quincenal')),
+                      DropdownMenuItem(value: 'unica_vez', child: Text('Única vez')),
+                    ],
+                    onChanged: (v) => setState(() => _frecuencia = v ?? 'mensual'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ];
+
+  /// Paso 2: Fotografía del documento de identidad
+  List<Widget> _pasoDocumento(TextTheme t) => [
+        Text(
+          'Documento de Identidad',
+          style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Adjunta una fotografía clara de tu documento de identidad (cédula de ciudadanía o extranjería). La Fundación mantendrá tus datos de forma confidencial.',
+          style: t.bodySmall?.copyWith(color: Colors.grey.shade600, height: 1.35),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: _docBytes == null ? Colors.grey.shade300 : Colors.green.shade400,
+              width: _docBytes == null ? 1 : 1.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_docBytes != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    _docBytes!,
+                    height: 180,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _docNombre ?? 'foto_documento.jpg',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Cambiar'),
+                      onPressed: _seleccionarDocumento,
+                    ),
+                  ],
+                ),
+              ] else ...[
+                Container(
+                  height: 130,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.rosaSuave,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.badge_outlined, color: AppColors.rosa, size: 40),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Ningún documento adjunto aún',
+                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.rosa,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Subir fotografía de cédula'),
+                  onPressed: _seleccionarDocumento,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ];
+
+  /// Paso 3: Resumen y Acuerdo de Responsabilidad y Compromiso
+  List<Widget> _pasoCompromiso(TextTheme t) {
+    final montoTexto = _montoCtrl.text.trim().isNotEmpty
+        ? '\$ ${_montoCtrl.text.trim()} COP'
+        : '\$ 0 COP';
+
+    return [
+      Text(
+        'Acuerdo y Confirmación',
+        style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'Revisa el resumen de tu apadrinamiento y acepta el acuerdo para formalizar tu solicitud.',
+        style: t.bodySmall?.copyWith(color: Colors.grey.shade600, height: 1.35),
+      ),
+      const SizedBox(height: 14),
+
+      // Resumen del apadrinamiento
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            _resumenFila('Fundación:', FundacionInfo.nombre),
+            const Divider(height: 14),
+            _resumenFila(
+              'Solicitante:',
+              '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
+                  ? 'Usuario Registrado'
+                  : '${Session.nombre} ${Session.apellidos}',
+            ),
+            const Divider(height: 14),
+            _resumenFila('Aporte voluntario:', '$montoTexto ($_frecuencia)'),
+            const Divider(height: 14),
+            _resumenFila('Documento:', _docNombre ?? 'Adjuntado'),
+          ],
+        ),
+      ),
+
+      const SizedBox(height: 18),
+
+      // Casilla de aceptación del acuerdo con enlace rosa
+      Material(
+        color: _aceptoAcuerdo ? Colors.green.shade50 : Colors.grey.shade50,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.0),
+          side: BorderSide(
+            color: _aceptoAcuerdo ? Colors.green.shade400 : Colors.grey.shade300,
+            width: _aceptoAcuerdo ? 1.5 : 1,
+          ),
+        ),
+        child: CheckboxListTile(
+          value: _aceptoAcuerdo,
+          activeColor: Colors.green,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: RichText(
+            text: TextSpan(
+              style: t.bodyMedium?.copyWith(color: AppColors.texto, height: 1.35),
+              children: [
+                const TextSpan(text: 'He leído y acepto el '),
+                TextSpan(
+                  text: 'acuerdo de responsabilidad y compromiso',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.rosa,
+                    decoration: TextDecoration.underline,
+                  ),
+                  recognizer: TapGestureRecognizer()..onTap = _verTerminosAcuerdo,
+                ),
+                const TextSpan(text: ' para el apadrinamiento de esta mascota.'),
+              ],
+            ),
+          ),
+          onChanged: (val) {
+            setState(() => _aceptoAcuerdo = val ?? false);
+          },
+          secondary: IconButton(
+            icon: const Icon(Icons.info_outline, color: AppColors.rosa),
+            tooltip: 'Ver acuerdo completo',
+            onPressed: _verTerminosAcuerdo,
+          ),
+        ),
+      ),
+
+      const SizedBox(height: 14),
+
+      // Aviso de constancia electrónica y descarga automática de PDF
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.rosaSuave,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.bordeRosa),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.file_download_outlined, color: AppColors.rosa, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Al confirmar, el sistema registrará tu constancia electrónica de aceptación y descargará automáticamente tu Acuerdo en PDF con la identidad de la Fundación.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade800, height: 1.35),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _resumenFila(String etiqueta, String valor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(etiqueta, style: const TextStyle(color: Colors.black54, fontSize: 12.5)),
+        Text(valor, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+      ],
+    );
+  }
+
+  /// Barra de botones en la parte inferior idéntica a la pantalla de adopción
+  Widget _barraBotones() {
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+        child: Row(
+          children: [
+            if (_paso > 0)
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: _enviando ? null : () => setState(() => _paso -= 1),
+                  child: const Text('Atrás'),
+                ),
+              ),
+            if (_paso > 0) const SizedBox(width: 12),
+            Expanded(
+              flex: _paso > 0 ? 2 : 1,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.rosa,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: _enviando
+                    ? null
+                    : (_paso < 2 ? _continuar : _enviar),
+                child: _enviando
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        _paso < 2
+                            ? 'Continuar'
+                            : 'Confirmar y descargar acuerdo',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Widget indicador de pasos visualmente idéntico al de adopción
+class _Pasos extends StatelessWidget {
+  final int paso;
+  const _Pasos({required this.paso});
+
+  @override
+  Widget build(BuildContext context) {
+    const etiquetas = ['Motivación', 'Documento', 'Compromiso'];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
+      child: Row(
+        children: [
+          for (var i = 0; i < etiquetas.length; i++) ...[
+            if (i > 0)
+              Expanded(
+                child: Container(
+                  height: 2,
+                  color: i <= paso ? AppColors.rosa : AppColors.bordeRosa,
+                ),
+              ),
+            Column(
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: i <= paso ? AppColors.rosa : AppColors.rosaClaro,
+                  child: Text(
+                    '${i + 1}',
+                    style: TextStyle(
+                      color: i <= paso ? Colors.white : AppColors.rosa,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  etiquetas[i],
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: i == paso ? AppColors.rosa : Colors.black54,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

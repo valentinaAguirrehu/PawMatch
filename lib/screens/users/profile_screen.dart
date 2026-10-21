@@ -4,7 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/user.dart';
+import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
+import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
@@ -14,7 +18,10 @@ const _pendiente = 'Sin completar';
 const _colorPendiente = Color(0xFFC62828);
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  /// Abre el formulario de edición en cuanto carga el perfil.
+  final bool iniciarEnEdicion;
+
+  const ProfileScreen({super.key, this.iniciarEnEdicion = false});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -52,6 +59,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _editando = widget.iniciarEnEdicion;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _cargar();
     });
@@ -109,6 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Session.apellidos = usuario.apellidos;
     Session.correo = usuario.correo;
     Session.telefono = usuario.telefono;
+    Session.documentoIdentidad = usuario.documentoIdentidad;
   }
 
   void _llenar(User usuario) {
@@ -293,6 +302,147 @@ class _ProfileScreenState extends State<ProfileScreen> {
             cargando: _cargando,
             onFoto: _elegirFoto,
           ),
+          if (!Session.isAdmin && !_editando) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Mis Solicitudes',
+              style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      ApadrinamientoService.marcarLeidasUsuario();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MisApadrinamientosScreen(),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.bordeRosa),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const CircleAvatar(
+                                backgroundColor: AppColors.rosaClaro,
+                                radius: 20,
+                                child: Icon(
+                                  Icons.volunteer_activism,
+                                  color: AppColors.rosa,
+                                  size: 20,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Apadrinamientos',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Estado y contratos',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      AdoptionService.marcarLeidasUsuario();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MyAdoptionsScreen(),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.bordeRosa),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const CircleAvatar(
+                                backgroundColor: AppColors.rosaClaro,
+                                radius: 20,
+                                child: Icon(
+                                  Icons.pets,
+                                  color: AppColors.rosa,
+                                  size: 20,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Adopciones',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Estado de adopción',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 22),
           Text(
             'Tu información',
@@ -407,20 +557,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
-        Text(
-          'Personalidad',
-          style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()),
+        if (!Session.isAdmin) ...[
+          const SizedBox(height: 28),
+          Text(
+            'Personalidad',
+            style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
-          icon: const FeatureIcon.compatibilidad(color: AppColors.rosa),
-          label: const Text('Mi personalidad'),
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
-        ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()),
+            ),
+            icon: const FeatureIcon.compatibilidad(color: AppColors.rosa),
+            label: const Text('Mi personalidad'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+          ),
+        ],
         const SizedBox(height: 28),
       Text(
         'Contraseña',

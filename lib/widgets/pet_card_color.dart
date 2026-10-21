@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 
 /// Tarjeta grande con fondo de color para el carrusel del inicio.
@@ -126,8 +127,27 @@ class PetCardColor extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                // Botones de acción abajo
-                if (_esApadrinada)
+                if (pet.estaAdoptada)
+                  Container(
+                    width: double.infinity,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      pet.mensajeFamiliaPara(Session.idUsuario),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: AppColors.rosa,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
+                    ),
+                  )
+                else if (_esApadrinada)
                   // Solo sale el botón por adoptar
                   SizedBox(
                     width: double.infinity,

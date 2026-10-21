@@ -1,24 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
-import 'package:paw_match/core/fundacion_info.dart';
-import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/screens/adoption/adoption_requests_admin_screen.dart';
+import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
+import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
-import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
-import 'package:paw_match/screens/pets/pet_detail_screen.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
-import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
-import 'package:paw_match/widgets/feature_icon.dart';
-import 'package:paw_match/widgets/fundacion_banner.dart';
-import 'package:paw_match/widgets/pet_card_color.dart';
+import 'package:paw_match/widgets/acordeon_inicio.dart';
+import 'package:paw_match/widgets/cta_inicio.dart';
+import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
+import 'package:paw_match/widgets/fila_punto.dart';
+import 'package:paw_match/widgets/foto_tarjeta.dart';
+import 'package:paw_match/widgets/hero_inicio.dart';
+import 'package:paw_match/widgets/impacto_carrusel.dart';
+import 'package:paw_match/widgets/manifiesto_inicio.dart';
+import 'package:paw_match/widgets/punto_inicio.dart';
+import 'package:paw_match/widgets/seccion_inicio.dart';
 
-/// Pestaña "Inicio": saludo, buscador, Fundación y perros para adoptar o apadrinar.
+/// Pestaña "Inicio": hero con foto, secciones interactivas y llamado final.
 class HomeTab extends StatefulWidget {
   final VoidCallback onVerMascotas;
+  final VoidCallback onVerMatch;
+
   const HomeTab({
     super.key,
     required this.onVerMascotas,
+    required this.onVerMatch,
   });
 
   @override
@@ -26,98 +35,43 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
-  late Future<List<Pet>> _future = PetsService.listar();
-
-  Future<void> _recargar() async {
-    setState(() {
-      _future = PetsService.listar();
-    });
-    await _future.catchError((_) => <Pet>[]);
+  void _abrirAdopciones() {
+    if (Session.esAdmin) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AdoptionRequestsAdminScreen()),
+      );
+    } else {
+      AdoptionService.marcarLeidasUsuario();
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MyAdoptionsScreen()),
+      );
+    }
   }
 
-  /// Perros disponibles para adopción o apadrinamiento.
-  List<Pet> _filtrar(List<Pet> pets) => pets.where((p) {
-    if (p.especie.toLowerCase() != 'perro') return false;
-    return p.estadoAdopcion.toLowerCase() != 'adoptado';
-  }).toList();
-
-  void _mostrarInfo(String titulo, String texto) => showModalBottomSheet(
-    context: context,
-    showDragHandle: true,
-    builder: (ctx) {
-      final t = Theme.of(ctx).textTheme;
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              titulo,
-              style: t.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: AppColors.rosa,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(texto, style: t.bodyLarge?.copyWith(height: 1.5)),
-          ],
-        ),
+  void _abrirApadrinamientos() {
+    if (Session.esAdmin) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ApadrinamientoAdminScreen()),
       );
-    },
-  );
-
-  void _abrirDetalle(Pet pet) => Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => PetDetailScreen(pet: pet)),
-  );
-
-  void _abrirApadrinamiento(Pet pet) {
-    SolicitudApadrinamientoDialog.mostrar(
-      context,
-      pet: pet,
-      onEnviadaExitosamente: _recargar,
-    );
+    } else {
+      ApadrinamientoService.marcarLeidasUsuario();
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MisApadrinamientosScreen()),
+      );
+    }
   }
 
   Future<void> _confirmarCerrarSesion() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Row(
-          children: [
-            Icon(Icons.logout, color: AppColors.rosa),
-            SizedBox(width: 10),
-            Text('Cerrar sesión'),
-          ],
-        ),
-        content: const Text(
-          '¿Estás seguro de que deseas cerrar sesión?',
-          style: TextStyle(fontSize: 15),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.rosa,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Sí, cerrar sesión'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar == true && mounted) {
+    final confirmar = await DialogoCerrarSesion.mostrar(context);
+    if (confirmar && mounted) {
       ApadrinamientoService.detenerMonitoreo();
+      AdoptionService.detenerMonitoreo();
       Session.cerrar();
-      Navigator.pushAndRemoveUntil(
-        context,
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const WelcomeScreen()),
         (_) => false,
       );
@@ -126,184 +80,117 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    return SafeArea(
-      bottom: false,
-      child: RefreshIndicator(
-        onRefresh: _recargar,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          children: [
-            // Encabezado
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('¡Hola, ${Session.nombre}! 👋', style: t.bodyLarge),
-                      Text(
-                        'Encuentra a tu\ncompañero ideal',
-                        style: t.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.texto,
-                          height: 1.15,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton.filledTonal(
-                  tooltip: 'Cerrar sesión',
-                  onPressed: _confirmarCerrarSesion,
-                  icon: const FeatureIcon.cerrarSesion(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Buscador (lleva a la lista completa, que ya tiene búsqueda y filtros)
-            Material(
-              color: AppColors.rosaSuave,
-              shape: const StadiumBorder(
-                side: BorderSide(color: AppColors.bordeRosa),
+    return ColoredBox(
+      color: AppColors.rosaClaro,
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          HeroInicio(
+            nombre: Session.nombre,
+            onCerrarSesion: _confirmarCerrarSesion,
+            onVerMascotas: widget.onVerMascotas,
+            onAdopciones: _abrirAdopciones,
+            onApadrinamientos: _abrirApadrinamientos,
+          ),
+          SeccionInicio(
+            titulo: 'Adoptar es Dar una Segunda Oportunidad',
+            texto:
+                'Adoptar no es solo llevar una mascota a casa; es salvar dos vidas: la del animal que acoges con amor y la del próximo rescatado que podrá ocupar su lugar en el refugio.',
+            hijos: [
+              FotoTarjeta(
+                asset: 'assets/images/inicio/familia.jpg',
+                alto: 220,
+                pie: 'Toca para conocer a tu alma gemela',
+                onTap: widget.onVerMatch,
               ),
-              child: InkWell(
-                customBorder: const StadiumBorder(),
-                onTap: widget.onVerMascotas,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
+              const SizedBox(height: 16),
+              const AcordeonInicio(
+                items: [
+                  PuntoInicio(
+                    icono: Icons.favorite_rounded,
+                    titulo: 'Amor incondicional y gratitud',
+                    texto:
+                        'Los animales rescatados desarrollan un vínculo único y profundo con quienes les abren las puertas de su hogar.',
                   ),
-                  child: Row(
-                    children: [
-                      const FeatureIcon.buscar(color: AppColors.texto),
-                      const SizedBox(width: 10),
-                      Text('Buscar mascotas...', style: t.bodyLarge),
-                    ],
+                  PuntoInicio(
+                    icono: Icons.loop_rounded,
+                    titulo: 'Rompemos el ciclo del abandono',
+                    texto:
+                        'Al elegir la adopción frente a la compra, desincentivas el comercio e impulsas el bienestar colectivo.',
                   ),
-                ),
+                  PuntoInicio(
+                    icono: Icons.home_rounded,
+                    titulo: 'Un nuevo miembro en tu familia',
+                    texto:
+                        'Adoptar llena tu vida de alegría, compañía sincera y momentos inolvidables.',
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // Fundación (misión y visión)
-            FundacionBanner(
-              onMision: () =>
-                  _mostrarInfo('Nuestra misión', FundacionInfo.mision),
-              onVision: () =>
-                  _mostrarInfo('Nuestra visión', FundacionInfo.vision),
-            ),
-            const SizedBox(height: 24),
-
-            // Encabezado sección perritos
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Nuestros perritos',
-                    style: t.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.texto,
-                    ),
-                  ),
-                ),
-                ValueListenableBuilder<int>(
-                  valueListenable: ApadrinamientoService.noLeidasUsuario,
-                  builder: (context, count, child) => Badge(
-                    isLabelVisible: count > 0,
-                    label: Text(count > 1 ? '$count' : 'Nuevo'),
-                    backgroundColor: Colors.redAccent,
-                    textColor: Colors.white,
-                    child: TextButton.icon(
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.rosa,
-                      ),
-                      icon: const Icon(Icons.volunteer_activism, size: 16),
-                      label: const Text('Mis apadrinamientos'),
-                      onPressed: () {
-                        ApadrinamientoService.marcarLeidasUsuario();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MisApadrinamientosScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: widget.onVerMascotas,
-                  child: const Text('Ver todos'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            FutureBuilder<List<Pet>>(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const SizedBox(
-                    height: 280,
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                if (snap.hasError) {
-                  return SizedBox(
-                    height: 200,
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const FeatureIcon.sinConexion(tamano: 40),
-                          const SizedBox(height: 8),
-                          const Text('No pudimos cargar las mascotas'),
-                          TextButton(
-                            onPressed: _recargar,
-                            child: const Text('Reintentar'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                final pets = _filtrar(snap.data!);
-                if (pets.isEmpty) {
-                  return SizedBox(
-                    height: 160,
-                    child: Center(
-                      child: Text(
-                        Session.isAdmin
-                            ? 'No hay perros en esta categoría. Agrégalos desde "Gestionar".'
-                            : 'Pronto verás aquí a los peludos que buscan hogar.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  );
-                }
-                final visibles = pets.take(10).toList();
-                return SizedBox(
-                  height: 330,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: visibles.length,
-                    separatorBuilder: (_, index) => const SizedBox(width: 14),
-                    itemBuilder: (_, i) => PetCardColor(
-                      pet: visibles[i],
-                      color: AppColors.pastel[i % AppColors.pastel.length],
-                      onTap: () => _abrirDetalle(visibles[i]),
-                      onAdoptar: () => _abrirDetalle(visibles[i]),
-                      onApadrinar: () => _abrirApadrinamiento(visibles[i]),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
+            ],
+          ),
+          SeccionInicio(
+            fondo: AppColors.rosaSuave,
+            curvaSuperior: true,
+            titulo:
+                '¿Qué significa Apadrinar y por qué tu ayuda transforma vidas?',
+            texto:
+                'No todos pueden adoptar en este momento por espacio, tiempo o estilo de vida, ¡y está bien! Apadrinar es ser el ángel guardián de un animal rescatado mientras encuentra un hogar definitivo o pasa sus días en el refugio.',
+            hijos: [
+              const FotoTarjeta(
+                asset: 'assets/images/inicio/juntos.jpg',
+                alto: 220,
+              ),
+              const SizedBox(height: 18),
+              const FilaPunto(
+                icono: Icons.restaurant_rounded,
+                titulo: 'Tu aporte mensual asegura',
+                texto:
+                    'Su alimentación diaria, atención médica, vacunas, tratamientos y un espacio seguro.',
+              ),
+              const FilaPunto(
+                icono: Icons.photo_camera_rounded,
+                titulo: 'Un vínculo real',
+                texto:
+                    'Recibes noticias periódicas, fotografías y actualizaciones del estado y progreso de tu ahijado.',
+              ),
+              const FilaPunto(
+                icono: Icons.favorite_border_rounded,
+                titulo: 'Amor a la distancia',
+                texto:
+                    'Puedes visitarlo, brindarle cariño y acompañarlo en su proceso de recuperación y socialización.',
+                ultimo: true,
+              ),
+            ],
+          ),
+          const ImpactoCarrusel(
+            titulo: 'Todo lo que construyes cuando decides actuar',
+            items: [
+              PuntoInicio(
+                icono: Icons.healing_rounded,
+                titulo: 'Sanamos heridas físicas y emocionales',
+                texto:
+                    'Tu apoyo permite rehabilitar animales con traumas, desnutrición o enfermedades, devolviéndoles la confianza y la alegría.',
+              ),
+              PuntoInicio(
+                icono: Icons.groups_rounded,
+                titulo: 'Fortaleces la labor comunitaria',
+                texto:
+                    'Respaldas a los refugios y rescatistas para que continúen salvando vidas, cubriendo gastos veterinarios y manteniendo instalaciones dignas.',
+              ),
+              PuntoInicio(
+                icono: Icons.spa_rounded,
+                titulo: 'Creas conciencia ambiental y social',
+                texto:
+                    'Fomentas el control ético de la población animal a través de la esterilización y promueves una sociedad más empática.',
+              ),
+            ],
+          ),
+          const ManifiestoInicio(),
+          CtaInicio(
+            onVerMascotas: widget.onVerMascotas,
+            onVerMatch: widget.onVerMatch,
+          ),
+        ],
       ),
     );
   }

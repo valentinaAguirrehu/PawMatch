@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
+import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 class MisApadrinamientosScreen extends StatefulWidget {
@@ -42,6 +45,92 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     final url =
         'https://wa.me/$numero?text=${Uri.encodeComponent(mensaje)}';
     abrirEnlace(context, url, nombre: 'WhatsApp de la Fundación');
+  }
+
+  Future<void> _verDetallesMascota(String idMascota) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final pet = await PetsService.obtener(idMascota);
+      if (!mounted) return;
+      Navigator.pop(context); // cerrar diálogo de espera
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PetDetailScreen(pet: pet),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo cargar la mascota: $e')),
+      );
+    }
+  }
+
+  Future<void> _verContrato(SolicitudApadrinamiento s) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final bytes = await ApadrinamientoService.obtenerBytesContrato(s.id);
+      if (!mounted) return;
+      Navigator.pop(context); // cerrar diálogo de espera
+
+      final esPdf = bytes.length >= 4 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46; // %PDF
+
+      if (esPdf) {
+        await Printing.layoutPdf(
+          onLayout: (_) => bytes,
+          name: 'Contrato_Apadrinamiento_${s.mascotaNombre}.pdf',
+        );
+        return;
+      }
+
+      showDialog(
+        context: context,
+        builder: (ctx) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              title: Text('Contrato de Apadrinamiento - ${s.mascotaNombre}'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            body: Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al cargar contrato: $e'),
+        ),
+      );
+    }
   }
 
   @override
@@ -124,9 +213,20 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
               itemBuilder: (context, i) {
                 final s = lista[i];
                 final color = switch (s.estado) {
-                  'aprobada' => Colors.green,
+                  'aprobada' =>
+                    s.tieneContrato ? Colors.green : Colors.amber.shade800,
                   'rechazada' => Colors.redAccent,
+                  'cancelada' => Colors.blueGrey,
                   _ => Colors.orange,
+                };
+
+                final estadoTexto = switch (s.estado) {
+                  'aprobada' => s.tieneContrato
+                      ? 'APROBADA (PADRINO OFICIAL)'
+                      : 'APROBADA (ESPERANDO CONTRATO)',
+                  'rechazada' => 'RECHAZADA',
+                  'cancelada' => 'CANCELADA',
+                  _ => 'PENDIENTE',
                 };
 
                 return Card(
@@ -154,7 +254,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                               border: Border.all(color: color),
                             ),
                             child: Text(
-                              s.estado.toUpperCase(),
+                              estadoTexto,
                               style: TextStyle(
                                 color: color,
                                 fontWeight: FontWeight.bold,
@@ -229,130 +329,317 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                                   fontSize: 13,
                                 ),
                               ),
+                              const SizedBox(height: 10),
+                              OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.rosa,
+                                  side: const BorderSide(color: AppColors.rosa),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.pets, size: 18),
+                                label: Text('Ver perfil de ${s.mascotaNombre}'),
+                                onPressed: () => _verDetallesMascota(s.idMascota),
+                              ),
                             ],
                           ),
                         ),
                         const Divider(height: 24),
+
+                        // ESTADO APROBADA
                         if (s.esAprobada) ...[
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.green.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Row(
-                                  children: [
-                                    Icon(Icons.stars, color: Colors.green),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      '¡Eres padrino oficial! 🎉',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
+                          if (!s.tieneContrato) ...[
+                            // PASO PENDIENTE: ESPERANDO CONTRATO
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.shade50,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.amber.shade400,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.hourglass_top_rounded,
+                                        color: Colors.amber.shade900,
+                                        size: 24,
                                       ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '¡Solicitud aprobada! Falta 1 paso ⏳',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: Colors.amber.shade900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Tu solicitud para apadrinar a ${s.mascotaNombre} ha sido aprobada por la fundación.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey.shade900,
                                     ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '📅 Fecha oficial de inicio: ${s.fechaInicioApadrinamiento ?? 'Activo'}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Contacto oficial: Fundación Maritza Arévalo (+${FundacionInfo.whatsappNumero.isNotEmpty ? FundacionInfo.whatsappNumero : '573136177747'})',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade800,
-                                  ),
-                                ),
-                                if (s.observaciones != null &&
-                                    s.observaciones!.trim().isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Container(
-                                    width: double.infinity,
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.green.shade200),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Colors.amber.shade300,
+                                      ),
                                     ),
-                                    child: Column(
+                                    child: Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Row(
-                                          children: [
-                                            Icon(Icons.rate_review_outlined,
-                                                size: 15, color: Colors.green),
-                                            SizedBox(width: 6),
-                                            Text(
-                                              'Observaciones de la fundación:',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                                color: Colors.green,
-                                              ),
-                                            ),
-                                          ],
+                                        Icon(
+                                          Icons.assignment_outlined,
+                                          color: Colors.amber.shade900,
+                                          size: 20,
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          s.observaciones!,
-                                          style: const TextStyle(
-                                            fontSize: 12.5,
-                                            height: 1.35,
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Aún falta un paso: debes esperar que el administrador suba el contrato de apadrinamiento firmado. Una vez lo suba, serás formalmente el padrino de ${s.mascotaNombre} y podrás descargarlo aquí.',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.amber.shade900,
+                                              height: 1.35,
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
+                                  if (s.observaciones != null &&
+                                      s.observaciones!.trim().isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Indicaciones de la fundación: ${s.observaciones}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontStyle: FontStyle.italic,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.orange.shade200),
-                                  ),
-                                  child: const Row(
+                              ),
+                            ),
+                          ] else ...[
+                            // YA TIENE CONTRATO: PADRINO OFICIAL
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade50,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.green.shade300,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
                                     children: [
-                                      Icon(Icons.info_outline, size: 16, color: Colors.orange),
-                                      SizedBox(width: 6),
+                                      Icon(Icons.verified, color: Colors.green, size: 24),
+                                      SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
-                                          'Debes contactar a la fundación por WhatsApp para coordinar los últimos permisos y requerimientos oficiales.',
-                                          style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.deepOrange),
+                                          '¡Eres padrino oficial! 🎉',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: Colors.green,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF25D366),
-                              foregroundColor: Colors.white,
-                              minimumSize: const Size.fromHeight(48),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '📅 Fecha oficial de inicio: ${s.fechaInicioApadrinamiento ?? 'Activo'}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Contacto oficial: Fundación Maritza Arévalo (+${FundacionInfo.whatsappNumero.isNotEmpty ? FundacionInfo.whatsappNumero : '573136177747'})',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                  if (s.observaciones != null &&
+                                      s.observaciones!.trim().isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.green.shade200),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Row(
+                                            children: [
+                                              Icon(Icons.rate_review_outlined,
+                                                  size: 15, color: Colors.green),
+                                              SizedBox(width: 6),
+                                              Text(
+                                                'Observaciones de la fundación:',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                  color: Colors.green,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            s.observaciones!,
+                                            style: const TextStyle(
+                                              fontSize: 12.5,
+                                              height: 1.35,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.rosa,
+                                      minimumSize: const Size.fromHeight(44),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.assignment_turned_in),
+                                    label: const Text(
+                                      'Ver Contrato de Apadrinamiento',
+                                      style: TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () => _verContrato(s),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFF25D366),
+                                      foregroundColor: Colors.white,
+                                      minimumSize: const Size.fromHeight(44),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.chat_bubble_outline),
+                                    label: const Text(
+                                      'Contactar por WhatsApp a la Fundación',
+                                      style: TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    onPressed: () => _contactarWhatsApp(s),
+                                  ),
+                                ],
                               ),
                             ),
-                            icon: const Icon(Icons.chat_bubble_outline),
-                            label: const Text(
-                              'Contactar por WhatsApp a la Fundación',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                          ],
+                        ] else if (s.esCancelada) ...[
+                          // ESTADO CANCELADA
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: Colors.red.shade300,
+                                width: 1.5,
+                              ),
                             ),
-                            onPressed: () => _contactarWhatsApp(s),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.cancel,
+                                      color: Colors.redAccent,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Apadrinamiento cancelado por la administración',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14.5,
+                                          color: Colors.red.shade900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Motivo de la cancelación informado por la fundación:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Text(
+                                    s.observaciones?.trim().isNotEmpty == true
+                                        ? s.observaciones!
+                                        : 'No se detalló un motivo específico.',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.black87,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                ),
+                                if (s.fechaActualizacionEstado != null) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Fecha de cancelación: ${s.fechaActualizacionEstado}',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ] else if (s.esPendiente) ...[
                           Text(
@@ -373,12 +660,32 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Motivo u observaciones:',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.redAccent,
-                                  ),
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Motivo u observaciones:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.redAccent,
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade100,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        'Rechazada ${s.vecesRechazada} ${s.vecesRechazada == 1 ? 'vez' : 'veces'}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red.shade900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(

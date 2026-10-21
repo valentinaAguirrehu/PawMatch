@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
-import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/pets_admin_screen.dart';
 import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
@@ -11,6 +10,7 @@ import 'package:paw_match/screens/match/perfect_match.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
 import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
@@ -19,8 +19,6 @@ import 'package:paw_match/widgets/nav_flotante.dart';
 /// Opciones del menú desplegable del administrador (último ícono de la barra).
 enum _Gestion {
   mascotas('Mascotas', Icons.pets),
-  adopcion('Adopción', Icons.favorite_border),
-  apadrinamiento('Apadrinamiento', Icons.volunteer_activism),
   seguimiento('Seguimiento de adopción', Icons.timeline),
   usuarios('Usuarios', Icons.people_outline),
   administradores('Administradores', Icons.admin_panel_settings_outlined),
@@ -37,14 +35,18 @@ class MenuScreen extends StatefulWidget {
 
   const MenuScreen({super.key, this.indiceInicial = 0});
 
-  /// Match perfecto solo está en la barra de quien no administra.
-  static int get indiceMatch => Session.isAdmin ? 0 : 2;
+  /// Match perfecto está en el centro para el usuario (índice 1).
+  static int get indiceMatch => Session.isAdmin ? 0 : 1;
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
 class _MenuScreenState extends State<MenuScreen> {
+  /// Pestaña central del administrador: gestión.
+  /// Inicio = 0, Gestionar = 1, Perfil = 2.
+  static const int _indiceGestionAdmin = 1;
+
   late int _index;
   _Gestion _seccion = _Gestion.mascotas;
 
@@ -57,13 +59,16 @@ class _MenuScreenState extends State<MenuScreen> {
   void initState() {
     super.initState();
     final pedido = widget.indiceInicial;
-    _index = (pedido >= 0 && pedido <= 3) ? pedido : 0;
+    const maximo = 2;
+    _index = (pedido >= 0 && pedido <= maximo) ? pedido : 0;
     ApadrinamientoService.iniciarMonitoreo();
+    AdoptionService.iniciarMonitoreo();
   }
 
   @override
   void dispose() {
     ApadrinamientoService.detenerMonitoreo();
+    AdoptionService.detenerMonitoreo();
     super.dispose();
   }
 
@@ -89,7 +94,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   void _alTocarPestana(int i) {
     // Último ícono (solo administrador): abre el menú desplegable
-    if (Session.isAdmin && i == 3) {
+    if (Session.isAdmin && i == _indiceGestionAdmin) {
       _mostrarMenuGestion();
       return;
     }
@@ -103,6 +108,25 @@ class _MenuScreenState extends State<MenuScreen> {
 
   void _irA(int i) => _alTocarPestana(i);
 
+  /// El administrador no tiene la pestaña Mascotas. Desde Inicio, la búsqueda
+  /// abre la misma lista en una pantalla aparte.
+  void _abrirListaMascotas() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Mascotas')),
+          body: const PetScreen(),
+        ),
+      ),
+    );
+  }
+
+  void _abrirMatch() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PerfectMatchScreen()),
+    );
+  }
+
   Future<void> _mostrarMenuGestion() async {
     final tam = MediaQuery.of(context).size;
     final inferior = MediaQuery.of(context).padding.bottom;
@@ -115,9 +139,9 @@ class _MenuScreenState extends State<MenuScreen> {
     final elegida = await showMenu<_Gestion>(
       context: context,
       position: RelativeRect.fromLTRB(
-        tam.width - 270, // pegado a la derecha, bajo el último ícono
+        (tam.width - 270) / 2, // centrado sobre el botón central de gestión
         tam.height - inferior - altoBarra - altoMenu,
-        16,
+        (tam.width - 270) / 2,
         0,
       ),
       color: Colors.white,
@@ -132,31 +156,6 @@ class _MenuScreenState extends State<MenuScreen> {
                 Icon(g.icono, size: 20, color: AppColors.rosa),
                 const SizedBox(width: 12),
                 Expanded(child: Text(g.etiqueta)),
-                if (g == _Gestion.apadrinamiento)
-                  ValueListenableBuilder<int>(
-                    valueListenable: ApadrinamientoService.noLeidasAdmin,
-                    builder: (context, count, _) {
-                      if (count == 0) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '$count',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
               ],
             ),
           ),
@@ -164,22 +163,13 @@ class _MenuScreenState extends State<MenuScreen> {
     );
 
     if (elegida != null && mounted) {
-      if (elegida == _Gestion.apadrinamiento) {
-        ApadrinamientoService.marcarLeidasAdmin();
-      }
-      _cambiarA(3, seccion: elegida);
+      _cambiarA(_indiceGestionAdmin, seccion: elegida);
     }
   }
 
   /// Pantalla que se muestra en la pestaña "Gestionar" según la opción elegida.
   Widget _paginaGestion() => switch (_seccion) {
     _Gestion.mascotas => const PetsAdminScreen(),
-    _Gestion.adopcion => const SeccionAdminScreen(
-      titulo: 'Solicitudes de adopción',
-      icono: Icons.favorite_border,
-      detalle: 'Aquí revisarás y responderás las solicitudes de adopción.',
-    ),
-    _Gestion.apadrinamiento => const ApadrinamientoAdminScreen(),
     _Gestion.seguimiento => const SeccionAdminScreen(
       titulo: 'Seguimiento de adopción',
       icono: Icons.timeline,
@@ -229,14 +219,16 @@ class _MenuScreenState extends State<MenuScreen> {
 
     if (confirmar == true && mounted) {
       ApadrinamientoService.detenerMonitoreo();
+      AdoptionService.detenerMonitoreo();
       Session.cerrar();
-      Navigator.pushAndRemoveUntil(
-        context,
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const WelcomeScreen()),
         (_) => false,
       );
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -244,16 +236,14 @@ class _MenuScreenState extends State<MenuScreen> {
 
     final paginas = <Widget>[
       HomeTab(
-        onVerMascotas: () => _irA(1),
+        onVerMascotas: _abrirListaMascotas,
+        onVerMatch: () => isAdmin ? _abrirMatch() : _irA(1),
       ),
-      const PetScreen(),
-      if (isAdmin) ...[
-        const ProfileScreen(),
-        _paginaGestion(),
-      ] else ...[
+      if (isAdmin)
+        _paginaGestion()
+      else
         const PerfectMatchScreen(),
-        const ProfileScreen(),
-      ],
+      const ProfileScreen(),
     ];
     final paginaActual = paginas[_index];
 
@@ -274,6 +264,11 @@ class _MenuScreenState extends State<MenuScreen> {
                 title: const Text('Paw Match'),
                 actions: [
                   IconButton(
+                    tooltip: 'Ver Mascotas',
+                    icon: const Icon(Icons.pets, color: AppColors.rosa),
+                    onPressed: _abrirListaMascotas,
+                  ),
+                  IconButton(
                     tooltip: 'Cerrar sesión',
                     icon: const FeatureIcon.cerrarSesion(),
                     onPressed: _confirmarCerrarSesion,
@@ -290,31 +285,30 @@ class _MenuScreenState extends State<MenuScreen> {
           indice: _index,
           onTap: _alTocarPestana,
           items: [
-            const NavItem(FeatureIcon.inicio(), 'Inicio'),
-            const NavItem(FeatureIcon.mascota(tamano: 24), 'Mascotas'),
-            if (isAdmin) ...[
-              const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
-              NavItem(
-                ValueListenableBuilder<int>(
-                  valueListenable: ApadrinamientoService.noLeidasAdmin,
-                  builder: (context, count, child) => Badge(
-                    isLabelVisible: count > 0,
-                    label: Text('$count'),
-                    backgroundColor: Colors.redAccent,
-                    textColor: Colors.white,
-                    child: child!,
-                  ),
-                  child: const FeatureIcon.gestionar(),
-                ),
-                'Gestionar',
-              ),
-            ] else ...[
+            const NavItem(
+              icono: Icon(Icons.home_outlined),
+              iconoActivo: Icon(Icons.home_rounded),
+              etiqueta: 'Inicio',
+            ),
+            if (isAdmin)
               const NavItem(
-                FeatureIcon.compatibilidad(tamano: 24),
-                'Match perfecto',
+                icono: Icon(Icons.tune_rounded),
+                iconoActivo: Icon(Icons.tune_rounded),
+                etiqueta: 'Gestionar',
+                esDestacado: true,
+              )
+            else
+              const NavItem(
+                icono: Icon(Icons.favorite_border_rounded),
+                iconoActivo: Icon(Icons.favorite_rounded),
+                etiqueta: 'Match perfecto',
+                esDestacado: true,
               ),
-              const NavItem(FeatureIcon.perfil(tamano: 24), 'Perfil'),
-            ],
+            const NavItem(
+              icono: Icon(Icons.person_outline_rounded),
+              iconoActivo: Icon(Icons.person_rounded),
+              etiqueta: 'Perfil',
+            ),
           ],
         ),
       ),
@@ -324,6 +318,8 @@ class _MenuScreenState extends State<MenuScreen> {
 
 /// Cuenta cuántas pantallas hay abiertas encima de la principal de la pestaña
 /// (ignora diálogos, menús emergentes y bottom sheets).
+
+
 class _ObservadorPaginas extends NavigatorObserver {
   _ObservadorPaginas(this.onCambio);
 

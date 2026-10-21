@@ -57,6 +57,12 @@ const petSelect = `
          m.tamano, m.descripcion, m.esterilizado, m.vacunas, m.fotos,
          m.estado_adopcion, m.estado_apadrinamiento,
          to_char(m.fecha_ingreso, 'YYYY-MM-DD') AS fecha_ingreso,
+         (SELECT s.id_usuario
+            FROM solicitudadopcion s
+           WHERE s.id_mascota = m.id_mascota
+             AND s.estado = 'aprobada'
+           ORDER BY s.fecha_actualizacion_estado DESC NULLS LAST
+           LIMIT 1) AS id_usuario_adoptante,
          CASE WHEN pm.id_mascota IS NULL THEN '{}'::json ELSE json_build_object(
            'nivel_energia', pm.nivel_energia,
            'sociabilidad_personas', pm.sociabilidad_personas,
