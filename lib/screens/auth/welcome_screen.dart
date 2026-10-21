@@ -164,12 +164,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final escritorio = ancho >= Layout.escritorio;
     final pad = escritorio ? 24.0 : 16.0;
     final interior = escritorio ? 40.0 : 22.0;
-    final contenido = math.min(ancho, Layout.anchoMaximo) - 2 * pad;
+    final contenido = math.max(0.0, math.min(ancho, Layout.anchoMaximo) - 2 * pad);
+    final anchoInterior = math.max(0.0, contenido - 2 * interior);
     final m = _Medidas(
       escritorio,
       ancho,
       interior,
-      contenido - 2 * interior,
+      anchoInterior,
       escritorio ? 40 : 28,
     );
     const separacion = SizedBox(height: 16);
@@ -494,10 +495,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         .take(4)
         .toList();
 
-    final columnas = m.escritorio ? 4 : (m.ancho >= Layout.tablet ? 3 : 2);
-    const sep = 14.0;
-    final w = (m.anchoInterior - sep * (columnas - 1)) / columnas;
-
     Widget cuerpo;
     if (_cargando) {
       cuerpo = const Padding(
@@ -522,22 +519,30 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         ),
       );
     } else {
-      cuerpo = Wrap(
-        spacing: sep,
-        runSpacing: sep,
-        alignment: WrapAlignment.center,
-        children: [
-          for (final p in perros)
-            SizedBox(
-              width: w,
-              height: 440,
-              child: PerritoLandingCard(
-                pet: p,
-                paraAdopcion: true,
-                onTap: () => _pedirCuenta(pet: p, adopcion: true),
-              ),
-            ),
-        ],
+      cuerpo = LayoutBuilder(
+        builder: (context, constraints) {
+          final maxW = math.max(0.0, constraints.maxWidth);
+          final columnas = maxW >= 900 ? 4 : (maxW >= 560 ? 2 : 1);
+          const sep = 14.0;
+          final w = math.max(120.0, (maxW - sep * (columnas - 1)) / columnas);
+          return Wrap(
+            spacing: sep,
+            runSpacing: sep,
+            alignment: WrapAlignment.center,
+            children: [
+              for (final p in perros)
+                SizedBox(
+                  width: w,
+                  height: 440,
+                  child: PerritoLandingCard(
+                    pet: p,
+                    paraAdopcion: true,
+                    onTap: () => _pedirCuenta(pet: p, adopcion: true),
+                  ),
+                ),
+            ],
+          );
+        },
       );
     }
 
@@ -563,10 +568,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   // ───────────── 6. Ayuda y contacto ─────────────
   Widget _ayuda(_Medidas m) {
-    final columnas = m.ancho >= Layout.tablet ? 2 : 1;
-    const sep = 14.0;
-    final w = (m.anchoInterior - sep * (columnas - 1)) / columnas;
-
     final tarjetas = [
       TarjetaAyuda(
         icono: Icons.home_outlined,
@@ -620,14 +621,22 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 alineacion: TextAlign.center,
               ),
               const SizedBox(height: 20),
-              Wrap(
-                spacing: sep,
-                runSpacing: sep,
-                alignment: WrapAlignment.center,
-                children: [
-                  for (final tarjeta in tarjetas)
-                    SizedBox(width: w, height: 220, child: tarjeta),
-                ],
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final maxW = math.max(0.0, constraints.maxWidth);
+                  final columnas = maxW >= Layout.tablet ? 2 : 1;
+                  const sep = 14.0;
+                  final w = math.max(120.0, (maxW - sep * (columnas - 1)) / columnas);
+                  return Wrap(
+                    spacing: sep,
+                    runSpacing: sep,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final tarjeta in tarjetas)
+                        SizedBox(width: w, height: 220, child: tarjeta),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 28),
               _contactoContenido(m),

@@ -10,11 +10,13 @@ class SolicitudApadrinamiento {
   final String? observaciones;
   final String? fechaActualizacionEstado;
   final String? documentoIdentidadArchivo;
+  final String? contratoArchivo;
   final bool acuerdoResponsabilidad;
   final String? fechaAcuerdoResponsabilidad;
   final String? fechaInicioApadrinamiento;
   final bool leidoAdmin;
   final bool leidoUsuario;
+  final int vecesRechazada;
 
   // Datos agregados del solicitante
   final String solicitanteNombres;
@@ -43,11 +45,13 @@ class SolicitudApadrinamiento {
     this.observaciones,
     this.fechaActualizacionEstado,
     this.documentoIdentidadArchivo,
+    this.contratoArchivo,
     this.acuerdoResponsabilidad = false,
     this.fechaAcuerdoResponsabilidad,
     this.fechaInicioApadrinamiento,
     this.leidoAdmin = false,
     this.leidoUsuario = true,
+    this.vecesRechazada = 1,
     this.solicitanteNombres = '',
     this.solicitanteApellidos = '',
     this.solicitanteCorreo = '',
@@ -74,6 +78,9 @@ class SolicitudApadrinamiento {
   bool get esPendiente => estado == 'pendiente';
   bool get esAprobada => estado == 'aprobada';
   bool get esRechazada => estado == 'rechazada';
+  bool get esCancelada => estado == 'cancelada';
+  bool get tieneContrato =>
+      contratoArchivo != null && contratoArchivo!.trim().isNotEmpty;
 
   factory SolicitudApadrinamiento.fromJson(Map<String, dynamic> json) {
     return SolicitudApadrinamiento(
@@ -88,11 +95,15 @@ class SolicitudApadrinamiento {
       observaciones: json['observaciones']?.toString(),
       fechaActualizacionEstado: json['fecha_actualizacion_estado']?.toString(),
       documentoIdentidadArchivo: json['documento_identidad_archivo']?.toString(),
+      contratoArchivo: json['contrato_apadrinamiento_archivo']?.toString(),
       acuerdoResponsabilidad: json['acuerdo_responsabilidad'] == true || json['acuerdo_responsabilidad'] == 'true',
       fechaAcuerdoResponsabilidad: json['fecha_acuerdo_responsabilidad']?.toString(),
       fechaInicioApadrinamiento: json['fecha_inicio_apadrinamiento']?.toString(),
       leidoAdmin: json['leido_admin'] == true || json['leido_admin'] == 'true',
       leidoUsuario: json['leido_usuario'] == true || json['leido_usuario'] == 'true',
+      vecesRechazada: json['veces_rechazada'] != null
+          ? (int.tryParse(json['veces_rechazada'].toString()) ?? 1)
+          : 1,
       solicitanteNombres: json['solicitante_nombres']?.toString() ?? '',
       solicitanteApellidos: json['solicitante_apellidos']?.toString() ?? '',
       solicitanteCorreo: json['solicitante_correo']?.toString() ?? '',

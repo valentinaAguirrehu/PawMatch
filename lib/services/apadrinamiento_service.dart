@@ -21,7 +21,7 @@ class ApadrinamientoService {
   };
 
   /// Envía una nueva solicitud de apadrinamiento con la foto del documento.
-  static Future<void> enviarSolicitud({
+  static Future<SolicitudApadrinamiento?> enviarSolicitud({
     required String idMascota,
     required String motivacion,
     int? montoAporte,
@@ -62,6 +62,16 @@ class ApadrinamientoService {
       } catch (_) {}
       throw Exception(mensaje);
     }
+
+    try {
+      final data = jsonDecode(utf8.decode(res.bodyBytes));
+      if (data is Map && data['solicitud'] != null) {
+        return SolicitudApadrinamiento.fromJson(
+          data['solicitud'] as Map<String, dynamic>,
+        );
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Lista solicitudes para el panel del administrador.
@@ -96,23 +106,66 @@ class ApadrinamientoService {
     return lista.map((j) => SolicitudApadrinamiento.fromJson(j as Map<String, dynamic>)).toList();
   }
 
-  /// Actualiza el estado de la solicitud (Aprobar o Rechazar).
+  /// Actualiza el estado de la solicitud (Aprobar, Rechazar o Cancelar).
   static Future<void> actualizarEstado({
     required String idSolicitud,
-    required String estado, // 'aprobada' o 'rechazada'
+    required String estado, // 'aprobada', 'rechazada' o 'cancelada'
     String? fechaInicio,
     String? observaciones,
   }) async {
     final uri = Uri.parse('$_url/$idSolicitud/estado');
     final body = jsonEncode({
       'estado': estado,
-      if (fechaInicio != null) 'fecha_inicio_apadrinamiento': fechaInicio,
-      if (observaciones != null) 'observaciones': observaciones,
+      ...?fechaInicio == null ? null : {'fecha_inicio_apadrinamiento': fechaInicio},
+      ...?observaciones == null ? null : {'observaciones': observaciones},
     });
 
     final res = await http.put(uri, headers: _headers, body: body);
     if (res.statusCode != 200) {
       String mensaje = 'No se pudo actualizar la solicitud';
+      try {
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
+        if (data is Map && data['error'] != null) {
+          mensaje = data['error'].toString();
+        }
+      } catch (_) {}
+      throw Exception(mensaje);
+    }
+  }
+
+  /// Cancela un apadrinamiento dejando el motivo obligatorio.
+  static Future<void> cancelarSolicitud({
+    required String idSolicitud,
+    required String motivo,
+  }) async {
+    return actualizarEstado(
+      idSolicitud: idSolicitud,
+      estado: 'cancelada',
+      observaciones: motivo,
+    );
+  }
+
+  /// Sube el contrato de apadrinamiento firmado (solo administrador).
+  static Future<void> subirContrato({
+    required String idSolicitud,
+    required Uint8List bytesContrato,
+    required String nombreArchivo,
+  }) async {
+    final uri = Uri.parse('$_url/$idSolicitud/contrato');
+    final req = http.MultipartRequest('POST', uri);
+    req.headers['x-usuario-id'] = Session.idUsuario ?? '';
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        'contrato',
+        bytesContrato,
+        filename: nombreArchivo,
+      ),
+    );
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      String mensaje = 'No se pudo subir el contrato';
       try {
         final data = jsonDecode(utf8.decode(res.bodyBytes));
         if (data is Map && data['error'] != null) {
@@ -132,6 +185,44 @@ class ApadrinamientoService {
       throw Exception('No tienes autorización o el documento no existe');
     }
     return res.bodyBytes;
+  }
+
+  /// Descarga segura de los bytes del contrato de apadrinamiento.
+  static Future<Uint8List> obtenerBytesContrato(String idSolicitud) async {
+    final uri = Uri.parse('$_url/$idSolicitud/contrato');
+    final res = await http.get(uri, headers: _headers);
+
+    if (res.statusCode != 200) {
+      throw Exception('No tienes autorización o el contrato no existe');
+    }
+    return res.bodyBytes;
+  }
+
+  /// Elimina el contrato de apadrinamiento (solo administrador).
+  static Future<void> eliminarContrato(String idSolicitud) async {
+    final uri = Uri.parse('$_url/$idSolicitud/contrato');
+    http.Response res = await http.delete(uri, headers: _headers);
+
+    // Si DELETE no está soportado o devuelve 404/405, intentar con POST
+    if (res.statusCode == 404 || res.statusCode == 405) {
+      final fallbackUri = Uri.parse('$_url/$idSolicitud/contrato/eliminar');
+      res = await http.post(fallbackUri, headers: _headers);
+    }
+
+    if (res.statusCode != 200) {
+      String mensaje = 'No se pudo eliminar el contrato (HTTP ${res.statusCode})';
+      try {
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
+        if (data is Map && data['error'] != null) {
+          mensaje = data['error'].toString();
+        }
+      } catch (_) {
+        if (res.body.isNotEmpty && !res.body.contains('<html')) {
+          mensaje = res.body;
+        }
+      }
+      throw Exception(mensaje);
+    }
   }
 
   /// Inicia monitoreo en segundo plano de notificaciones.

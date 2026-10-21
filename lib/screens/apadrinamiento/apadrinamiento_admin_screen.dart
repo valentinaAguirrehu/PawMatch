@@ -1,9 +1,13 @@
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
+import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart';
+import 'package:printing/printing.dart';
 
 class ApadrinamientoAdminScreen extends StatefulWidget {
   const ApadrinamientoAdminScreen({super.key});
@@ -15,13 +19,26 @@ class ApadrinamientoAdminScreen extends StatefulWidget {
 
 class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabCtrl = TabController(length: 3, vsync: this);
-  late Future<List<SolicitudApadrinamiento>> _future = _cargar();
+  late TabController _tabCtrl;
+  late Future<List<SolicitudApadrinamiento>> _future;
 
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 4, vsync: this);
+    _future = _cargar();
     ApadrinamientoService.marcarLeidasAdmin();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    // Asegurar que si hubo Hot Reload el TabController tenga la longitud exacta de 4
+    if (_tabCtrl.length != 4) {
+      final oldIndex = _tabCtrl.index.clamp(0, 3);
+      _tabCtrl.dispose();
+      _tabCtrl = TabController(length: 4, vsync: this, initialIndex: oldIndex);
+    }
   }
 
   @override
@@ -54,6 +71,8 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen>
             _tabCtrl.animateTo(1);
           } else if (nuevoEstado == 'rechazada') {
             _tabCtrl.animateTo(2);
+          } else if (nuevoEstado == 'cancelada') {
+            _tabCtrl.animateTo(3);
           }
         },
       ),
@@ -70,10 +89,12 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen>
           labelColor: AppColors.rosa,
           unselectedLabelColor: Colors.black54,
           indicatorColor: AppColors.rosa,
+          isScrollable: true,
           tabs: const [
             Tab(icon: Icon(Icons.mark_email_unread_outlined), text: 'Nuevas'),
             Tab(icon: Icon(Icons.check_circle_outline), text: 'Aprobadas'),
             Tab(icon: Icon(Icons.cancel_outlined), text: 'Rechazadas'),
+            Tab(icon: Icon(Icons.highlight_off_outlined), text: 'Canceladas'),
           ],
         ),
       ),
@@ -118,6 +139,7 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen>
           final nuevas = todas.where((s) => s.esPendiente).toList();
           final aprobadas = todas.where((s) => s.esAprobada).toList();
           final rechazadas = todas.where((s) => s.esRechazada).toList();
+          final canceladas = todas.where((s) => s.esCancelada).toList();
 
           return TabBarView(
             controller: _tabCtrl,
@@ -139,6 +161,12 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen>
               _ListaSolicitudes(
                 solicitudes: rechazadas,
                 mensajeVacio: 'No hay solicitudes rechazadas.',
+                onRefrescar: _recargar,
+                onTap: _abrirDetalle,
+              ),
+              _ListaSolicitudes(
+                solicitudes: canceladas,
+                mensajeVacio: 'No hay solicitudes canceladas.',
                 onRefrescar: _recargar,
                 onTap: _abrirDetalle,
               ),
@@ -204,6 +232,7 @@ class _ListaSolicitudes extends StatelessWidget {
           final colorEstado = switch (s.estado) {
             'aprobada' => Colors.green,
             'rechazada' => Colors.redAccent,
+            'cancelada' => Colors.blueGrey,
             _ => Colors.orange,
           };
 
@@ -273,6 +302,108 @@ class _ListaSolicitudes extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (s.esAprobada) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: s.tieneContrato ? Colors.green.shade50 : Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: s.tieneContrato ? Colors.green.shade200 : Colors.amber.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              s.tieneContrato ? Icons.verified : Icons.hourglass_top_rounded,
+                              size: 14,
+                              color: s.tieneContrato ? Colors.green.shade800 : Colors.amber.shade900,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              s.tieneContrato ? 'Contrato de apadrinamiento subido' : 'Falta subir contrato de apadrinamiento',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: s.tieneContrato ? Colors.green.shade800 : Colors.amber.shade900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (s.esCancelada && s.observaciones != null && s.observaciones!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Text(
+                          'Cancelada: ${s.observaciones}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red.shade900,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (s.esRechazada) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.replay,
+                                  size: 14,
+                                  color: Colors.red.shade700,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Rechazada ${s.vecesRechazada} ${s.vecesRechazada == 1 ? 'vez' : 'veces'}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red.shade900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (s.observaciones != null && s.observaciones!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                'Motivo: ${s.observaciones!.trim()}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Colors.red.shade800,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                     const Divider(height: 20),
                     // Vista previa de la motivación
                     Text(
@@ -343,12 +474,30 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
   Uint8List? _docBytes;
   bool _cargandoDoc = true;
   String? _errorDoc;
+
+  Uint8List? _contratoBytes;
+  bool _cargandoContrato = false;
+  String? _errorContrato;
+  bool _subiendoContrato = false;
+  late bool _tieneContrato;
+  String? _nombreContrato;
+
   bool _procesando = false;
+
+  bool _esBytesPdf(Uint8List bytes) {
+    if (bytes.length < 4) return false;
+    return bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46; // %PDF
+  }
 
   @override
   void initState() {
     super.initState();
+    _tieneContrato = widget.solicitud.tieneContrato;
+    _nombreContrato = widget.solicitud.contratoArchivo;
     _cargarDocumentoSeguro();
+    if (_tieneContrato) {
+      _cargarContratoSeguro();
+    }
   }
 
   Future<void> _cargarDocumentoSeguro() async {
@@ -366,6 +515,26 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
       setState(() {
         _errorDoc = e.toString().replaceFirst('Exception: ', '');
         _cargandoDoc = false;
+      });
+    }
+  }
+
+  Future<void> _cargarContratoSeguro() async {
+    setState(() => _cargandoContrato = true);
+    try {
+      final bytes = await ApadrinamientoService.obtenerBytesContrato(
+        widget.solicitud.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _contratoBytes = bytes;
+        _cargandoContrato = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorContrato = e.toString().replaceFirst('Exception: ', '');
+        _cargandoContrato = false;
       });
     }
   }
@@ -396,6 +565,270 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
         ),
       ),
     );
+  }
+
+  void _verContratoCompleto() {
+    if (_contratoBytes == null) return;
+    if (_esBytesPdf(_contratoBytes!)) {
+      Printing.layoutPdf(
+        onLayout: (_) => _contratoBytes!,
+        name: _nombreContrato ?? 'Contrato_Apadrinamiento_${widget.solicitud.mascotaNombre}.pdf',
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: const Text('Contrato de Apadrinamiento'),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.memory(_contratoBytes!, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _subirContrato() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+      );
+      if (files.isEmpty) return;
+
+      final file = files.first;
+      final bytes = await file.xFile.readAsBytes();
+      if (bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('No se pudo leer el archivo seleccionado.'),
+          ),
+        );
+        return;
+      }
+
+      final ext = file.name.split('.').last.toLowerCase();
+      final esPdf = ext == 'pdf' || _esBytesPdf(bytes);
+
+      if (!mounted) return;
+      // Diálogo de confirmación: "¿Estás seguro de que deseas subir el contrato?"
+      final confirmacion = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.upload_file, color: AppColors.rosa),
+              SizedBox(width: 8),
+              Expanded(child: Text('Confirmar Subida')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '¿Estás seguro de que deseas subir este contrato de apadrinamiento para ${widget.solicitud.solicitanteNombreCompleto}?',
+                style: const TextStyle(fontSize: 14.5),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      esPdf ? Icons.picture_as_pdf : Icons.image,
+                      color: esPdf ? Colors.redAccent : AppColors.rosa,
+                      size: 32,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            file.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            '${(bytes.length / 1024).toStringAsFixed(1)} KB • Formato: ${ext.toUpperCase()}',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmacion != true) return;
+
+      setState(() => _subiendoContrato = true);
+
+      await ApadrinamientoService.subirContrato(
+        idSolicitud: widget.solicitud.id,
+        bytesContrato: bytes,
+        nombreArchivo: file.name,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _subiendoContrato = false;
+        _contratoBytes = bytes;
+        _tieneContrato = true;
+        _nombreContrato = file.name;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text(
+            '¡Contrato de apadrinamiento subido con éxito! El usuario ya es padrino oficial.',
+          ),
+        ),
+      );
+      widget.onCambioEstado('aprobada');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subiendoContrato = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al subir contrato: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _eliminarContrato() async {
+    final confirmacion = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Expanded(child: Text('Eliminar Contrato')),
+          ],
+        ),
+        content: const Text(
+          '¿Estás seguro de que deseas eliminar este contrato de apadrinamiento? El usuario dejará de tener el contrato disponible hasta que subas uno nuevo.',
+          style: TextStyle(fontSize: 14.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmacion != true) return;
+
+    setState(() => _subiendoContrato = true);
+    try {
+      await ApadrinamientoService.eliminarContrato(widget.solicitud.id);
+      if (!mounted) return;
+      setState(() {
+        _subiendoContrato = false;
+        _contratoBytes = null;
+        _tieneContrato = false;
+        _nombreContrato = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text('Contrato de apadrinamiento eliminado con éxito.'),
+        ),
+      );
+      widget.onCambioEstado('aprobada');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subiendoContrato = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al eliminar contrato: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _verDetallesMascota() async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+      final pet = await PetsService.obtener(widget.solicitud.idMascota);
+      if (!mounted) return;
+      Navigator.pop(context); // cerrar diálogo de espera
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PetDetailScreen(pet: pet),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir la mascota: $e')),
+      );
+    }
   }
 
   Future<void> _aprobar() async {
@@ -464,7 +897,7 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Se enviará un correo y una notificación en la app al solicitante.',
+                  'Al aprobar, deberás subir el contrato de apadrinamiento para formalizar el proceso.',
                   style: TextStyle(fontSize: 12, color: Colors.black54),
                 ),
               ],
@@ -501,7 +934,7 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.green,
-          content: Text('¡Solicitud aprobada y notificación enviada con éxito!'),
+          content: Text('¡Solicitud aprobada! Ahora puedes adjuntar el contrato.'),
         ),
       );
       widget.onCambioEstado('aprobada');
@@ -570,6 +1003,101 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
         ),
       );
       widget.onCambioEstado('rechazada');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _procesando = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.redAccent, content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _cancelarApadrinamiento() async {
+    final motivoCtrl = TextEditingController();
+    final confirmacion = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Expanded(child: Text('Cancelar Apadrinamiento')),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '¿Confirmas la cancelación del apadrinamiento de ${widget.solicitud.solicitanteNombreCompleto} para ${widget.solicitud.mascotaNombre}?',
+                style: const TextStyle(height: 1.35),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Motivo de cancelación (obligatorio para el usuario):',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                controller: motivoCtrl,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: const InputDecoration(
+                  hintText: 'Explica el motivo por el cual se cancela el apadrinamiento...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Este comentario se guardará en la base de datos y se mostrará al usuario en sus apadrinamientos.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Volver'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () {
+              if (motivoCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Colors.redAccent,
+                    content: Text('Por favor escribe el motivo de cancelación.'),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Confirmar Cancelación'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmacion != true) return;
+
+    setState(() => _procesando = true);
+    try {
+      await ApadrinamientoService.cancelarSolicitud(
+        idSolicitud: widget.solicitud.id,
+        motivo: motivoCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text('El apadrinamiento ha sido cancelado con éxito.'),
+        ),
+      );
+      widget.onCambioEstado('cancelada');
     } catch (e) {
       if (!mounted) return;
       setState(() => _procesando = false);
@@ -692,6 +1220,19 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                             fontSize: 12.5,
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.rosa,
+                            side: const BorderSide(color: AppColors.rosa),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.pets, size: 18),
+                          label: Text('Ver perfil completo de ${s.mascotaNombre}'),
+                          onPressed: _verDetallesMascota,
+                        ),
                       ],
                     ),
                   ),
@@ -731,7 +1272,7 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
 
                 const SizedBox(height: 14),
 
-                // MOTIVACIÓN OBLIGATORIA COMPLETA (SIN TRUNCAR)
+                // MOTIVACIÓN OBLIGATORIA COMPLETA
                 _SeccionTarjeta(
                   titulo: '¿Por qué quiere apadrinar a esta mascota?',
                   icono: Icons.favorite,
@@ -811,8 +1352,376 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 14),
+
+                // SECCIÓN DE CONTRATO DE APADRINAMIENTO (ADMIN)
+                 if (s.esAprobada) ...[
+                   _SeccionTarjeta(
+                     titulo: 'Contrato de apadrinamiento',
+                     icono: Icons.assignment_outlined,
+                     colorFondo: _tieneContrato || _contratoBytes != null
+                         ? Colors.green.shade50.withOpacity(0.5)
+                         : Colors.amber.shade50.withOpacity(0.5),
+                     child: Column(
+                       crossAxisAlignment: CrossAxisAlignment.start,
+                       children: [
+                         if (_subiendoContrato)
+                           const Center(
+                             child: Padding(
+                               padding: EdgeInsets.all(16),
+                               child: Column(
+                                 children: [
+                                   CircularProgressIndicator(),
+                                   SizedBox(height: 8),
+                                   Text('Procesando contrato de apadrinamiento...'),
+                                 ],
+                               ),
+                             ),
+                           )
+                         else if (_tieneContrato || _contratoBytes != null) ...[
+                           Container(
+                             padding: const EdgeInsets.all(12),
+                             decoration: BoxDecoration(
+                               color: Colors.green.shade50,
+                               borderRadius: BorderRadius.circular(12),
+                               border: Border.all(color: Colors.green.shade300),
+                             ),
+                             child: const Row(
+                               children: [
+                                 Icon(Icons.check_circle, color: Colors.green, size: 24),
+                                 SizedBox(width: 10),
+                                 Expanded(
+                                   child: Column(
+                                     crossAxisAlignment: CrossAxisAlignment.start,
+                                     children: [
+                                       Text(
+                                         'Contrato de apadrinamiento subido',
+                                         style: TextStyle(
+                                           fontWeight: FontWeight.bold,
+                                           color: Colors.green,
+                                         ),
+                                       ),
+                                       Text(
+                                         'El usuario ya es oficialmente el padrino de la mascota.',
+                                         style: TextStyle(
+                                           fontSize: 12,
+                                           color: Colors.black87,
+                                         ),
+                                       ),
+                                     ],
+                                   ),
+                                 ),
+                               ],
+                             ),
+                           ),
+                           const SizedBox(height: 12),
+                           if (_cargandoContrato)
+                             const Center(
+                               child: Padding(
+                                 padding: EdgeInsets.all(12),
+                                 child: CircularProgressIndicator(),
+                               ),
+                             )
+                           else if (_errorContrato != null)
+                             Padding(
+                               padding: const EdgeInsets.symmetric(vertical: 8),
+                               child: Text(
+                                 'Error al cargar contrato: $_errorContrato',
+                                 style: const TextStyle(
+                                   color: Colors.redAccent,
+                                   fontSize: 12,
+                                 ),
+                               ),
+                             )
+                           else if (_contratoBytes != null) ...[
+                             if (_esBytesPdf(_contratoBytes!))
+                               Container(
+                                 width: double.infinity,
+                                 padding: const EdgeInsets.all(12),
+                                 decoration: BoxDecoration(
+                                   color: Colors.red.shade50,
+                                   borderRadius: BorderRadius.circular(12),
+                                   border: Border.all(color: Colors.red.shade200),
+                                 ),
+                                 child: Row(
+                                   children: [
+                                     Container(
+                                       padding: const EdgeInsets.all(10),
+                                       decoration: BoxDecoration(
+                                         color: Colors.red.shade100,
+                                         borderRadius: BorderRadius.circular(10),
+                                       ),
+                                       child: const Icon(
+                                         Icons.picture_as_pdf,
+                                         color: Colors.redAccent,
+                                         size: 32,
+                                       ),
+                                     ),
+                                     const SizedBox(width: 12),
+                                     Expanded(
+                                       child: Column(
+                                         crossAxisAlignment: CrossAxisAlignment.start,
+                                         children: [
+                                           Text(
+                                             _nombreContrato ?? 'Contrato_Apadrinamiento.pdf',
+                                             style: const TextStyle(
+                                               fontWeight: FontWeight.bold,
+                                               fontSize: 13,
+                                             ),
+                                             maxLines: 1,
+                                             overflow: TextOverflow.ellipsis,
+                                           ),
+                                           Text(
+                                             'Documento PDF (${(_contratoBytes!.length / 1024).toStringAsFixed(1)} KB)',
+                                             style: TextStyle(
+                                               color: Colors.grey.shade600,
+                                               fontSize: 11.5,
+                                             ),
+                                           ),
+                                         ],
+                                       ),
+                                     ),
+                                   ],
+                                 ),
+                               )
+                             else
+                               ClipRRect(
+                                 borderRadius: BorderRadius.circular(12),
+                                 child: Image.memory(
+                                   _contratoBytes!,
+                                   height: 160,
+                                   width: double.infinity,
+                                   fit: BoxFit.cover,
+                                 ),
+                               ),
+                             const SizedBox(height: 10),
+                             Row(
+                               children: [
+                                 Expanded(
+                                   child: OutlinedButton.icon(
+                                     style: OutlinedButton.styleFrom(
+                                       foregroundColor: AppColors.rosa,
+                                       side: const BorderSide(color: AppColors.rosa),
+                                       padding: const EdgeInsets.symmetric(vertical: 10),
+                                     ),
+                                     icon: const Icon(Icons.visibility, size: 18),
+                                     label: const Text('Ver'),
+                                     onPressed: _verContratoCompleto,
+                                   ),
+                                 ),
+                                 const SizedBox(width: 8),
+                                 Expanded(
+                                   child: OutlinedButton.icon(
+                                     style: OutlinedButton.styleFrom(
+                                       foregroundColor: Colors.grey.shade800,
+                                       side: BorderSide(color: Colors.grey.shade400),
+                                       padding: const EdgeInsets.symmetric(vertical: 10),
+                                     ),
+                                     icon: const Icon(Icons.upload_file, size: 18),
+                                     label: const Text('Reemplazar'),
+                                     onPressed: _subirContrato,
+                                   ),
+                                 ),
+                                 const SizedBox(width: 8),
+                                 Expanded(
+                                   child: OutlinedButton.icon(
+                                     style: OutlinedButton.styleFrom(
+                                       foregroundColor: Colors.redAccent,
+                                       side: const BorderSide(color: Colors.redAccent),
+                                       padding: const EdgeInsets.symmetric(vertical: 10),
+                                     ),
+                                     icon: const Icon(Icons.delete_outline, size: 18),
+                                     label: const Text('Eliminar'),
+                                     onPressed: _eliminarContrato,
+                                   ),
+                                 ),
+                               ],
+                             ),
+                           ] else ...[
+                             Row(
+                               children: [
+                                 Expanded(
+                                   child: FilledButton.icon(
+                                     style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                                     icon: const Icon(Icons.visibility),
+                                     label: const Text('Cargar y ver contrato'),
+                                     onPressed: _cargarContratoSeguro,
+                                   ),
+                                 ),
+                                 const SizedBox(width: 8),
+                                 IconButton(
+                                   tooltip: 'Eliminar contrato',
+                                   icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                   onPressed: _eliminarContrato,
+                                 ),
+                               ],
+                             ),
+                           ],
+                         ] else ...[
+                           Container(
+                             padding: const EdgeInsets.all(12),
+                             decoration: BoxDecoration(
+                               color: Colors.amber.shade50,
+                               borderRadius: BorderRadius.circular(12),
+                               border: Border.all(color: Colors.amber.shade300),
+                             ),
+                             child: Row(
+                               crossAxisAlignment: CrossAxisAlignment.start,
+                               children: [
+                                 Icon(Icons.info_outline, color: Colors.amber.shade900, size: 22),
+                                 const SizedBox(width: 8),
+                                 Expanded(
+                                   child: Text(
+                                     'Paso pendiente: El apadrinamiento fue aprobado pero el usuario aún no es padrino oficial hasta que subas el contrato firmado (JPG, PNG o PDF).',
+                                     style: TextStyle(
+                                       fontSize: 12.5,
+                                       fontWeight: FontWeight.w600,
+                                       color: Colors.amber.shade900,
+                                     ),
+                                   ),
+                                 ),
+                               ],
+                             ),
+                           ),
+                           const SizedBox(height: 12),
+                           SizedBox(
+                             width: double.infinity,
+                             child: FilledButton.icon(
+                               style: FilledButton.styleFrom(
+                                 backgroundColor: AppColors.rosa,
+                                 minimumSize: const Size.fromHeight(48),
+                                 shape: RoundedRectangleBorder(
+                                   borderRadius: BorderRadius.circular(12),
+                                 ),
+                               ),
+                               icon: const Icon(Icons.upload_file),
+                               label: const Text(
+                                 'Subir Contrato (JPG, PNG o PDF)',
+                                 style: TextStyle(fontWeight: FontWeight.bold),
+                               ),
+                               onPressed: _subirContrato,
+                             ),
+                           ),
+                         ],
+                       ],
+                     ),
+                   ),
+                   const SizedBox(height: 14),
+                 ],
+
+                // SI ESTÁ CANCELADA, MOSTRAR MOTIVO
+                if (s.esCancelada) ...[
+                  _SeccionTarjeta(
+                    titulo: 'Apadrinamiento Cancelado',
+                    icono: Icons.highlight_off,
+                    colorFondo: Colors.red.shade50.withOpacity(0.5),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Motivo de cancelación registrado en base de datos:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            s.observaciones?.trim().isNotEmpty == true
+                                ? s.observaciones!
+                                : 'Sin motivo especificado.',
+                            style: const TextStyle(fontSize: 14, height: 1.4),
+                          ),
+                        ),
+                        if (s.fechaActualizacionEstado != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Fecha de cancelación: ${s.fechaActualizacionEstado}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // SI ESTÁ RECHAZADA, MOSTRAR VECES RECHAZADA Y OBSERVACIONES
+                if (s.esRechazada) ...[
+                  _SeccionTarjeta(
+                    titulo: 'Solicitud Rechazada',
+                    icono: Icons.cancel_outlined,
+                    colorFondo: Colors.red.shade50.withOpacity(0.5),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.shade300),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.replay, size: 16, color: Colors.red.shade900),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Esta solicitud ha sido rechazada ${s.vecesRechazada} ${s.vecesRechazada == 1 ? 'vez' : 'veces'}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red.shade900,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Motivo del rechazo u observaciones:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.red.shade200),
+                          ),
+                          child: Text(
+                            s.observaciones?.trim().isNotEmpty == true
+                                ? s.observaciones!
+                                : 'Sin motivo especificado.',
+                            style: const TextStyle(fontSize: 14, height: 1.4),
+                          ),
+                        ),
+                        if (s.fechaActualizacionEstado != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Fecha de rechazo: ${s.fechaActualizacionEstado}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
 
                 // ACUERDO DE RESPONSABILIDAD
                 _SeccionTarjeta(
@@ -874,6 +1783,11 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                         'Estado de la solicitud',
                         s.estado.toUpperCase(),
                       ),
+                      if (s.esRechazada)
+                        _FilaInfo(
+                          'Veces rechazada',
+                          '${s.vecesRechazada} ${s.vecesRechazada == 1 ? 'vez' : 'veces'}',
+                        ),
                       if (s.fechaInicioApadrinamiento != null)
                         _FilaInfo(
                           'Fecha de inicio oficial',
@@ -897,7 +1811,7 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
 
                 const SizedBox(height: 24),
 
-                // Botones de acción (solo si es pendiente)
+                // Botones de acción si es pendiente
                 if (s.esPendiente) ...[
                   if (_procesando)
                     const Center(child: CircularProgressIndicator())
@@ -935,6 +1849,29 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                           ),
                         ),
                       ],
+                    ),
+                ],
+
+                // Botón para CANCELAR si ya está aprobada
+                if (s.esAprobada) ...[
+                  if (_procesando)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.cancel_outlined),
+                      label: const Text(
+                        'Cancelar Apadrinamiento',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: _cancelarApadrinamiento,
                     ),
                 ],
               ],

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/screens/adoption/adoption_requests_admin_screen.dart';
+import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
 import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
@@ -34,19 +36,33 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   void _abrirAdopciones() {
-    AdoptionService.marcarLeidasUsuario();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MyAdoptionsScreen()),
-    );
+    if (Session.esAdmin) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AdoptionRequestsAdminScreen()),
+      );
+    } else {
+      AdoptionService.marcarLeidasUsuario();
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MyAdoptionsScreen()),
+      );
+    }
   }
 
   void _abrirApadrinamientos() {
-    ApadrinamientoService.marcarLeidasUsuario();
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const MisApadrinamientosScreen()),
-    );
+    if (Session.esAdmin) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ApadrinamientoAdminScreen()),
+      );
+    } else {
+      ApadrinamientoService.marcarLeidasUsuario();
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MisApadrinamientosScreen()),
+      );
+    }
   }
 
   Future<void> _confirmarCerrarSesion() async {
