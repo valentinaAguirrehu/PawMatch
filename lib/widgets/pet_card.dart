@@ -80,30 +80,30 @@ class PetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final detalle = [
-      pet.raza ?? pet.especie,
-      if (pet.edad != null) pet.edadTexto,
-    ].join(' · ');
+    final especie = pet.especie.toLowerCase();
+    final edadTxt = pet.edad == null
+        ? 'edad no reg.'
+        : (pet.edad! <= 1 ? 'cachorro' : pet.edadTexto);
+    final subtituloFoto = '$edadTxt · $especie';
 
     final descripcionCorta = (pet.descripcion != null && pet.descripcion!.trim().isNotEmpty)
         ? pet.descripcion!.trim()
         : 'Hermoso ${pet.especie.toLowerCase()} rescatado, lleno de amor y buscando una familia que lo cuide para siempre.';
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 5),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
           BoxShadow(
-            color: AppColors.rosa.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: AppColors.rosa.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
         ],
         border: Border.all(
@@ -113,155 +113,161 @@ class PetCard extends StatelessWidget {
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(24),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // 1. Foto de la mascota a la izquierda (como en la referencia)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    width: 110,
-                    height: 120,
-                    color: const Color(0xFFF1F3F7),
-                    child: PetImage(url: pet.foto, fit: BoxFit.cover),
-                  ),
-                ),
-                const SizedBox(width: 14),
-
-                // 2. Información y detalles a la derecha
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Fila superior: Nombre y corazón flotante
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  pet.nombre,
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1E272E),
-                                    letterSpacing: -0.3,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on_rounded,
-                                      size: 13,
-                                      color: AppColors.rosa,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Expanded(
-                                      child: Text(
-                                        'Pasto · Fundación M. Arévalo',
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          color: Colors.grey.shade600,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. Foto con el nombre en la esquina inferior izquierda
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                      child: PetImage(url: pet.foto, fit: BoxFit.cover),
+                    ),
+                    // Sombra degradada para que el nombre blanco y texto se lean siempre nítidos
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.45, 1.0],
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.75),
+                            ],
                           ),
-                          // Botón / Distintivo de corazón (estilo imagen de referencia)
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: const Color(0xFFFFF0F5),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: AppColors.rosa.withValues(alpha: 0.15),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.favorite_rounded,
-                              size: 18,
-                              color: AppColors.rosa,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 7),
-
-                      // Breve descripción
-                      Text(
-                        descripcionCorta,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.35,
-                          color: Colors.grey.shade600,
                         ),
                       ),
-                      const SizedBox(height: 9),
-
-                      // Etiquetas: Raza/edad y estado
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                    ),
+                    // Nombre y subtitulo en la esquina inferior izquierda (como en la foto de referencia)
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 8,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              detalle,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF4B5563),
-                              ),
+                          Text(
+                            pet.nombre,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black54,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
                             ),
                           ),
-                          if (pet.estaAdoptada)
-                            Text(
-                              pet.mensajeFamiliaPara(Session.idUsuario),
-                              style: const TextStyle(
-                                color: AppColors.rosa,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 11.5,
-                              ),
-                            )
-                          else
-                            EstadoChip(estado: pet.estadoAdopcion),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtituloFoto,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFFF72AD), // rosado luminoso sobre la foto
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black54,
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2. Sección inferior: descripción
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                child: SizedBox(
+                  height: 38,
+                  child: Text(
+                    descripcionCorta,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: Colors.grey.shade700,
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+
+              // 3. Pie de la tarjeta: Tamaño a la izquierda, Acción a la derecha
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.rosaSuave,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.bordeRosa,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        (pet.tamano ?? 'mediano').toLowerCase(),
+                        style: const TextStyle(
+                          color: AppColors.rosa,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ),
+                    if (pet.estaAdoptada)
+                      Text(
+                        pet.mensajeFamiliaPara(Session.idUsuario),
+                        style: const TextStyle(
+                          color: AppColors.rosa,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      )
+                    else
+                      const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Apadrinar →',
+                            style: TextStyle(
+                              color: AppColors.rosa,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),

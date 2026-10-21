@@ -55,6 +55,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   void initState() {
     super.initState();
     _personalidad.addListener(_refrescarPersonalidad);
+    _nombre.addListener(_refrescarPersonalidad);
   }
 
   void _refrescarPersonalidad() {
@@ -64,6 +65,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   @override
   void dispose() {
     _personalidad.removeListener(_refrescarPersonalidad);
+    _nombre.removeListener(_refrescarPersonalidad);
     _personalidad.dispose();
     _nombre.dispose();
     _raza.dispose();
@@ -457,7 +459,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                     ),
                     const SizedBox(height: 10),
                     _campo(
-                      'Descripción',
+                      'Sobre ${_nombre.text.trim().isNotEmpty ? _nombre.text.trim() : (_esEdicion ? widget.pet!.nombre : 'la mascota')}',
                       TextFormField(
                         controller: _descripcion,
                         decoration: _deco('Cuéntanos sobre esta mascota...'),
