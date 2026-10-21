@@ -7,6 +7,7 @@ import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
+import 'package:paw_match/screens/admin/pets_form_screen.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
@@ -34,6 +35,7 @@ class PetDetailScreen extends StatefulWidget {
 }
 
 class _PetDetailScreenState extends State<PetDetailScreen> {
+  late Pet _pet = widget.pet;
   late Future<Pet> _completa = PetsService.obtener(widget.pet.id);
   SolicitudApadrinamiento? _miSolicitud;
   AdoptionRequest? _miAdopcion;
@@ -48,7 +50,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   Future<void> _consultarMiSolicitud() async {
     if (Session.idUsuario == null) return;
     try {
-      final lista = await ApadrinamientoService.listarMisSolicitudes(idMascota: widget.pet.id);
+      final lista = await ApadrinamientoService.listarMisSolicitudes(idMascota: _pet.id);
       if (mounted) {
         setState(() {
           _miSolicitud = lista.isNotEmpty ? lista.first : null;
@@ -60,7 +62,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   Future<void> _consultarMiAdopcion() async {
     if (Session.idUsuario == null) return;
     try {
-      final lista = await AdoptionService.listMine(petId: widget.pet.id);
+      final lista = await AdoptionService.listMine(petId: _pet.id);
       if (!mounted) return;
       setState(() => _miAdopcion = lista.isEmpty ? null : lista.first);
     } catch (_) {}
@@ -69,7 +71,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   Future<void> _abrirFormularioAdopcion() async {
     final listo = await perfilListoParaAdoptar(context);
     if (!listo || !mounted) return;
-    final enviada = await AdoptionFormScreen.mostrar(context, pet: widget.pet);
+    final enviada = await AdoptionFormScreen.mostrar(context, pet: _pet);
     if (enviada == true && mounted) _consultarMiAdopcion();
   }
 
@@ -82,7 +84,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           icon: const Icon(Icons.verified, color: Colors.green, size: 48),
-          title: Text('¡Adopción de ${widget.pet.nombre} aprobada!'),
+          title: Text('¡Adopción de ${_pet.nombre} aprobada!'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,7 +118,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ? FundacionInfo.whatsappNumero
                     : '573136177747';
                 final msg =
-                    'Hola Fundación Maritza Arévalo, mi solicitud para adoptar a ${widget.pet.nombre} fue aprobada en Paw Match.';
+                    'Hola Fundación Maritza Arévalo, mi solicitud para adoptar a ${_pet.nombre} fue aprobada en Paw Match.';
                 abrirEnlace(
                   context,
                   'https://wa.me/$num?text=${Uri.encodeComponent(msg)}',
@@ -138,8 +140,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           title: const Text('Solicitud en revisión'),
           content: Text(
             s.petAdoptionStatus == 'adoptado'
-                ? '${widget.pet.nombre} ya fue adoptado. La fundación aún debe cerrar tu solicitud.'
-                : 'Tu solicitud para adoptar a ${widget.pet.nombre} fue enviada el ${s.requestedAtLabel}. Recibirás una notificación cuando sea revisada.',
+                ? '${_pet.nombre} ya fue adoptado. La fundación aún debe cerrar tu solicitud.'
+                : 'Tu solicitud para adoptar a ${_pet.nombre} fue enviada el ${s.requestedAtLabel}. Recibirás una notificación cuando sea revisada.',
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Entendido')),
@@ -159,7 +161,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Tu solicitud anterior para adoptar a ${widget.pet.nombre} no fue aprobada.',
+              'Tu solicitud anterior para adoptar a ${_pet.nombre} no fue aprobada.',
             ),
             const SizedBox(height: 10),
             const Text(
@@ -190,7 +192,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     if (_estadoAdopcion == 'adoptado') return;
     SolicitudApadrinamientoDialog.mostrar(
       context,
-      pet: widget.pet,
+      pet: _pet,
       onEnviadaExitosamente: _consultarMiSolicitud,
     );
   }
@@ -215,7 +217,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       if (esPdf) {
         await Printing.layoutPdf(
           onLayout: (_) => bytes,
-          name: 'Contrato_Apadrinamiento_${widget.pet.nombre}.pdf',
+          name: 'Contrato_Apadrinamiento_${_pet.nombre}.pdf',
         );
         return;
       }
@@ -228,7 +230,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             appBar: AppBar(
               backgroundColor: Colors.black,
               foregroundColor: Colors.white,
-              title: Text('Contrato de Apadrinamiento - ${widget.pet.nombre}'),
+              title: Text('Contrato de Apadrinamiento - ${_pet.nombre}'),
               leading: IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: () => Navigator.pop(ctx),
@@ -266,7 +268,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             icon: const Icon(Icons.stars, color: Colors.green, size: 48),
-            title: Text('¡Eres Padrino Oficial de ${widget.pet.nombre}! 🎉'),
+            title: Text('¡Eres Padrino Oficial de ${_pet.nombre}! 🎉'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -303,7 +305,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                 onPressed: () {
                   Navigator.pop(ctx);
                   final num = FundacionInfo.whatsappNumero.isNotEmpty ? FundacionInfo.whatsappNumero : '573136177747';
-                  final msg = 'Hola Fundación Maritza Arévalo, soy el padrino de ${widget.pet.nombre} y vengo de Paw Match.';
+                  final msg = 'Hola Fundación Maritza Arévalo, soy el padrino de ${_pet.nombre} y vengo de Paw Match.';
                   abrirEnlace(context, 'https://wa.me/$num?text=${Uri.encodeComponent(msg)}', nombre: 'WhatsApp');
                 },
               ),
@@ -321,7 +323,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '¡Tu solicitud para apadrinar a ${widget.pet.nombre} fue aprobada por la fundación!',
+                  '¡Tu solicitud para apadrinar a ${_pet.nombre} fue aprobada por la fundación!',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 12),
@@ -339,7 +341,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Aún falta un paso: Debes esperar a que el administrador suba el contrato oficial de apadrinamiento firmado. Una vez lo suba, serás formalmente el padrino de ${widget.pet.nombre} y podrás consultarlo aquí.',
+                          'Aún falta un paso: Debes esperar a que el administrador suba el contrato oficial de apadrinamiento firmado. Una vez lo suba, serás formalmente el padrino de ${_pet.nombre} y podrás consultarlo aquí.',
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
@@ -380,7 +382,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('El apadrinamiento para ${widget.pet.nombre} fue cancelado por la administración.'),
+              Text('El apadrinamiento para ${_pet.nombre} fue cancelado por la administración.'),
               const SizedBox(height: 10),
               const Text('Motivo de la cancelación:', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
@@ -424,7 +426,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tu solicitud para apadrinar a ${widget.pet.nombre} fue enviada el ${s.fechaSolicitud}.'),
+              Text('Tu solicitud para apadrinar a ${_pet.nombre} fue enviada el ${s.fechaSolicitud}.'),
               const SizedBox(height: 10),
               const Text('Tu motivación registrada:', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
@@ -451,7 +453,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tu solicitud anterior para apadrinar a ${widget.pet.nombre} no fue aprobada.'),
+              Text('Tu solicitud anterior para apadrinar a ${_pet.nombre} no fue aprobada.'),
               const SizedBox(height: 10),
               const Text('Motivo u observaciones:', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
@@ -477,17 +479,89 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   String _t(String? v) => v?.trim() ?? '';
 
   String get _estadoAdopcion {
-    final e = _t(widget.pet.estadoAdopcion);
+    final e = _t(_pet.estadoAdopcion);
     return e.isEmpty ? 'disponible' : e;
   }
 
-  bool get _apadrinada => _t(widget.pet.estadoApadrinamiento) == 'apadrinado';
+  bool get _apadrinada => _t(_pet.estadoApadrinamiento) == 'apadrinado';
   bool get _puedeAdoptar => _estadoAdopcion == 'disponible';
   bool get _puedeApadrinar => !_apadrinada && _estadoAdopcion != 'adoptado';
 
   bool get _esRecorte {
-    final f = _t(widget.pet.foto).toLowerCase();
+    final f = _t(_pet.foto).toLowerCase();
     return f.contains('.png') || f.contains('.webp');
+  }
+
+  Future<void> _editarMascotaAdmin() async {
+    final guardado = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => PetsFormScreen(pet: _pet)),
+    );
+    if (guardado == true && mounted) {
+      try {
+        final actualizada = await PetsService.obtener(_pet.id);
+        if (mounted) {
+          setState(() {
+            _pet = actualizada;
+            _completa = Future.value(actualizada);
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Datos de la mascota actualizados exitosamente')),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _completa = PetsService.obtener(_pet.id);
+          });
+        }
+      }
+    }
+  }
+
+  Future<void> _eliminarMascotaAdmin() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Eliminar mascota'),
+        content: Text(
+          '¿Seguro que quieres eliminar a ${_pet.nombre}? '
+          'Esta acción no se puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    try {
+      await PetsService.eliminar(_pet.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${_pet.nombre} fue eliminada')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   void _mostrarOpciones(BuildContext context) {
@@ -502,6 +576,31 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (Session.esAdmin) ...[
+                ListTile(
+                  leading: const Icon(Icons.edit_rounded, color: AppColors.rosa),
+                  title: const Text('Modificar datos de la mascota'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _editarMascotaAdmin();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.delete_outline_rounded, color: Colors.red.shade700),
+                  title: Text(
+                    'Eliminar mascota',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _eliminarMascotaAdmin();
+                  },
+                ),
+                const Divider(),
+              ],
               ListTile(
                 leading: const Icon(Icons.chat_bubble_outline, color: Color(0xFF25D366)),
                 title: const Text('Contactar a la Fundación por WhatsApp'),
@@ -510,7 +609,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                   final num = FundacionInfo.whatsappNumero.isNotEmpty
                       ? FundacionInfo.whatsappNumero
                       : '573136177747';
-                  final msg = 'Hola Fundación Maritza Arévalo, me interesa información sobre ${widget.pet.nombre}.';
+                  final msg = 'Hola Fundación Maritza Arévalo, me interesa información sobre ${_pet.nombre}.';
                   abrirEnlace(context, 'https://wa.me/$num?text=${Uri.encodeComponent(msg)}', nombre: 'WhatsApp');
                 },
               ),
@@ -550,7 +649,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   void _verFotoCompleta(BuildContext context) {
-    final url = widget.pet.foto;
+    final url = _pet.foto;
     if (url == null || url.isEmpty) return;
     showDialog(
       context: context,
@@ -560,7 +659,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           appBar: AppBar(
             backgroundColor: Colors.black,
             foregroundColor: Colors.white,
-            title: Text(widget.pet.nombre),
+            title: Text(_pet.nombre),
             leading: IconButton(
               icon: const Icon(Icons.close),
               onPressed: () => Navigator.pop(ctx),
@@ -582,7 +681,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   Widget _buildFotoMascota(BuildContext context) {
-    final url = widget.pet.foto;
+    final url = _pet.foto;
     if (url == null || url.isEmpty) {
       return Container(
         width: 140,
@@ -638,7 +737,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final p = widget.pet;
+    final p = _pet;
     final descripcion = _t(p.descripcion);
 
     return Scaffold(
@@ -1100,7 +1199,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             const Expanded(child: Text('No se pudo cargar la personalidad.')),
             TextButton(
               onPressed: () => setState(
-                () => _completa = PetsService.obtener(widget.pet.id),
+                () => _completa = PetsService.obtener(_pet.id),
               ),
               child: const Text('Reintentar'),
             ),
@@ -1118,8 +1217,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         final v = valores[r.clave];
         if (v == null || v == 3) continue;
         final texto = v <= 2
-            ? r.minimoPara(widget.pet.sexo)
-            : r.maximoPara(widget.pet.sexo);
+            ? r.minimoPara(_pet.sexo)
+            : r.maximoPara(_pet.sexo);
         chips.add(_chipRasgo(r.icono, texto));
       }
 
@@ -1210,6 +1309,48 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   Widget _acciones() {
+    if (Session.esAdmin) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red.shade700,
+                    side: BorderSide(color: Colors.red.shade300, width: 1.5),
+                    minimumSize: const Size.fromHeight(52),
+                    shape: const StadiumBorder(),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+                  ),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                  label: const Text('Eliminar', overflow: TextOverflow.ellipsis),
+                  onPressed: _eliminarMascotaAdmin,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.rosa,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: const StadiumBorder(),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14.5),
+                    elevation: 2,
+                  ),
+                  icon: const Icon(Icons.edit_rounded, size: 20),
+                  label: const Text('Modificar datos', overflow: TextOverflow.ellipsis),
+                  onPressed: _editarMascotaAdmin,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
@@ -1224,7 +1365,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       _miSolicitud == null || _miSolicitud!.esRechazada;
                   if (_estadoAdopcion == 'adoptado' && sinApadrinamientoActivo) {
                     return _AvisoYaEnFamilia(
-                      texto: widget.pet.mensajeFamiliaPara(Session.idUsuario),
+                      texto: _pet.mensajeFamiliaPara(Session.idUsuario),
                     );
                   }
 
