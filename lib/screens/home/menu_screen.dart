@@ -113,10 +113,7 @@ class _MenuScreenState extends State<MenuScreen> {
   void _abrirListaMascotas() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Scaffold(
-          appBar: AppBar(title: const Text('Mascotas')),
-          body: const PetScreen(),
-        ),
+        builder: (_) => const PetScreen(),
       ),
     );
   }

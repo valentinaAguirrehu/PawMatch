@@ -34,7 +34,7 @@ class PetImage extends StatelessWidget {
       fit: fit,
       width: double.infinity,
       height: double.infinity,
-      errorBuilder: (_, __, ___) => placeholder,
+      errorBuilder: (_, error, stack) => placeholder,
       loadingBuilder: (context, child, progress) => progress == null
           ? child
           : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -80,60 +80,189 @@ class PetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
     final detalle = [
       pet.raza ?? pet.especie,
       if (pet.edad != null) pet.edadTexto,
     ].join(' · ');
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: 1,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: PetImage(url: pet.foto)),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    pet.nombre,
-                    style: t.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+    final descripcionCorta = (pet.descripcion != null && pet.descripcion!.trim().isNotEmpty)
+        ? pet.descripcion!.trim()
+        : 'Hermoso ${pet.especie.toLowerCase()} rescatado, lleno de amor y buscando una familia que lo cuide para siempre.';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 5),
+          ),
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.grey.withValues(alpha: 0.12),
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // 1. Foto de la mascota a la izquierda (como en la referencia)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: 110,
+                    height: 120,
+                    color: const Color(0xFFF1F3F7),
+                    child: PetImage(url: pet.foto, fit: BoxFit.cover),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    detalle,
-                    style: t.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  if (pet.estaAdoptada)
-                    SizedBox(
-                      width: double.infinity,
-                      child: Text(
-                        pet.mensajeFamiliaPara(Session.idUsuario),
-                        textAlign: TextAlign.center,
+                ),
+                const SizedBox(width: 14),
+
+                // 2. Información y detalles a la derecha
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Fila superior: Nombre y corazón flotante
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  pet.nombre,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1E272E),
+                                    letterSpacing: -0.3,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.location_on_rounded,
+                                      size: 13,
+                                      color: AppColors.rosa,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Expanded(
+                                      child: Text(
+                                        'Pasto · Fundación M. Arévalo',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Botón / Distintivo de corazón (estilo imagen de referencia)
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFFFFF0F5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.rosa.withValues(alpha: 0.15),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.favorite_rounded,
+                              size: 18,
+                              color: AppColors.rosa,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+
+                      // Breve descripción
+                      Text(
+                        descripcionCorta,
                         maxLines: 2,
-                        style: t.labelMedium?.copyWith(
-                          color: AppColors.rosa,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: Colors.grey.shade600,
                         ),
                       ),
-                    )
-                  else
-                    EstadoChip(estado: pet.estadoAdopcion),
-                ],
-              ),
+                      const SizedBox(height: 9),
+
+                      // Etiquetas: Raza/edad y estado
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              detalle,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF4B5563),
+                              ),
+                            ),
+                          ),
+                          if (pet.estaAdoptada)
+                            Text(
+                              pet.mensajeFamiliaPara(Session.idUsuario),
+                              style: const TextStyle(
+                                color: AppColors.rosa,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 11.5,
+                              ),
+                            )
+                          else
+                            EstadoChip(estado: pet.estadoAdopcion),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
