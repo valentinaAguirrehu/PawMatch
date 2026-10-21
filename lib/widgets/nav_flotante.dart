@@ -31,14 +31,14 @@ class NavFlotante extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(24, 4, 24, 14),
+      minimum: const EdgeInsets.fromLTRB(16, 4, 16, 14),
       child: SizedBox(
         height: 64,
         child: Center(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 290),
+            constraints: const BoxConstraints(maxWidth: 350),
             height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(36),
@@ -125,8 +125,8 @@ class NavFlotante extends StatelessWidget {
         onTap: () => onTap(i),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 48,
-          height: 48,
+          width: 44,
+          height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -137,7 +137,7 @@ class NavFlotante extends StatelessWidget {
           child: IconTheme(
             data: IconThemeData(
               color: activo ? AppColors.rosa : const Color(0xFF9E9E9E),
-              size: 26,
+              size: 24,
             ),
             child: (activo && item.iconoActivo != null)
                 ? item.iconoActivo!

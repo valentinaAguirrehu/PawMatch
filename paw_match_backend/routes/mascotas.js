@@ -53,7 +53,7 @@ function personalityValues(personality = {}) {
 
 // fecha_ingreso va como texto 'YYYY-MM-DD' para evitar desfases de zona horaria
 const petSelect = `
-  SELECT m.id_mascota, m.nombre, m.especie, m.raza, m.edad, m.sexo,
+  SELECT m.id_mascota, m.nombre, m.especie, m.raza, m.edad, m.unidad_edad, m.sexo,
          m.tamano, m.descripcion, m.esterilizado, m.vacunas, m.fotos,
          m.estado_adopcion, m.estado_apadrinamiento,
          to_char(m.fecha_ingreso, 'YYYY-MM-DD') AS fecha_ingreso,
@@ -116,7 +116,7 @@ router.post('/foto', requireAdmin, upload.single('foto'), async (req, res) => {
 
 router.post('/', requireAdmin, async (req, res) => {
   const {
-    nombre, especie, raza, edad, sexo, tamano, descripcion, esterilizado,
+    nombre, especie, raza, edad, unidad_edad: unidadEdad = 'anos', sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion = 'disponible',
     estado_apadrinamiento: estadoApadrinamiento = 'disponible', personalidad,
   } = req.body;
@@ -127,12 +127,12 @@ router.post('/', requireAdmin, async (req, res) => {
     await client.query('BEGIN');
     const pet = await client.query(
       `INSERT INTO mascota
-       (id_mascota, nombre, especie, raza, edad, sexo, tamano, descripcion,
+       (id_mascota, nombre, especie, raza, edad, unidad_edad, sexo, tamano, descripcion,
         esterilizado, vacunas, fotos, fecha_ingreso, estado_adopcion,
         estado_apadrinamiento, id_administrador)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_DATE,
-               $12, $13, $14) RETURNING id_mascota`,
-      [randomUUID(), nombre, especie, raza || null, edad || null, sexo || null,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_DATE,
+               $13, $14, $15) RETURNING id_mascota`,
+      [randomUUID(), nombre, especie, raza || null, edad || null, unidadEdad || 'anos', sexo || null,
         tamano || null, descripcion || null, esterilizado === true, vacunas === true,
         fotos || null, estadoAdopcion, estadoApadrinamiento, req.adminId],
     );
@@ -157,7 +157,7 @@ router.post('/', requireAdmin, async (req, res) => {
 
 router.put('/:id', requireAdmin, async (req, res) => {
   const {
-    nombre, especie, raza, edad, sexo, tamano, descripcion, esterilizado,
+    nombre, especie, raza, edad, unidad_edad: unidadEdad = 'anos', sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion, estado_apadrinamiento: estadoApadrinamiento,
     personalidad,
   } = req.body;
@@ -165,11 +165,11 @@ router.put('/:id', requireAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
     const pet = await client.query(
-      `UPDATE mascota SET nombre = $1, especie = $2, raza = $3, edad = $4, sexo = $5,
-       tamano = $6, descripcion = $7, esterilizado = $8, vacunas = $9, fotos = $10,
-       estado_adopcion = $11, estado_apadrinamiento = $12 WHERE id_mascota = $13
+      `UPDATE mascota SET nombre = $1, especie = $2, raza = $3, edad = $4, unidad_edad = $5, sexo = $6,
+       tamano = $7, descripcion = $8, esterilizado = $9, vacunas = $10, fotos = $11,
+       estado_adopcion = $12, estado_apadrinamiento = $13 WHERE id_mascota = $14
        RETURNING id_mascota`,
-      [nombre, especie, raza || null, edad || null, sexo || null, tamano || null,
+      [nombre, especie, raza || null, edad || null, unidadEdad || 'anos', sexo || null, tamano || null,
         descripcion || null, esterilizado === true, vacunas === true, fotos || null,
         estadoAdopcion, estadoApadrinamiento, req.params.id],
     );

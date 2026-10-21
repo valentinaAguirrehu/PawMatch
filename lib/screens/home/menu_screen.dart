@@ -5,6 +5,7 @@ import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
+import 'package:paw_match/screens/home/notifications_tab.dart';
 import 'package:paw_match/screens/match/perfect_match.dart';
 import 'package:paw_match/screens/pets/pet_screen.dart';
 import 'package:paw_match/screens/users/profile_screen.dart';
@@ -33,20 +34,15 @@ class MenuScreen extends StatefulWidget {
 
   const MenuScreen({super.key, this.indiceInicial = 0});
 
-  /// Match perfecto está en el centro para el usuario (índice 1).
-  static int get indiceMatch => Session.isAdmin ? 0 : 1;
+  /// Match perfecto está en el centro (índice 2).
+  static int get indiceMatch => 2;
 
   @override
   State<MenuScreen> createState() => _MenuScreenState();
 }
 
 class _MenuScreenState extends State<MenuScreen> {
-  /// Pestaña central del administrador: gestión.
-  /// Inicio = 0, Gestionar = 1, Perfil = 2.
-  static const int _indiceGestionAdmin = 1;
-
   late int _index;
-  _Gestion _seccion = _Gestion.seguimiento;
 
   late GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
@@ -57,7 +53,7 @@ class _MenuScreenState extends State<MenuScreen> {
   void initState() {
     super.initState();
     final pedido = widget.indiceInicial;
-    const maximo = 2;
+    const maximo = 4;
     _index = (pedido >= 0 && pedido <= maximo) ? pedido : 0;
     ApadrinamientoService.iniciarMonitoreo();
     AdoptionService.iniciarMonitoreo();
@@ -79,11 +75,10 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
-  /// Cambia de pestaña (o de sección de gestión) con un navegador nuevo.
-  void _cambiarA(int i, {_Gestion? seccion}) {
+  /// Cambia de pestaña con un navegador nuevo.
+  void _cambiarA(int i) {
     setState(() {
       _index = i;
-      if (seccion != null) _seccion = seccion;
       _enDetalle = false;
       _navKey = GlobalKey<NavigatorState>();
       _obs = _ObservadorPaginas(_alCambiarPila);
@@ -91,11 +86,6 @@ class _MenuScreenState extends State<MenuScreen> {
   }
 
   void _alTocarPestana(int i) {
-    // Último ícono (solo administrador): abre el menú desplegable
-    if (Session.isAdmin && i == _indiceGestionAdmin) {
-      _mostrarMenuGestion();
-      return;
-    }
     if (i == _index) {
       // tocar la pestaña actual vuelve a su pantalla principal
       _navKey.currentState?.popUntil((r) => r.isFirst);
@@ -106,35 +96,17 @@ class _MenuScreenState extends State<MenuScreen> {
 
   void _irA(int i) => _alTocarPestana(i);
 
-  /// El administrador no tiene la pestaña Mascotas. Desde Inicio, la búsqueda
-  /// abre la misma lista en una pantalla aparte.
-  void _abrirListaMascotas() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const PetScreen(),
-      ),
-    );
-  }
-
-  void _abrirMatch() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PerfectMatchScreen()),
-    );
-  }
-
   Future<void> _mostrarMenuGestion() async {
     final tam = MediaQuery.of(context).size;
     final inferior = MediaQuery.of(context).padding.bottom;
 
-    // Ajusta estos dos números si el menú queda muy pegado o muy separado
-    // de la barra flotante.
-    const altoBarra = 96.0; // alto de la barra flotante + su margen
+    const altoBarra = 96.0;
     final altoMenu = _Gestion.values.length * 48.0 + 16;
 
     final elegida = await showMenu<_Gestion>(
       context: context,
       position: RelativeRect.fromLTRB(
-        (tam.width - 270) / 2, // centrado sobre el botón central de gestión
+        (tam.width - 270) / 2,
         tam.height - inferior - altoBarra - altoMenu,
         (tam.width - 270) / 2,
         0,
@@ -158,12 +130,14 @@ class _MenuScreenState extends State<MenuScreen> {
     );
 
     if (elegida != null && mounted) {
-      _cambiarA(_indiceGestionAdmin, seccion: elegida);
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => _paginaGestion(elegida)),
+      );
     }
   }
 
-  /// Pantalla que se muestra en la pestaña "Gestionar" según la opción elegida.
-  Widget _paginaGestion() => switch (_seccion) {
+  /// Pantalla que se muestra en "Gestionar" según la opción elegida.
+  Widget _paginaGestion(_Gestion g) => switch (g) {
     _Gestion.seguimiento => const SeccionAdminScreen(
       titulo: 'Seguimiento de adopción',
       icono: Icons.timeline,
@@ -226,17 +200,16 @@ class _MenuScreenState extends State<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = Session.isAdmin;
+
 
     final paginas = <Widget>[
       HomeTab(
-        onVerMascotas: _abrirListaMascotas,
-        onVerMatch: () => isAdmin ? _abrirMatch() : _irA(1),
+        onVerMascotas: () => _irA(1),
+        onVerMatch: () => _irA(2),
       ),
-      if (isAdmin)
-        _paginaGestion()
-      else
-        const PerfectMatchScreen(),
+      const PetScreen(),
+      const PerfectMatchScreen(),
+      const NotificationsTab(),
       const ProfileScreen(),
     ];
     final paginaActual = paginas[_index];
@@ -252,16 +225,17 @@ class _MenuScreenState extends State<MenuScreen> {
         }
       },
       child: Scaffold(
-        appBar: (_index == 0 || _enDetalle)
+        appBar: (_index == 0 || _index == 1 || _index == 3 || _enDetalle)
             ? null
             : AppBar(
                 title: const Text('Paw Match'),
                 actions: [
-                  IconButton(
-                    tooltip: 'Ver Mascotas',
-                    icon: const Icon(Icons.pets, color: AppColors.rosa),
-                    onPressed: _abrirListaMascotas,
-                  ),
+                  if (Session.isAdmin)
+                    IconButton(
+                      tooltip: 'Gestión Admin',
+                      icon: const Icon(Icons.tune_rounded, color: AppColors.rosa),
+                      onPressed: _mostrarMenuGestion,
+                    ),
                   IconButton(
                     tooltip: 'Cerrar sesión',
                     icon: const FeatureIcon.cerrarSesion(),
@@ -284,20 +258,80 @@ class _MenuScreenState extends State<MenuScreen> {
               iconoActivo: Icon(Icons.home_rounded),
               etiqueta: 'Inicio',
             ),
-            if (isAdmin)
-              const NavItem(
-                icono: Icon(Icons.tune_rounded),
-                iconoActivo: Icon(Icons.tune_rounded),
-                etiqueta: 'Gestionar',
-                esDestacado: true,
-              )
-            else
-              const NavItem(
-                icono: Icon(Icons.favorite_border_rounded),
-                iconoActivo: Icon(Icons.favorite_rounded),
-                etiqueta: 'Match perfecto',
-                esDestacado: true,
+            const NavItem(
+              icono: Icon(Icons.pets_outlined),
+              iconoActivo: Icon(Icons.pets_rounded),
+              etiqueta: 'Mascotas',
+            ),
+            const NavItem(
+              icono: Icon(Icons.favorite_rounded),
+              iconoActivo: Icon(Icons.favorite_rounded),
+              etiqueta: 'Match perfecto',
+              esDestacado: true,
+            ),
+            NavItem(
+              icono: AnimatedBuilder(
+                animation: Listenable.merge([
+                  Session.esAdmin
+                      ? ApadrinamientoService.noLeidasAdmin
+                      : ApadrinamientoService.noLeidasUsuario,
+                  Session.esAdmin
+                      ? AdoptionService.noLeidasAdmin
+                      : AdoptionService.noLeidasUsuario,
+                ]),
+                builder: (context, _) {
+                  final total = Session.esAdmin
+                      ? (ApadrinamientoService.noLeidasAdmin.value +
+                          AdoptionService.noLeidasAdmin.value)
+                      : (ApadrinamientoService.noLeidasUsuario.value +
+                          AdoptionService.noLeidasUsuario.value);
+                  return Badge(
+                    isLabelVisible: total > 0,
+                    label: Text(
+                      '$total',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    backgroundColor: Colors.redAccent,
+                    child: const Icon(Icons.notifications_outlined),
+                  );
+                },
               ),
+              iconoActivo: AnimatedBuilder(
+                animation: Listenable.merge([
+                  Session.esAdmin
+                      ? ApadrinamientoService.noLeidasAdmin
+                      : ApadrinamientoService.noLeidasUsuario,
+                  Session.esAdmin
+                      ? AdoptionService.noLeidasAdmin
+                      : AdoptionService.noLeidasUsuario,
+                ]),
+                builder: (context, _) {
+                  final total = Session.esAdmin
+                      ? (ApadrinamientoService.noLeidasAdmin.value +
+                          AdoptionService.noLeidasAdmin.value)
+                      : (ApadrinamientoService.noLeidasUsuario.value +
+                          AdoptionService.noLeidasUsuario.value);
+                  return Badge(
+                    isLabelVisible: total > 0,
+                    label: Text(
+                      '$total',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    backgroundColor: Colors.redAccent,
+                    child: const Icon(Icons.notifications_rounded),
+                  );
+                },
+              ),
+              etiqueta: 'Notificaciones',
+            ),
             const NavItem(
               icono: Icon(Icons.person_outline_rounded),
               iconoActivo: Icon(Icons.person_rounded),
