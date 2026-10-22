@@ -7,6 +7,7 @@ import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/acordeon_inicio.dart';
 import 'package:paw_match/widgets/cta_inicio.dart';
@@ -71,10 +72,7 @@ class _HomeTabState extends State<HomeTab> {
       ApadrinamientoService.detenerMonitoreo();
       AdoptionService.detenerMonitoreo();
       Session.cerrar();
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-        (_) => false,
-      );
+      Navegacion.ir(context, const WelcomeScreen());
     }
   }
 

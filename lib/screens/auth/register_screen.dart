@@ -99,9 +99,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       await abrirDestinoTrasAuth(context);
     } catch (e) {
       if (!mounted) return;
+      setState(() => _cargando = false);
       _aviso(e.toString().replaceFirst('Exception: ', ''));
-    } finally {
-      if (mounted) setState(() => _cargando = false);
     }
   }
 

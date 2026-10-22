@@ -12,6 +12,7 @@ import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/nav_flotante.dart';
@@ -189,10 +190,7 @@ class _MenuScreenState extends State<MenuScreen> {
       ApadrinamientoService.detenerMonitoreo();
       AdoptionService.detenerMonitoreo();
       Session.cerrar();
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-        (_) => false,
-      );
+      Navegacion.ir(context, const WelcomeScreen());
     }
   }
 
