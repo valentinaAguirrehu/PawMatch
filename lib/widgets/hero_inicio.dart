@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
+import 'package:paw_match/widgets/seccion_noticias_fundacion.dart';
 
-/// Encabezado del inicio: foto, saludo y botón de salir.
+export 'package:paw_match/widgets/seccion_noticias_fundacion.dart';
+
+/// Encabezado del inicio: foto, saludo, botón de salir y sección de noticias de la fundación.
 class HeroInicio extends StatelessWidget {
   final String nombre;
   final VoidCallback onCerrarSesion;
@@ -22,6 +25,17 @@ class HeroInicio extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _bannerHero(context),
+        const SeccionNoticiasFundacion(),
+      ],
+    );
+  }
+
+  Widget _bannerHero(BuildContext context) {
     final alto = (MediaQuery.of(context).size.height * 0.58)
         .clamp(420.0, 500.0)
         .toDouble();
