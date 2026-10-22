@@ -481,8 +481,8 @@ class _PetScreenState extends State<PetScreen> {
               ),
               subtitle: Text(
                 esAdmin
-                    ? 'Revisar solicitudes enviadas por usuarios'
-                    : 'Consulta si tu adopción fue aprobada',
+                    ? 'Revisar solicitudes y subir el contrato firmado'
+                    : 'Consulta el estado de tu adopción y el contrato',
               ),
               trailing: ValueListenableBuilder<int>(
                 valueListenable: esAdmin

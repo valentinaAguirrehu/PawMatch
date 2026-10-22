@@ -81,55 +81,105 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     if (s == null) return;
 
     if (s.isApproved) {
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.verified, color: Colors.green, size: 48),
-          title: Text('¡Adopción de ${_pet.nombre} aprobada!'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '📅 Fecha oficial de inicio: ${s.adoptionStartDateLabel ?? 'Activo'}',
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'La fundación aprobó tu solicitud. Coordina la entrega por el WhatsApp oficial.',
-              ),
-              if (s.hasObservations) ...[
-                const SizedBox(height: 10),
+      if (s.hasContract) {
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.verified, color: Colors.green, size: 48),
+            title: Text('¡Adopción de ${_pet.nombre} aprobada!'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('📅 Fecha oficial de inicio: ${s.adoptionStartDateLabel ?? 'Activo'}'),
+                const SizedBox(height: 8),
                 const Text(
-                  'Observaciones de la fundación:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  'El contrato de adopción ya está disponible. Puedes verlo y descargarlo, y coordinar la entrega por WhatsApp.',
                 ),
-                const SizedBox(height: 4),
-                Text(s.observations!),
+                if (s.hasObservations) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Observaciones de la fundación:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(s.observations!),
+                ],
               ],
+            ),
+            actions: [
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                icon: const Icon(Icons.assignment_turned_in),
+                label: const Text('Ver contrato'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _verContratoAdopcion(s);
+                },
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
+                icon: const Icon(Icons.chat),
+                label: const Text('WhatsApp'),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _whatsappAdopcion();
+                },
+              ),
             ],
           ),
-          actions: [
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF25D366)),
-              icon: const Icon(Icons.chat),
-              label: const Text('Contactar por WhatsApp'),
-              onPressed: () {
-                Navigator.pop(ctx);
-                final num = FundacionInfo.whatsappNumero.isNotEmpty
-                    ? FundacionInfo.whatsappNumero
-                    : '573136177747';
-                final msg =
-                    'Hola Fundación Maritza Arévalo, mi solicitud para adoptar a ${_pet.nombre} fue aprobada en Paw Match.';
-                abrirEnlace(
-                  context,
-                  'https://wa.me/$num?text=${Uri.encodeComponent(msg)}',
-                  nombre: 'WhatsApp',
-                );
-              },
+        );
+      } else {
+        showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.hourglass_top_rounded, color: Colors.orange, size: 48),
+            title: const Text('Pendiente subir contrato de adopción'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tu solicitud para adoptar a ${_pet.nombre} fue aprobada.',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Text(
+                    'Pendiente subir contrato de adopción. Debes esperar a que el administrador suba el contrato firmado. Cuando lo haga, podrás verlo y descargarlo aquí.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.amber.shade900,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                if (s.hasObservations) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'Indicaciones de la fundación: ${s.observations}',
+                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
-      );
+            actions: [
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      }
       return;
     }
 
@@ -196,6 +246,81 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       pet: _pet,
       onEnviadaExitosamente: _consultarMiSolicitud,
     );
+  }
+
+  void _whatsappAdopcion() {
+    final num = FundacionInfo.whatsappNumero.isNotEmpty
+        ? FundacionInfo.whatsappNumero
+        : '573136177747';
+    final msg =
+        'Hola Fundación Maritza Arévalo, mi solicitud para adoptar a ${_pet.nombre} fue aprobada en Paw Match.';
+    abrirEnlace(
+      context,
+      'https://wa.me/$num?text=${Uri.encodeComponent(msg)}',
+      nombre: 'WhatsApp',
+    );
+  }
+
+  Future<void> _verContratoAdopcion(AdoptionRequest solicitud) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final bytes = await AdoptionService.fetchContract(solicitud.id);
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      final esPdf = bytes.length >= 4 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46;
+
+      if (esPdf) {
+        await Printing.layoutPdf(
+          onLayout: (_) => bytes,
+          name: 'Contrato_Adopcion_${_pet.nombre}.pdf',
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              title: Text('Contrato de adopción - ${_pet.nombre}'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            body: Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4,
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al cargar contrato: $e'),
+        ),
+      );
+    }
   }
 
   Future<void> _verContrato(SolicitudApadrinamiento s) async {
@@ -979,6 +1104,40 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       _personalidad(),
 
                       // Contrato disponible si es padrino
+                      if (_miAdopcion != null && _miAdopcion!.hasContract) ...[
+                        const SizedBox(height: 22),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Colors.green.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.assignment_turned_in, color: Colors.green, size: 28),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Contrato oficial de adopción firmado y disponible.',
+                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                ),
+                              ),
+                              FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.green.shade700,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                onPressed: () => _verContratoAdopcion(_miAdopcion!),
+                                child: const Text('Ver'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
                       if (_miSolicitud != null && _miSolicitud!.tieneContrato) ...[
                         const SizedBox(height: 22),
                         Container(
@@ -1230,10 +1389,17 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         final mia = _miAdopcion;
         if (mia != null) {
           if (mia.isApproved) {
-            etiquetaAdoptar = 'Aprobada';
-            iconoAdoptar = Icons.verified;
-            accionAdoptar = _verEstadoAdopcion;
-            fondoAdoptar = Colors.green.shade700;
+            if (mia.hasContract) {
+              etiquetaAdoptar = 'Ver contrato';
+              iconoAdoptar = Icons.assignment_turned_in;
+              accionAdoptar = _verEstadoAdopcion;
+              fondoAdoptar = Colors.green.shade700;
+            } else {
+              etiquetaAdoptar = 'Falta contrato';
+              iconoAdoptar = Icons.hourglass_top_rounded;
+              accionAdoptar = _verEstadoAdopcion;
+              fondoAdoptar = Colors.amber.shade800;
+            }
           } else if (mia.isPending) {
             etiquetaAdoptar = 'En revisión';
             iconoAdoptar = Icons.hourglass_top;

@@ -28,6 +28,9 @@ class AdoptionRequest {
   final String? adoptionStartDate;
   final bool readByAdmin;
   final bool readByUser;
+  final String? contractFile;
+  final String? contractStatus;
+  final String? contractUploadedAt;
   final String? reviewerId;
 
   final String applicantFirstName;
@@ -65,6 +68,9 @@ class AdoptionRequest {
     this.adoptionStartDate,
     this.readByAdmin = false,
     this.readByUser = true,
+    this.contractFile,
+    this.contractStatus,
+    this.contractUploadedAt,
     this.reviewerId,
     this.applicantFirstName = '',
     this.applicantLastName = '',
@@ -84,12 +90,29 @@ class AdoptionRequest {
   bool get isApproved => status == 'aprobada';
   bool get isRejected => status == 'rechazada';
 
-  String get statusLabel => switch (status) {
-    'aprobada' => 'Aprobada',
-    'rechazada' => 'Rechazada',
-    'cancelada' => 'Cancelada',
-    _ => 'Pendiente',
-  };
+  bool get hasContract =>
+      contractFile != null && contractFile!.trim().isNotEmpty;
+
+  /// Aprobada y a la espera de que el administrador cargue el contrato.
+  bool get contractPending => isApproved && !hasContract;
+
+  String get statusLabel {
+    if (status == 'aprobada' && !hasContract) {
+      return 'Pendiente subir contrato de adopción';
+    }
+    return switch (status) {
+      'aprobada' => 'Aprobada',
+      'rechazada' => 'Rechazada',
+      'cancelada' => 'Cancelada',
+      _ => 'Pendiente',
+    };
+  }
+
+  String? get contractUploadedAtLabel {
+    final texto = contractUploadedAt?.trim() ?? '';
+    if (texto.isEmpty) return null;
+    return _fecha(texto);
+  }
 
   String get applicantFullName {
     final nombre = '$applicantFirstName $applicantLastName'.trim();
@@ -178,6 +201,9 @@ class AdoptionRequest {
       adoptionStartDate: _opcional(json['fecha_inicio_adopcion']),
       readByAdmin: json['leido_admin'] == true || json['leido_admin'] == 'true',
       readByUser: json['leido_usuario'] == true || json['leido_usuario'] == 'true',
+      contractFile: _opcional(json['contrato_adopcion_archivo']),
+      contractStatus: _opcional(json['contrato_adopcion_estado']),
+      contractUploadedAt: _opcional(json['contrato_adopcion_subido_en']),
       reviewerId: json['id_administrador_revisor']?.toString(),
       applicantFirstName: json['solicitante_nombres']?.toString() ?? '',
       applicantLastName: json['solicitante_apellidos']?.toString() ?? '',

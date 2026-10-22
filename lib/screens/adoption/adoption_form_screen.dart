@@ -1,9 +1,12 @@
 import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -51,6 +54,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   bool _mostrarError = false;
   bool _correoPerfilConfirmado = true;
   bool _actualizandoCorreo = false;
+  bool _aceptoTerminos = false;
   String? _error;
 
   String? _vivienda;
@@ -234,6 +238,17 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       return;
     }
 
+    if (_cedulaBytes == null || _reciboBytes == null) {
+      setState(() => _paso = 2);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Adjunta la cédula y el recibo de servicio público antes de continuar.'),
+        ),
+      );
+      return;
+    }
+
     final correoFinal = _correoCtrl.text.trim();
     if (correoFinal.isEmpty || !correoFinal.contains('@') || !correoFinal.contains('.')) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -255,13 +270,25 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       return;
     }
 
+    if (!_aceptoTerminos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Debes aceptar los términos y condiciones de adopción responsable para continuar.',
+          ),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _enviando = true;
       _error = null;
     });
 
     try {
-      await AdoptionService.submit(
+      final idCreado = await AdoptionService.submit(
         petId: widget.pet.id,
         housingType: _vivienda!,
         hasYard: _patio!,
@@ -277,12 +304,79 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
         utilityBillName: _reciboNombre!,
         correoContacto: correoFinal,
       );
+
+      final fechaAhora = DateTime.now();
+      final idRadicado = (idCreado != null && idCreado.isNotEmpty)
+          ? idCreado
+          : 'ADOP-${fechaAhora.millisecondsSinceEpoch}';
+
+      if (Session.documentoIdentidad.trim().isEmpty && Session.idUsuario != null) {
+        try {
+          final usuario = await ApiService.obtenerUsuario(Session.idUsuario!);
+          if (usuario.documentoIdentidad.trim().isNotEmpty) {
+            Session.documentoIdentidad = usuario.documentoIdentidad.trim();
+          }
+        } catch (_) {}
+      }
+
+      final nombreCompleto = '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
+          ? 'Usuario Registrado'
+          : '${Session.nombre} ${Session.apellidos}'.trim();
+
+      Uint8List? pdfBytes;
+      String? avisoPdf;
+      try {
+        pdfBytes = await AcuerdoAdopcionPdfService.generarPdfBytes(
+          DatosActaAdopcion(
+            idSolicitud: idRadicado,
+            nombreUsuario: nombreCompleto,
+            documentoUsuario: Session.documentoIdentidad.trim().isNotEmpty
+                ? Session.documentoIdentidad.trim()
+                : null,
+            correoUsuario: correoFinal,
+            telefonoUsuario: Session.telefono.isNotEmpty ? Session.telefono : null,
+            tipoVivienda: _vivienda!,
+            tienePatio: _patio!,
+            tieneNinos: _ninos!,
+            tieneOtrasMascotas: _otrasMascotas!,
+            otrasMascotas: _otrasCtrl.text.trim(),
+            tiempoDisponible: _tiempo!,
+            experienciaPrevia: _experiencia!,
+            motivacion: _infoCtrl.text.trim(),
+            nombreMascota: widget.pet.nombre,
+            especieMascota: widget.pet.especie,
+            razaMascota: widget.pet.raza,
+            edadMascota: widget.pet.edadTexto,
+            sexoMascota: widget.pet.sexo,
+            fechaAceptacion: fechaAhora,
+            aceptoTerminos: true,
+          ),
+        );
+        await AcuerdoAdopcionPdfService.descargarYGuardarPdf(
+          bytes: pdfBytes,
+          nombreMascota: widget.pet.nombre,
+        );
+      } catch (e) {
+        avisoPdf =
+            'La solicitud quedó registrada, pero no se pudo generar el acta en PDF. Puedes solicitarla de nuevo a la fundación.';
+      }
+
       if (!mounted) return;
-      await showDialog<void>(
-        context: context,
+      final navigator = Navigator.of(context);
+      navigator.pop(true);
+
+      showDialog<void>(
+        context: navigator.context,
         builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 52),
-          title: const Text('Solicitud enviada'),
+          title: Text(
+            pdfBytes != null
+                ? 'Solicitud enviada y acta descargada'
+                : 'Solicitud enviada',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -292,6 +386,43 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
+              if (pdfBytes != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.rosaSuave,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.bordeRosa),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.picture_as_pdf, color: AppColors.rosa, size: 28),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Acta de adopción en PDF',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                            ),
+                            Text(
+                              'Se descargó el compromiso con tu aceptación expresa de los términos.',
+                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else if (avisoPdf != null)
+                Text(
+                  avisoPdf,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12.5),
+                ),
+              const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -305,16 +436,39 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Notificación: Te llegará un correo a $correoFinal cuando la fundación apruebe tu solicitud.',
+                        'Notificación: Te llegará un correo a $correoFinal cuando la fundación apruebe o rechace tu solicitud.',
                         style: TextStyle(fontSize: 11.5, color: Colors.blue.shade900),
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Radicado: #$idRadicado',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: Colors.black54,
+                ),
+              ),
             ],
           ),
           actions: [
+            if (pdfBytes != null)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.download, size: 18),
+                label: const Text('Descargar copia'),
+                onPressed: () {
+                  AcuerdoAdopcionPdfService.descargarYGuardarPdf(
+                    bytes: pdfBytes!,
+                    nombreMascota: widget.pet.nombre,
+                  );
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Descargando copia del acta de adopción...')),
+                  );
+                },
+              ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
               onPressed: () => Navigator.pop(ctx),
@@ -323,8 +477,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           ],
         ),
       );
-      if (!mounted) return;
-      Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _enviando = false);
@@ -412,6 +564,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                                 if (_paso == 0) ..._pasoHogar(t),
                                 if (_paso == 1) ..._pasoExperiencia(t),
                                 if (_paso == 2) ..._pasoDocumentos(t),
+                                if (_paso == 3) ..._pasoCompromiso(t),
                                 if (_error != null) ...[
                                   const SizedBox(height: 12),
                                   Text(
@@ -683,8 +836,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       bytes: _reciboBytes,
       onElegir: () => _elegirFoto(cedula: false),
     ),
-    const SizedBox(height: 18),
-    _tarjetaConfirmacionCorreoPerfil(t),
   ];
 
   Widget _campoCorreoInicial(TextTheme t) {
@@ -922,6 +1073,271 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     );
   }
 
+  /// Texto formal de los términos, con la cláusula de rescisión destacada.
+  void _verTerminosAdopcion() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.rosaSuave,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.gavel_outlined, color: AppColors.rosa, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Términos de adopción',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  Text(
+                    'Fundación Maritza Arévalo',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Container(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 460),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Text(
+                  'Al solicitar la adopción de ${widget.pet.nombre}, aceptas libre y voluntariamente los siguientes términos y condiciones:',
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                ...AcuerdoAdopcionPdfService.clausulasAdopcion.map((c) {
+                  final esAlerta = c['alerta'] == 'si';
+                  final fila = Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 10,
+                        backgroundColor: esAlerta ? Colors.red.shade50 : AppColors.rosaSuave,
+                        child: Text(
+                          c['num']!,
+                          style: TextStyle(
+                            color: esAlerta ? Colors.red.shade800 : AppColors.rosa,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: esAlerta ? Colors.red.shade900 : Colors.black87,
+                              height: 1.38,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: '${c['titulo']}: ',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              TextSpan(text: c['cuerpo']),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: esAlerta
+                        ? Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: fila,
+                          )
+                        : fila,
+                  );
+                }),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.verified_outlined, color: Colors.green, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Al confirmar, el sistema registrará tu constancia electrónica y generará el acta de adopción en PDF.',
+                          style: TextStyle(fontSize: 11.5, color: Colors.black87),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.rosa,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Paso final: resumen, aceptación expresa y descarga del acta.
+  List<Widget> _pasoCompromiso(TextTheme t) {
+    final nombre = '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
+        ? 'Usuario registrado'
+        : '${Session.nombre} ${Session.apellidos}'.trim();
+
+    return [
+      Text(
+        'Términos y confirmación',
+        style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        'Revisa el resumen de tu solicitud y acepta los términos de adopción responsable de la Fundación Maritza Arévalo.',
+        style: t.bodySmall?.copyWith(color: Colors.grey.shade600, height: 1.35),
+      ),
+      const SizedBox(height: 14),
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            _resumenFila('Fundación:', FundacionInfo.nombre),
+            const Divider(height: 14),
+            _resumenFila('Adoptante:', nombre),
+            const Divider(height: 14),
+            _resumenFila('Notificación al correo:', _correoCtrl.text.trim()),
+            const Divider(height: 14),
+            _resumenFila('Mascota:', widget.pet.nombre),
+            const Divider(height: 14),
+            _resumenFila('Vivienda:', _vivienda ?? '—'),
+            const Divider(height: 14),
+            _resumenFila('Documentos:', 'Cédula y recibo adjuntos'),
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
+      Material(
+        color: _aceptoTerminos ? Colors.green.shade50 : Colors.grey.shade50,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(
+            color: _aceptoTerminos ? Colors.green.shade400 : Colors.grey.shade300,
+            width: _aceptoTerminos ? 1.5 : 1,
+          ),
+        ),
+        child: CheckboxListTile(
+          value: _aceptoTerminos,
+          activeColor: Colors.green,
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+          title: RichText(
+            text: TextSpan(
+              style: t.bodyMedium?.copyWith(color: AppColors.texto, height: 1.35),
+              children: [
+                const TextSpan(text: 'He leído y acepto los '),
+                TextSpan(
+                  text: 'términos y condiciones de adopción responsable',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.rosa,
+                    decoration: TextDecoration.underline,
+                  ),
+                  recognizer: TapGestureRecognizer()..onTap = _verTerminosAdopcion,
+                ),
+                TextSpan(text: ' de ${widget.pet.nombre}.'),
+              ],
+            ),
+          ),
+          onChanged: (valor) => setState(() => _aceptoTerminos = valor ?? false),
+          secondary: IconButton(
+            icon: const Icon(Icons.info_outline, color: AppColors.rosa),
+            tooltip: 'Ver términos completos',
+            onPressed: _verTerminosAdopcion,
+          ),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.rosaSuave,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.bordeRosa),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.file_download_outlined, color: AppColors.rosa, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Al confirmar, el sistema registrará tu aceptación expresa y descargará el acta de compromiso de adopción en PDF, con tus datos, los de la mascota y la fecha.',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade800, height: 1.35),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
+      _tarjetaConfirmacionCorreoPerfil(t),
+    ];
+  }
+
+  Widget _resumenFila(String etiqueta, String valor) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(etiqueta, style: const TextStyle(color: Colors.black54, fontSize: 12.5)),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            valor,
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _botones() {
     return SafeArea(
       top: false,
@@ -947,7 +1363,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                   backgroundColor: AppColors.rosa,
                   minimumSize: const Size.fromHeight(48),
                 ),
-                onPressed: _enviando ? null : (_paso < 2 ? _continuar : _enviar),
+                onPressed: _enviando ? null : (_paso < 3 ? _continuar : _enviar),
                 child: _enviando
                     ? const SizedBox(
                         width: 22,
@@ -957,7 +1373,11 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : Text(_paso < 2 ? 'Continuar' : 'Enviar solicitud'),
+                    : Text(
+                        _paso < 3 ? 'Continuar' : 'Enviar solicitud de adopción',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
               ),
             ),
           ],
@@ -973,7 +1393,7 @@ class _Pasos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const etiquetas = ['Su hogar', 'Tiempo', 'Documentos'];
+    const etiquetas = ['Hogar', 'Tiempo', 'Documentos', 'Compromiso'];
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
       child: Row(
@@ -1004,7 +1424,7 @@ class _Pasos extends StatelessWidget {
                 Text(
                   etiquetas[i],
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: i == paso ? AppColors.rosa : Colors.black54,
                   ),

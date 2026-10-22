@@ -429,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Estado de adopción',
+                            'Estado y contrato',
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 11.5,
