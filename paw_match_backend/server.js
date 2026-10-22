@@ -7,6 +7,7 @@ const mascotasRoutes = require('./routes/mascotas');
 const fundacionRoutes = require('./routes/fundacion');
 const solicitudesApadrinamientoRoutes = require('./routes/solicitudes_apadrinamiento');
 const adoptionRequestsRoutes = require('./routes/adoption_requests');
+const noticiasRoutes = require('./routes/noticias');
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,7 @@ app.use('/api/mascotas', mascotasRoutes);
 app.use('/api/fundacion', fundacionRoutes);
 app.use('/api/solicitudes-apadrinamiento', solicitudesApadrinamientoRoutes);
 app.use('/api/adoption-requests', adoptionRequestsRoutes);
+app.use('/api/noticias', noticiasRoutes);
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => res.send('API Paw Match funcionando'));
