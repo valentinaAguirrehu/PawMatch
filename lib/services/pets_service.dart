@@ -20,7 +20,13 @@ class PetsService {
     };
     if (estado != null) parametros['estado'] = estado;
     final uri = Uri.parse(_url).replace(queryParameters: parametros);
-    final resp = await http.get(uri);
+    final resp = await http.get(
+      uri,
+      headers: const {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+    );
     _validar(resp, 200);
     final data = jsonDecode(resp.body) as List<dynamic>;
     return data.map((e) => Pet.fromJson(e as Map<String, dynamic>)).toList();

@@ -8,7 +8,7 @@ import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 
 /// Formulario para agregar (pet == null) o editar una mascota.
-/// Al guardar con éxito hace Navigator.pop(context, true).
+/// Al guardar con éxito hace Navigator.pop con la mascota guardada.
 class PetsFormScreen extends StatefulWidget {
   final Pet? pet;
   const PetsFormScreen({super.key, this.pet});
@@ -80,6 +80,21 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
   void _aviso(String texto) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+  }
+
+  /// Macho/masculino usa participio masculino; hembra/femenino, el femenino.
+  bool _esMacho(String? sexo) {
+    final s = (sexo ?? '').trim().toLowerCase();
+    return s == 'macho' || s == 'masculino' || s.startsWith('masc');
+  }
+
+  String _mensajeGuardado(Pet pet) {
+    final macho = _esMacho(pet.sexo);
+    final nombre = '"${pet.nombre}"';
+    if (_esEdicion) {
+      return '$nombre ${macho ? 'actualizado' : 'actualizada'} exitosamente.';
+    }
+    return '$nombre ${macho ? 'agregado' : 'agregada'} exitosamente.';
   }
 
   // ---------------- Foto ----------------
@@ -175,16 +190,12 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
         personalidad: _personalidad.personalidad,
       );
 
-      if (_esEdicion) {
-        await PetsService.actualizar(widget.pet!.id, pet);
-      } else {
-        await PetsService.crear(pet);
-      }
+      final guardada = _esEdicion
+          ? await PetsService.actualizar(widget.pet!.id, pet)
+          : await PetsService.crear(pet);
       if (!mounted) return;
-      _aviso(
-        _esEdicion ? '${pet.nombre} actualizada' : '${pet.nombre} agregada',
-      );
-      Navigator.pop(context, true);
+      _aviso(_mensajeGuardado(guardada));
+      Navigator.pop(context, guardada);
     } catch (e) {
       if (mounted) _aviso(e.toString().replaceFirst('Exception: ', ''));
     } finally {

@@ -494,11 +494,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   Future<void> _editarMascotaAdmin() async {
-    final guardado = await Navigator.push<bool>(
+    final guardado = await Navigator.push<Pet>(
       context,
       MaterialPageRoute(builder: (_) => PetsFormScreen(pet: _pet)),
     );
-    if (guardado == true && mounted) {
+    if (guardado != null && mounted) {
       try {
         final actualizada = await PetsService.obtener(_pet.id);
         if (mounted) {

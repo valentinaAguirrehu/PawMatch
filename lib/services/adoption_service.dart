@@ -37,6 +37,7 @@ class AdoptionService {
     required String idCardName,
     required Uint8List utilityBillBytes,
     required String utilityBillName,
+    String? correoContacto,
   }) async {
     final req = http.MultipartRequest('POST', Uri.parse(_url));
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
@@ -50,6 +51,8 @@ class AdoptionService {
       'experiencia_previa': previousExperience.toString(),
       'informacion_adicional': additionalInfo,
       if (hasOtherPets && otherPets != null) 'otras_mascotas': otherPets,
+      if (correoContacto != null && correoContacto.trim().isNotEmpty)
+        'correo_contacto': correoContacto.trim(),
     });
     req.files.add(
       http.MultipartFile.fromBytes(

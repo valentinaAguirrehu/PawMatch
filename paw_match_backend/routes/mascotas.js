@@ -25,6 +25,24 @@ const personalityColumns = [
   'tolerancia_soledad', 'adaptabilidad',
 ];
 
+// La edad puede estar en meses o años. Sin esta columna, el listado falla.
+const esquemaListo = pool.query(`
+  ALTER TABLE mascota
+    ADD COLUMN IF NOT EXISTS unidad_edad VARCHAR(10) NOT NULL DEFAULT 'anos'
+`).catch((err) => {
+  console.error('No se pudo preparar la tabla mascota:', err.message);
+  throw err;
+});
+
+router.use(async (_req, res, next) => {
+  try {
+    await esquemaListo;
+    next();
+  } catch (_) {
+    res.status(500).json({ error: 'La tabla mascota no coincide con el esquema esperado.' });
+  }
+});
+
 async function requireAdmin(req, res, next) {
   const userId = req.header('x-usuario-id');
   if (!userId) return res.status(401).json({ error: 'Debes iniciar sesión' });

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/screens/admin/pets_form_screen.dart';
 import 'package:paw_match/screens/adoption/adoption_requests_admin_screen.dart';
 import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
@@ -25,6 +26,14 @@ class PetScreen extends StatefulWidget {
 class _PetScreenState extends State<PetScreen> {
   late Future<List<Pet>> _future = PetsService.listar();
   final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+
+  /// Mascota recién creada: se muestra primera aunque el listado tarde en refrescarse.
+  Pet? _recienAgregada;
+  bool _irAlInicio = false;
+
+  /// Último listado ya mostrado, para no tapar la pantalla con el indicador al refrescar.
+  List<Pet>? _listaVisible;
   String _busqueda = '';
   String _especie = 'Todas';
   String _sexo = 'Todos'; // 'Todos', 'Macho', 'Hembra'
@@ -52,12 +61,52 @@ class _PetScreenState extends State<PetScreen> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _recargar() async {
     setState(() => _future = PetsService.listar());
     await _future.catchError((_) => <Pet>[]);
+  }
+
+  /// Deja la mascota nueva al inicio y limpia filtros que podrían ocultarla.
+  List<Pet> _conRecienAgregada(List<Pet> pets) {
+    final nueva = _recienAgregada;
+    if (nueva == null) return pets;
+    final resto = pets.where((p) => p.id != nueva.id);
+    final guardada = pets.where((p) => p.id == nueva.id);
+    return [guardada.isEmpty ? nueva : guardada.first, ...resto];
+  }
+
+  void _programarIrAlInicio() {
+    if (!_irAlInicio) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_irAlInicio || !_scrollCtrl.hasClients) return;
+      _scrollCtrl.jumpTo(0);
+      _irAlInicio = false;
+    });
+  }
+
+  /// Abre el formulario existente de alta. Solo se ofrece al administrador.
+  Future<void> _abrirFormularioNuevaMascota() async {
+    final creada = await Navigator.push<Pet>(
+      context,
+      MaterialPageRoute(builder: (_) => const PetsFormScreen()),
+    );
+    if (creada == null || !mounted) return;
+    setState(() {
+      _recienAgregada = creada;
+      _irAlInicio = true;
+      _searchCtrl.clear();
+      _busqueda = '';
+      _especie = 'Todas';
+      _sexo = 'Todos';
+      _tamano = 'Todos';
+      _edad = 'Todos';
+    });
+    await _recargar();
+    _programarIrAlInicio();
   }
 
   List<Pet> _filtrar(List<Pet> pets) {
@@ -466,8 +515,17 @@ class _PetScreenState extends State<PetScreen> {
   Widget build(BuildContext context) {
     final bool puedeVolver = Navigator.canPop(context);
 
+    final bool esAdmin = Session.esAdmin;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FD),
+      floatingActionButton: esAdmin
+          ? FloatingActionButton.extended(
+              onPressed: _abrirFormularioNuevaMascota,
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar mascota'),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
@@ -810,35 +868,45 @@ class _PetScreenState extends State<PetScreen> {
               child: FutureBuilder<List<Pet>>(
                 future: _future,
                 builder: (context, snap) {
-                  if (snap.connectionState != ConnectionState.done) {
+                  if (snap.connectionState == ConnectionState.done && snap.hasData) {
+                    _listaVisible = snap.data;
+                  }
+                  final origen = snap.hasData ? snap.data : _listaVisible;
+                  if (origen == null) {
+                    if (snap.connectionState != ConnectionState.done) {
+                      return const Center(
+                        child: CircularProgressIndicator(color: AppColors.rosa),
+                      );
+                    }
+                    if (snap.hasError) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey),
+                            const SizedBox(height: 10),
+                            const Text(
+                              'No pudimos cargar las mascotas',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            const SizedBox(height: 6),
+                            FilledButton.icon(
+                              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                              onPressed: _recargar,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Reintentar'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
                     return const Center(
                       child: CircularProgressIndicator(color: AppColors.rosa),
                     );
                   }
-                  if (snap.hasError) {
-                    return Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'No pudimos cargar las mascotas',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const SizedBox(height: 6),
-                          FilledButton.icon(
-                            style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
-                            onPressed: _recargar,
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Reintentar'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
 
-                  final pets = _filtrar(snap.data!);
+                  final pets = _conRecienAgregada(_filtrar(origen));
+                  _programarIrAlInicio();
 
                   if (pets.isEmpty) {
                     return RefreshIndicator(
@@ -924,8 +992,15 @@ class _PetScreenState extends State<PetScreen> {
                                 ? 3
                                 : (constraints.maxWidth >= 480 ? 2 : 1);
                             return GridView.builder(
+                              controller: _scrollCtrl,
+                              primary: false,
                               physics: const AlwaysScrollableScrollPhysics(),
-                              padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+                              padding: EdgeInsets.fromLTRB(
+                                16,
+                                10,
+                                16,
+                                esAdmin ? 88 : 28,
+                              ),
                               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
                                 crossAxisSpacing: 18,

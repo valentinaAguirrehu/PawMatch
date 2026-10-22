@@ -16,7 +16,8 @@ const esquemaListo = (async () => {
       ADD COLUMN IF NOT EXISTS leido_admin BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS leido_usuario BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS fecha_inicio_adopcion DATE,
-      ADD COLUMN IF NOT EXISTS fecha_actualizacion_estado TIMESTAMP
+      ADD COLUMN IF NOT EXISTS fecha_actualizacion_estado TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS correo_contacto TEXT
   `);
 })().catch((err) => {
   console.error('No se pudo preparar la tabla solicitudadopcion:', err.message);
@@ -177,7 +178,7 @@ const selectSolicitud = `
     s.id_administrador_revisor,
     COALESCE(u.nombres, '') AS solicitante_nombres,
     COALESCE(u.apellidos, '') AS solicitante_apellidos,
-    COALESCE(u.correo, '') AS solicitante_correo,
+    COALESCE(NULLIF(btrim(s.correo_contacto), ''), u.correo, '') AS solicitante_correo,
     COALESCE(u.telefono, '') AS solicitante_telefono,
     COALESCE(u.direccion, '') AS solicitante_direccion,
     COALESCE(u.documento_identidad, '') AS solicitante_cedula,
@@ -248,6 +249,14 @@ router.post('/', subirArchivos, async (req, res) => {
       });
     }
 
+    const correoIngresado = (req.body.correo_contacto || '').trim();
+    const correoFinal = correoIngresado || (usuario.correo || '').trim();
+    if (!correoFinal || !correoFinal.includes('@') || !correoFinal.includes('.')) {
+      return res.status(400).json({
+        error: 'Debes proporcionar un correo electrónico válido para recibir la respuesta',
+      });
+    }
+
     const petCheck = await pool.query(
       'SELECT id_mascota, nombre, estado_adopcion FROM mascota WHERE id_mascota = $1',
       [idMascota]
@@ -283,8 +292,8 @@ router.post('/', subirArchivos, async (req, res) => {
         id_usuario, id_mascota, tipo_vivienda, tiene_patio, tiene_ninos,
         tiene_mascotas, otras_mascotas, tiempo_disponible, experiencia_previa,
         informacion_adicional, foto_cedula, foto_servicios_publicos, estado,
-        leido_admin, leido_usuario
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente', false, true)
+        leido_admin, leido_usuario, correo_contacto
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente', false, true, $13)
       RETURNING id_solicitud_adopcion`,
       [
         usuario.id_usuario,
@@ -299,6 +308,7 @@ router.post('/', subirArchivos, async (req, res) => {
         informacion,
         cedula.filename,
         recibo.filename,
+        correoFinal,
       ]
     );
 
@@ -506,6 +516,7 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
     await client.query('BEGIN');
     const actualRes = await client.query(
       `SELECT s.id_solicitud_adopcion, s.estado, s.id_usuario, s.id_mascota,
+              s.correo_contacto,
               u.nombres, u.apellidos, u.correo,
               m.nombre AS nombre_mascota, m.estado_adopcion
        FROM solicitudadopcion s
@@ -598,8 +609,12 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
         }
       } catch (_) {}
 
+      const correoDestino = (sol.correo_contacto && String(sol.correo_contacto).trim().length > 0)
+        ? String(sol.correo_contacto).trim()
+        : sol.correo;
+
       enviarCorreoAprobacionAdopcion({
-        destinatario: sol.correo,
+        destinatario: correoDestino,
         nombreUsuario: `${sol.nombres} ${sol.apellidos}`.trim(),
         nombreMascota: sol.nombre_mascota,
         fechaInicio,
