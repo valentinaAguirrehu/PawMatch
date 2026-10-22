@@ -75,15 +75,16 @@ class _LoginScreenState extends State<LoginScreen> {
       // Guarda quién inició sesión (id, nombre y rol) para usarlo en la app
       Session.iniciar(usuario);
 
-      // Cuestionario solo la primera vez; si ya existe, va al inicio
+      // Cuestionario solo la primera vez; si ya existe, va al inicio.
+      // No hay setState después: esta ruta se destruye y un rebuild aquí
+      // dispara el fallo '_dependents.isEmpty'.
       await abrirDestinoTrasAuth(context);
     } catch (e) {
       if (!mounted) return;
+      setState(() => _cargando = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
-    } finally {
-      if (mounted) setState(() => _cargando = false);
     }
   }
 

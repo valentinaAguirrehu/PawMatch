@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_theme.dart';
-import 'package:paw_match/screens/auth/welcome_screen.dart';
+import 'package:paw_match/screens/sesion_shell.dart';
 
 void main() {
   runApp(const PawMatchApp());
@@ -15,7 +15,7 @@ class PawMatchApp extends StatelessWidget {
       title: 'Paw Match',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const WelcomeScreen(),
+      home: const SesionShell(),
     );
   }
 }
