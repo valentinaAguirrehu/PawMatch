@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/services/adoption_service.dart';
@@ -31,10 +33,28 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
   String? _errorRecibo;
   bool _procesando = false;
 
+  Uint8List? _contratoBytes;
+  bool _cargandoContrato = false;
+  String? _errorContrato;
+  bool _subiendoContrato = false;
+  late bool _tieneContrato;
+  String? _nombreContrato;
+
+  bool _esPdf(Uint8List bytes) {
+    if (bytes.length < 4) return false;
+    return bytes[0] == 0x25 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x44 &&
+        bytes[3] == 0x46;
+  }
+
   @override
   void initState() {
     super.initState();
+    _tieneContrato = widget.request.hasContract;
+    _nombreContrato = widget.request.contractFile;
     _cargarDocumentos();
+    if (_tieneContrato) _cargarContrato();
   }
 
   Future<void> _cargarDocumentos() async {
@@ -116,6 +136,238 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     );
   }
 
+  Future<void> _cargarContrato() async {
+    setState(() {
+      _cargandoContrato = true;
+      _errorContrato = null;
+    });
+    try {
+      final bytes = await AdoptionService.fetchContract(widget.request.id);
+      if (!mounted) return;
+      setState(() {
+        _contratoBytes = bytes;
+        _cargandoContrato = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorContrato = e.toString().replaceFirst('Exception: ', '');
+        _cargandoContrato = false;
+      });
+    }
+  }
+
+  void _verContrato() {
+    final bytes = _contratoBytes;
+    if (bytes == null) return;
+    if (_esPdf(bytes)) {
+      Printing.layoutPdf(
+        onLayout: (_) => bytes,
+        name: _nombreContrato ?? 'Contrato_Adopcion_${widget.request.petName}.pdf',
+      );
+      return;
+    }
+    _verCompleta(bytes, 'Contrato de adopción');
+  }
+
+  Future<void> _subirContrato() async {
+    try {
+      final files = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+      );
+      if (files.isEmpty) return;
+      final file = files.first;
+      final bytes = await file.xFile.readAsBytes();
+      if (bytes.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text('No se pudo leer el archivo seleccionado.'),
+          ),
+        );
+        return;
+      }
+
+      final ext = file.name.split('.').last.toLowerCase();
+      final esPdf = ext == 'pdf' || _esPdf(bytes);
+      if (!mounted) return;
+
+      final confirmacion = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.upload_file, color: AppColors.rosa),
+              SizedBox(width: 8),
+              Expanded(child: Text('Confirmar subida')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '¿Subir este contrato de adopción para ${widget.request.applicantFullName}? El adoptante recibirá un correo y una alerta en la app.',
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      esPdf ? Icons.picture_as_pdf : Icons.image,
+                      color: esPdf ? Colors.redAccent : AppColors.rosa,
+                      size: 32,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            file.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          Text(
+                            '${(bytes.length / 1024).toStringAsFixed(1)} KB • ${ext.toUpperCase()}',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Aceptar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmacion != true) return;
+
+      setState(() => _subiendoContrato = true);
+      await AdoptionService.subirContrato(
+        id: widget.request.id,
+        bytes: bytes,
+        nombreArchivo: file.name,
+      );
+      if (!mounted) return;
+      setState(() {
+        _subiendoContrato = false;
+        _contratoBytes = bytes;
+        _tieneContrato = true;
+        _nombreContrato = file.name;
+        _errorContrato = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text(
+            'Contrato subido. El adoptante ya puede verlo y descargarlo.',
+          ),
+        ),
+      );
+      widget.onCambioEstado('aprobada');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subiendoContrato = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al subir contrato: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _eliminarContrato() async {
+    final confirmacion = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Expanded(child: Text('Eliminar contrato')),
+          ],
+        ),
+        content: const Text(
+          '¿Eliminar este contrato de adopción? El adoptante dejará de verlo y el estado volverá a «Pendiente subir contrato de adopción» hasta que subas uno nuevo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmacion != true) return;
+
+    setState(() => _subiendoContrato = true);
+    try {
+      await AdoptionService.eliminarContrato(widget.request.id);
+      if (!mounted) return;
+      setState(() {
+        _subiendoContrato = false;
+        _contratoBytes = null;
+        _tieneContrato = false;
+        _nombreContrato = null;
+        _errorContrato = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.orange,
+          content: Text('Contrato de adopción eliminado.'),
+        ),
+      );
+      widget.onCambioEstado('aprobada');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subiendoContrato = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al eliminar contrato: $e'),
+        ),
+      );
+    }
+  }
+
+  String _avisoCorreo(String correo, String decision) {
+    final destino = correo.trim();
+    if (destino.isEmpty) {
+      return 'Se enviará un correo de $decision y una notificación en la app al solicitante.';
+    }
+    return 'Se enviará un correo de $decision a $destino y una notificación en la app.';
+  }
+
   Future<void> _aprobar() async {
     DateTime fechaSeleccionada = DateTime.now();
     final observacionCtrl = TextEditingController();
@@ -182,9 +434,14 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
+                Text(
+                  _avisoCorreo(s.applicantEmail, 'aprobación'),
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                const SizedBox(height: 8),
                 const Text(
-                  'Se enviará un correo y una notificación en la app al solicitante.',
-                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                  'Al aprobar, deberás subir el contrato de adopción. El adoptante verá «Pendiente subir contrato de adopción» hasta que lo cargues.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
                 ),
               ],
             ),
@@ -212,7 +469,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
       estado: 'aprobada',
       fechaInicio: fecha,
       observaciones: observacionCtrl.text.trim(),
-      mensaje: '¡Solicitud aprobada y notificación enviada con éxito!',
+      mensaje: '¡Solicitud aprobada! Ahora puedes adjuntar el contrato. Se notificó al adoptante.',
       color: Colors.green,
     );
   }
@@ -242,9 +499,9 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'El solicitante verá este mensaje en su notificación y en el detalle.',
-              style: TextStyle(fontSize: 12, color: Colors.black54),
+            Text(
+              _avisoCorreo(s.applicantEmail, 'rechazo'),
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
             ),
           ],
         ),
@@ -266,7 +523,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     await _guardar(
       estado: 'rechazada',
       observaciones: motivoCtrl.text.trim(),
-      mensaje: 'La solicitud ha sido rechazada.',
+      mensaje: 'Solicitud rechazada. Se envió el correo al adoptante.',
       color: Colors.orange,
     );
   }
@@ -463,6 +720,10 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                     titulo: 'Recibo de servicio público',
                   ),
                 ),
+                if (s.isApproved) ...[
+                  const SizedBox(height: 14),
+                  _seccionContrato(),
+                ],
                 const SizedBox(height: 14),
                 _Seccion(
                   titulo: 'Detalles de la adopción',
@@ -523,6 +784,195 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _seccionContrato() {
+    final hayArchivo = _tieneContrato || _contratoBytes != null;
+    return _Seccion(
+      titulo: 'Contrato de adopción',
+      icono: Icons.assignment_outlined,
+      colorFondo: hayArchivo
+          ? Colors.green.shade50.withValues(alpha: 0.7)
+          : Colors.amber.shade50.withValues(alpha: 0.7),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_subiendoContrato)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 8),
+                    Text('Procesando contrato de adopción...'),
+                  ],
+                ),
+              ),
+            )
+          else if (hayArchivo) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green.shade300),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green, size: 24),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Contrato de adopción subido. El adoptante ya puede verlo y descargarlo.',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_cargandoContrato)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_errorContrato != null)
+              Text(
+                'Error al cargar contrato: $_errorContrato',
+                style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+              )
+            else if (_contratoBytes != null) ...[
+              if (_esPdf(_contratoBytes!))
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _nombreContrato ?? 'Contrato_Adopcion.pdf',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            Text(
+                              'Documento PDF (${(_contratoBytes!.length / 1024).toStringAsFixed(1)} KB)',
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    _contratoBytes!,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.rosa,
+                      side: const BorderSide(color: AppColors.rosa),
+                    ),
+                    onPressed: _verContrato,
+                    icon: const Icon(Icons.visibility, size: 18),
+                    label: const Text('Ver'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _subirContrato,
+                    icon: const Icon(Icons.upload_file, size: 18),
+                    label: const Text('Reemplazar'),
+                  ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.redAccent,
+                      side: const BorderSide(color: Colors.redAccent),
+                    ),
+                    onPressed: _eliminarContrato,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Eliminar'),
+                  ),
+                ],
+              ),
+            ] else
+              FilledButton.icon(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                onPressed: _cargarContrato,
+                icon: const Icon(Icons.visibility),
+                label: const Text('Cargar y ver contrato'),
+              ),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, color: Colors.amber.shade900, size: 22),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Pendiente subir contrato de adopción. El adoptante verá ese estado hasta que cargues el contrato firmado (JPG, PNG o PDF).',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.amber.shade900,
+                        height: 1.35,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.rosa,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: _subirContrato,
+                icon: const Icon(Icons.upload_file),
+                label: const Text(
+                  'Subir contrato (JPG, PNG o PDF)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -4,7 +4,11 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
-const { enviarCorreoAprobacionAdopcion } = require('../utils/correo');
+const {
+  enviarCorreoAprobacionAdopcion,
+  enviarCorreoRechazoAdopcion,
+  enviarCorreoContratoAdopcion,
+} = require('../utils/correo');
 
 const router = express.Router();
 
@@ -16,7 +20,18 @@ const esquemaListo = (async () => {
       ADD COLUMN IF NOT EXISTS leido_admin BOOLEAN NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS leido_usuario BOOLEAN NOT NULL DEFAULT true,
       ADD COLUMN IF NOT EXISTS fecha_inicio_adopcion DATE,
-      ADD COLUMN IF NOT EXISTS fecha_actualizacion_estado TIMESTAMP
+      ADD COLUMN IF NOT EXISTS fecha_actualizacion_estado TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS correo_contacto TEXT,
+      ADD COLUMN IF NOT EXISTS contrato_adopcion_archivo TEXT,
+      ADD COLUMN IF NOT EXISTS contrato_adopcion_estado TEXT,
+      ADD COLUMN IF NOT EXISTS contrato_adopcion_subido_en TIMESTAMP
+  `);
+  await pool.query(`
+    UPDATE solicitudadopcion
+    SET contrato_adopcion_estado = 'pendiente'
+    WHERE estado = 'aprobada'
+      AND (contrato_adopcion_archivo IS NULL OR btrim(contrato_adopcion_archivo) = '')
+      AND (contrato_adopcion_estado IS NULL OR btrim(contrato_adopcion_estado) = '')
   `);
 })().catch((err) => {
   console.error('No se pudo preparar la tabla solicitudadopcion:', err.message);
@@ -36,6 +51,9 @@ router.use(async (_req, res, next) => {
 
 const privateUploadsDir = path.join(__dirname, '..', 'private_uploads', 'documentos_adopcion');
 fs.mkdirSync(privateUploadsDir, { recursive: true });
+
+const contratosDir = path.join(__dirname, '..', 'private_uploads', 'contratos_adopcion');
+fs.mkdirSync(contratosDir, { recursive: true });
 
 const extensiones = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,6 +78,37 @@ const upload = multer({
     cb(null, true);
   },
 });
+
+const uploadContrato = multer({
+  storage: multer.diskStorage({
+    destination: contratosDir,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const permitidas = new Set(['.jpg', '.jpeg', '.png', '.pdf']);
+      cb(null, `contrato_${randomUUID()}${permitidas.has(ext) ? ext : '.pdf'}`);
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.pdf'].includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Formato no permitido. Solo se aceptan archivos JPG, PNG o PDF'));
+    }
+  },
+});
+
+function subirContrato(req, res, next) {
+  uploadContrato.single('contrato')(req, res, (err) => {
+    if (!err) return next();
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    const mensaje = err.code === 'LIMIT_FILE_SIZE'
+      ? 'El contrato debe pesar máximo 15 MB'
+      : (err.message || 'No se pudo subir el contrato');
+    return res.status(400).json({ error: mensaje });
+  });
+}
 
 function subirArchivos(req, res, next) {
   upload.fields([
@@ -99,15 +148,35 @@ function leerBool(valor) {
   return null;
 }
 
-function archivoPrivado(nombre) {
+function archivoEnCarpeta(carpeta, nombre) {
   if (typeof nombre !== 'string' || !nombre.trim()) return null;
   const base = path.basename(nombre.trim());
   if (base !== nombre.trim()) return null;
-  const full = path.resolve(privateUploadsDir, base);
-  const root = path.resolve(privateUploadsDir);
+  const full = path.resolve(carpeta, base);
+  const root = path.resolve(carpeta);
   const rootConSep = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
   if (full !== root && !full.startsWith(rootConSep)) return null;
   return full;
+}
+
+function archivoPrivado(nombre) {
+  return archivoEnCarpeta(privateUploadsDir, nombre);
+}
+
+function archivoContrato(nombre) {
+  return archivoEnCarpeta(contratosDir, nombre);
+}
+
+async function whatsappFundacion() {
+  let numero = '573136177747';
+  try {
+    const fundRes = await pool.query('SELECT telefono FROM informacionfundacion LIMIT 1');
+    if (fundRes.rows.length > 0 && fundRes.rows[0].telefono) {
+      const limpio = String(fundRes.rows[0].telefono).replace(/\D/g, '');
+      if (limpio) numero = limpio;
+    }
+  } catch (_) {}
+  return numero;
 }
 
 function errorDb(res, err, fallback) {
@@ -174,10 +243,13 @@ const selectSolicitud = `
     to_char(s.fecha_inicio_adopcion, 'YYYY-MM-DD') AS fecha_inicio_adopcion,
     s.leido_admin,
     s.leido_usuario,
+    s.contrato_adopcion_archivo,
+    COALESCE(s.contrato_adopcion_estado, '') AS contrato_adopcion_estado,
+    to_char(s.contrato_adopcion_subido_en, 'YYYY-MM-DD HH24:MI:SS') AS contrato_adopcion_subido_en,
     s.id_administrador_revisor,
     COALESCE(u.nombres, '') AS solicitante_nombres,
     COALESCE(u.apellidos, '') AS solicitante_apellidos,
-    COALESCE(u.correo, '') AS solicitante_correo,
+    COALESCE(NULLIF(btrim(s.correo_contacto), ''), u.correo, '') AS solicitante_correo,
     COALESCE(u.telefono, '') AS solicitante_telefono,
     COALESCE(u.direccion, '') AS solicitante_direccion,
     COALESCE(u.documento_identidad, '') AS solicitante_cedula,
@@ -248,6 +320,14 @@ router.post('/', subirArchivos, async (req, res) => {
       });
     }
 
+    const correoIngresado = (req.body.correo_contacto || '').trim();
+    const correoFinal = correoIngresado || (usuario.correo || '').trim();
+    if (!correoFinal || !correoFinal.includes('@') || !correoFinal.includes('.')) {
+      return res.status(400).json({
+        error: 'Debes proporcionar un correo electrónico válido para recibir la respuesta',
+      });
+    }
+
     const petCheck = await pool.query(
       'SELECT id_mascota, nombre, estado_adopcion FROM mascota WHERE id_mascota = $1',
       [idMascota]
@@ -283,8 +363,8 @@ router.post('/', subirArchivos, async (req, res) => {
         id_usuario, id_mascota, tipo_vivienda, tiene_patio, tiene_ninos,
         tiene_mascotas, otras_mascotas, tiempo_disponible, experiencia_previa,
         informacion_adicional, foto_cedula, foto_servicios_publicos, estado,
-        leido_admin, leido_usuario
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente', false, true)
+        leido_admin, leido_usuario, correo_contacto
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente', false, true, $13)
       RETURNING id_solicitud_adopcion`,
       [
         usuario.id_usuario,
@@ -299,6 +379,7 @@ router.post('/', subirArchivos, async (req, res) => {
         informacion,
         cedula.filename,
         recibo.filename,
+        correoFinal,
       ]
     );
 
@@ -506,6 +587,7 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
     await client.query('BEGIN');
     const actualRes = await client.query(
       `SELECT s.id_solicitud_adopcion, s.estado, s.id_usuario, s.id_mascota,
+              s.correo_contacto,
               u.nombres, u.apellidos, u.correo,
               m.nombre AS nombre_mascota, m.estado_adopcion
        FROM solicitudadopcion s
@@ -552,7 +634,11 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
            id_administrador_revisor = $2,
            observaciones = $3,
            fecha_inicio_adopcion = $4,
-           leido_usuario = false
+           leido_usuario = false,
+           contrato_adopcion_estado = CASE
+             WHEN $1 = 'aprobada' THEN 'pendiente'
+             ELSE contrato_adopcion_estado
+           END
        WHERE id_solicitud_adopcion = $5
        RETURNING id_solicitud_adopcion, estado, observaciones,
                  to_char(fecha_inicio_adopcion, 'YYYY-MM-DD') AS fecha_inicio_adopcion`,
@@ -588,30 +674,37 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
 
     await client.query('COMMIT');
 
-    if (estado === 'aprobada') {
-      let whatsappFundacion = '573136177747';
-      try {
-        const fundRes = await pool.query('SELECT telefono FROM informacionfundacion LIMIT 1');
-        if (fundRes.rows.length > 0 && fundRes.rows[0].telefono) {
-          const limpio = String(fundRes.rows[0].telefono).replace(/\D/g, '');
-          if (limpio) whatsappFundacion = limpio;
-        }
-      } catch (_) {}
+    const correoDestino = (sol.correo_contacto && String(sol.correo_contacto).trim().length > 0)
+      ? String(sol.correo_contacto).trim()
+      : String(sol.correo || '').trim();
+    const nombreUsuario = `${sol.nombres || ''} ${sol.apellidos || ''}`.trim() || 'Estimado/a adoptante';
 
-      enviarCorreoAprobacionAdopcion({
-        destinatario: sol.correo,
-        nombreUsuario: `${sol.nombres} ${sol.apellidos}`.trim(),
+    const numeroWhatsapp = await whatsappFundacion();
+
+    if (correoDestino) {
+      const datosCorreo = {
+        destinatario: correoDestino,
+        nombreUsuario,
         nombreMascota: sol.nombre_mascota,
-        fechaInicio,
-        whatsappFundacion,
+        whatsappFundacion: numeroWhatsapp,
         observaciones: observaciones || null,
-      }).catch((err) => console.error('Error al enviar correo de adopción:', err));
+      };
+
+      if (estado === 'aprobada') {
+        enviarCorreoAprobacionAdopcion({
+          ...datosCorreo,
+          fechaInicio,
+        }).catch((err) => console.error('Error al enviar correo de aprobación de adopción:', err));
+      } else if (estado === 'rechazada') {
+        enviarCorreoRechazoAdopcion(datosCorreo)
+          .catch((err) => console.error('Error al enviar correo de rechazo de adopción:', err));
+      }
     }
 
     return res.json({
       mensaje: estado === 'aprobada'
-        ? 'Solicitud aprobada. La mascota quedó como adoptada.'
-        : 'Solicitud rechazada.',
+        ? 'Solicitud aprobada. Quedó pendiente subir el contrato de adopción y se notificó al adoptante.'
+        : 'Solicitud rechazada. Se notificó por correo al adoptante.',
       solicitud: updateRes.rows[0],
     });
   } catch (err) {
@@ -621,5 +714,187 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
     client.release();
   }
 });
+
+/**
+ * POST /api/adoption-requests/:id/contrato
+ * El administrador sube el contrato de adopción firmado.
+ */
+router.post('/:id/contrato', requireAdmin, subirContrato, async (req, res) => {
+  if (!esUuid(req.params.id)) {
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(400).json({ error: 'Solicitud inválida' });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: 'Debes adjuntar el archivo del contrato' });
+  }
+
+  try {
+    const solicitudRes = await pool.query(
+      `SELECT s.id_solicitud_adopcion, s.estado, s.contrato_adopcion_archivo,
+              s.correo_contacto,
+              u.nombres, u.apellidos, u.correo,
+              m.nombre AS nombre_mascota
+       FROM solicitudadopcion s
+       JOIN usuario u ON u.id_usuario = s.id_usuario
+       JOIN mascota m ON m.id_mascota = s.id_mascota
+       WHERE s.id_solicitud_adopcion = $1`,
+      [req.params.id]
+    );
+
+    if (solicitudRes.rows.length === 0) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const sol = solicitudRes.rows[0];
+    if (sol.estado !== 'aprobada') {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Solo se puede subir el contrato a solicitudes aprobadas' });
+    }
+
+    if (sol.contrato_adopcion_archivo) {
+      const viejo = archivoContrato(sol.contrato_adopcion_archivo);
+      if (viejo && fs.existsSync(viejo)) fs.unlinkSync(viejo);
+    }
+
+    const updateRes = await pool.query(
+      `UPDATE solicitudadopcion
+       SET contrato_adopcion_archivo = $1,
+           contrato_adopcion_estado = 'disponible',
+           contrato_adopcion_subido_en = NOW(),
+           leido_usuario = false
+       WHERE id_solicitud_adopcion = $2
+       RETURNING contrato_adopcion_archivo,
+                 contrato_adopcion_estado,
+                 to_char(contrato_adopcion_subido_en, 'YYYY-MM-DD HH24:MI:SS') AS contrato_adopcion_subido_en`,
+      [req.file.filename, req.params.id]
+    );
+
+    const correoDestino = (sol.correo_contacto && String(sol.correo_contacto).trim().length > 0)
+      ? String(sol.correo_contacto).trim()
+      : String(sol.correo || '').trim();
+    const nombreUsuario = `${sol.nombres || ''} ${sol.apellidos || ''}`.trim() || 'Estimado/a adoptante';
+
+    if (correoDestino) {
+      const numeroWhatsapp = await whatsappFundacion();
+      enviarCorreoContratoAdopcion({
+        destinatario: correoDestino,
+        nombreUsuario,
+        nombreMascota: sol.nombre_mascota,
+        whatsappFundacion: numeroWhatsapp,
+      }).catch((err) => console.error('Error al enviar correo de contrato de adopción:', err));
+    }
+
+    return res.json({
+      mensaje: 'Contrato de adopción subido. El adoptante ya puede verlo y descargarlo.',
+      contrato_archivo: req.file.filename,
+      contrato_estado: 'disponible',
+      solicitud: updateRes.rows[0],
+    });
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return errorDb(res, err, 'Error al subir el contrato');
+  }
+});
+
+/**
+ * GET /api/adoption-requests/:id/contrato
+ * El adoptante o un administrador consulta el contrato.
+ */
+router.get('/:id/contrato', async (req, res) => {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión para consultar este contrato' });
+  }
+  if (!esUuid(req.params.id)) {
+    return res.status(400).json({ error: 'Solicitud inválida' });
+  }
+
+  try {
+    const solicitudRes = await pool.query(
+      `SELECT id_usuario, contrato_adopcion_archivo
+       FROM solicitudadopcion
+       WHERE id_solicitud_adopcion = $1`,
+      [req.params.id]
+    );
+    if (solicitudRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const sol = solicitudRes.rows[0];
+    const esDuenio = sol.id_usuario === usuario.id_usuario;
+    const esAdmin = usuario.rol === 'administrador';
+    if (!esAdmin && !esDuenio) {
+      return res.status(403).json({ error: 'No tienes autorización para ver este contrato' });
+    }
+    if (!sol.contrato_adopcion_archivo) {
+      return res.status(404).json({ error: 'Aún no se ha subido el contrato de adopción' });
+    }
+
+    const filePath = archivoContrato(sol.contrato_adopcion_archivo);
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'El archivo físico del contrato no fue encontrado' });
+    }
+
+    res.set('Cache-Control', 'private, no-store');
+    return res.sendFile(filePath);
+  } catch (err) {
+    return errorDb(res, err, 'Error consultando el contrato');
+  }
+});
+
+/**
+ * DELETE /api/adoption-requests/:id/contrato
+ * POST   /api/adoption-requests/:id/contrato/eliminar
+ * El administrador retira el contrato. La adopción vuelve a quedar pendiente de contrato.
+ */
+const eliminarContratoHandler = async (req, res) => {
+  if (!esUuid(req.params.id)) {
+    return res.status(400).json({ error: 'Solicitud inválida' });
+  }
+
+  try {
+    const solicitudRes = await pool.query(
+      `SELECT id_solicitud_adopcion, contrato_adopcion_archivo
+       FROM solicitudadopcion
+       WHERE id_solicitud_adopcion = $1`,
+      [req.params.id]
+    );
+    if (solicitudRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const sol = solicitudRes.rows[0];
+    if (sol.contrato_adopcion_archivo) {
+      const filePath = archivoContrato(sol.contrato_adopcion_archivo);
+      if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
+    const updateRes = await pool.query(
+      `UPDATE solicitudadopcion
+       SET contrato_adopcion_archivo = NULL,
+           contrato_adopcion_estado = CASE
+             WHEN estado = 'aprobada' THEN 'pendiente'
+             ELSE NULL
+           END,
+           contrato_adopcion_subido_en = NULL,
+           leido_usuario = false
+       WHERE id_solicitud_adopcion = $1
+       RETURNING contrato_adopcion_estado`,
+      [req.params.id]
+    );
+
+    return res.json({
+      ok: true,
+      mensaje: 'Contrato de adopción eliminado. El adoptante verá de nuevo el estado pendiente.',
+      solicitud: updateRes.rows[0],
+    });
+  } catch (err) {
+    return errorDb(res, err, 'Error al eliminar el contrato');
+  }
+};
+
+router.delete('/:id/contrato', requireAdmin, eliminarContratoHandler);
+router.post('/:id/contrato/eliminar', requireAdmin, eliminarContratoHandler);
 
 module.exports = router;

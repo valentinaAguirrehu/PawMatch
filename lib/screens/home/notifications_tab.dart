@@ -126,8 +126,8 @@ class NotificationsTab extends StatelessWidget {
                 _TarjetaNotificacion(
                   titulo: esAdmin ? 'Solicitudes de Adopción' : 'Mis Adopciones',
                   subtitulo: esAdmin
-                      ? 'Revisa y aprueba solicitudes de adopción enviadas por usuarios.'
-                      : 'Consulta el estado de tu proceso de adopción y observaciones.',
+                      ? 'Revisa solicitudes y sube el contrato de las adopciones aprobadas.'
+                      : 'Consulta el estado de tu adopción, el contrato oficial y las observaciones.',
                   icono: Icons.pets_rounded,
                   contador: noLeidasAdop,
                   colorIcono: AppColors.rosa,

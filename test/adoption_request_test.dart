@@ -65,11 +65,30 @@ void main() {
   test('traduce los estados revisados', () {
     expect(
       AdoptionRequest.fromJson({'estado': 'aprobada'}).statusLabel,
-      'Aprobada',
+      'Pendiente subir contrato de adopción',
+    );
+    expect(
+      AdoptionRequest.fromJson({'estado': 'aprobada'}).contractPending,
+      isTrue,
     );
     expect(
       AdoptionRequest.fromJson({'estado': 'rechazada'}).isRejected,
       isTrue,
     );
+  });
+
+  test('el contrato disponible habilita la consulta y cambia el estado', () {
+    final solicitud = AdoptionRequest.fromJson({
+      'estado': 'aprobada',
+      'contrato_adopcion_archivo': 'contrato_abc.pdf',
+      'contrato_adopcion_estado': 'disponible',
+      'contrato_adopcion_subido_en': '2026-10-22 14:30:00',
+    });
+
+    expect(solicitud.hasContract, isTrue);
+    expect(solicitud.contractPending, isFalse);
+    expect(solicitud.contractStatus, 'disponible');
+    expect(solicitud.contractUploadedAtLabel, '22/10/2026 14:30');
+    expect(solicitud.statusLabel, 'Aprobada');
   });
 }

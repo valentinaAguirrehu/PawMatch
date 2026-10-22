@@ -1,0 +1,582 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+
+import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/services/session.dart';
+
+/// Datos que quedan consignados en el acta de compromiso de adopción.
+class DatosActaAdopcion {
+  final String idSolicitud;
+  final String nombreUsuario;
+  final String? documentoUsuario;
+  final String correoUsuario;
+  final String? telefonoUsuario;
+  final String tipoVivienda;
+  final bool tienePatio;
+  final bool tieneNinos;
+  final bool tieneOtrasMascotas;
+  final String otrasMascotas;
+  final String tiempoDisponible;
+  final bool experienciaPrevia;
+  final String motivacion;
+  final String nombreMascota;
+  final String especieMascota;
+  final String? razaMascota;
+  final String edadMascota;
+  final String? sexoMascota;
+  final DateTime fechaAceptacion;
+  final bool aceptoTerminos;
+
+  DatosActaAdopcion({
+    required this.idSolicitud,
+    required this.nombreUsuario,
+    this.documentoUsuario,
+    required this.correoUsuario,
+    this.telefonoUsuario,
+    required this.tipoVivienda,
+    required this.tienePatio,
+    required this.tieneNinos,
+    required this.tieneOtrasMascotas,
+    this.otrasMascotas = '',
+    required this.tiempoDisponible,
+    required this.experienciaPrevia,
+    required this.motivacion,
+    required this.nombreMascota,
+    required this.especieMascota,
+    this.razaMascota,
+    required this.edadMascota,
+    this.sexoMascota,
+    required this.fechaAceptacion,
+    required this.aceptoTerminos,
+  });
+}
+
+class AcuerdoAdopcionPdfService {
+  AcuerdoAdopcionPdfService._();
+
+  /// Cláusulas formales de la Fundación Maritza Arévalo.
+  /// La clave `alerta` marca la cláusula de rescisión para destacarla en la UI y en el PDF.
+  static const List<Map<String, String>> clausulasAdopcion = [
+    {
+      'num': '1',
+      'titulo': 'Requisitos de la adopción responsable',
+      'cuerpo':
+          'La adopción es un compromiso permanente de tenencia responsable. '
+          'El adoptante asume la alimentación, la atención veterinaria, las vacunas, '
+          'un espacio seguro y el cuidado diario del perro. Declara que su hogar '
+          'ofrece condiciones adecuadas de convivencia y que no entregará al animal '
+          'a terceros sin autorización previa de la Fundación Maritza Arévalo.',
+    },
+    {
+      'num': '2',
+      'titulo': 'Visitas domiciliarias de verificación',
+      'cuerpo':
+          'El adoptante autoriza y se compromete a recibir visitas domiciliarias '
+          'frecuentes de la Fundación Maritza Arévalo, destinadas a verificar las '
+          'condiciones de vida, la salud y el bienestar del perro. Impedir estas '
+          'visitas sin justa causa se entiende como incumplimiento de este compromiso.',
+    },
+    {
+      'num': '3',
+      'titulo': 'Fotografías y actualizaciones por WhatsApp',
+      'cuerpo':
+          'El adoptante se compromete a enviar de forma periódica fotografías y '
+          'actualizaciones sobre el estado de la mascota por el WhatsApp oficial de '
+          'la Fundación, cuando esta lo solicite o según el seguimiento acordado, '
+          'para constatar su adaptación y bienestar.',
+    },
+    {
+      'num': '4',
+      'titulo': 'Rescisión, retiro de la mascota y sanción',
+      'alerta': 'si',
+      'cuerpo':
+          'Si no se cumple con una adopción responsable o la Fundación detecta '
+          'irregularidades en el cuidado, la tenencia o las condiciones de vida del '
+          'perro, realizará el proceso de retiro de la mascota (recuperación). '
+          'En ese evento aplicará una sanción e inhabilitará de forma permanente '
+          'a la familia para futuras adopciones en la Fundación Maritza Arévalo.',
+    },
+    {
+      'num': '5',
+      'titulo': 'Veracidad de la información y confidencialidad',
+      'cuerpo':
+          'El adoptante garantiza que los datos personales y los documentos adjuntos '
+          '(cédula y recibo de servicio público) son verídicos y corresponden a su '
+          'identidad y domicilio. La Fundación tratará esta información con '
+          'confidencialidad, conforme a la normativa vigente.',
+    },
+  ];
+
+  /// Genera el acta de compromiso con la misma identidad visual del acuerdo de apadrinamiento.
+  static Future<Uint8List> generarPdfBytes(DatosActaAdopcion datos) async {
+    if (!datos.aceptoTerminos) {
+      throw StateError(
+        'No se puede generar el acta sin la aceptación expresa de los términos.',
+      );
+    }
+
+    final pdf = pw.Document();
+
+    pw.MemoryImage? logoImage;
+    try {
+      final logoData = await rootBundle.load('assets/images/logo.png');
+      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (e) {
+      debugPrint('No se pudo cargar logo de Paw Match: $e');
+    }
+
+    final verdePrincipal = PdfColor.fromHex('#23533E');
+    final verdeSecundario = PdfColor.fromHex('#2E7D32');
+    final verdeClaroBorde = PdfColor.fromHex('#80A892');
+    final grisBorde = PdfColor.fromHex('#D1D5DB');
+    final grisOscuro = PdfColor.fromHex('#1F2937');
+    final grisMedio = PdfColor.fromHex('#4B5563');
+    final rojoAlerta = PdfColor.fromHex('#991B1B');
+    final fondoAlerta = PdfColor.fromHex('#FEF2F2');
+
+    final dia = datos.fechaAceptacion.day.toString().padLeft(2, '0');
+    final mes = datos.fechaAceptacion.month.toString().padLeft(2, '0');
+    final anio = datos.fechaAceptacion.year.toString();
+    final hora = datos.fechaAceptacion.hour.toString().padLeft(2, '0');
+    final minuto = datos.fechaAceptacion.minute.toString().padLeft(2, '0');
+    final fechaFormateada = '$dia/$mes/$anio a las $hora:$minuto';
+
+    final razaTexto = (datos.razaMascota != null && datos.razaMascota!.trim().isNotEmpty)
+        ? datos.razaMascota!.trim()
+        : 'Mestiza';
+    final sexoTexto = (datos.sexoMascota != null && datos.sexoMascota!.trim().isNotEmpty)
+        ? datos.sexoMascota!.trim()
+        : 'No registrado';
+
+    final documento = (datos.documentoUsuario != null &&
+            datos.documentoUsuario!.trim().isNotEmpty)
+        ? datos.documentoUsuario!.trim()
+        : (Session.documentoIdentidad.trim().isNotEmpty
+            ? Session.documentoIdentidad.trim()
+            : 'No registrado');
+
+    final otrasTexto = datos.tieneOtrasMascotas
+        ? (datos.otrasMascotas.trim().isEmpty
+            ? 'Sí'
+            : 'Sí. ${datos.otrasMascotas.trim()}')
+        : 'No';
+
+    final motivacion = datos.motivacion.trim().isEmpty
+        ? 'No especificada'
+        : datos.motivacion.trim();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+        footer: (context) => pw.Column(
+          children: [
+            pw.SizedBox(height: 6),
+            pw.Container(height: 0.6, color: grisBorde),
+            pw.SizedBox(height: 4),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Documento electrónico emitido por Paw Match para la Fundación Maritza Arévalo.',
+                  style: pw.TextStyle(fontSize: 6.8, color: grisMedio),
+                ),
+                pw.Text(
+                  'Página ${context.pageNumber} de ${context.pagesCount}',
+                  style: pw.TextStyle(fontSize: 6.8, color: grisMedio),
+                ),
+              ],
+            ),
+          ],
+        ),
+        build: (context) => [
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Container(
+                width: 54,
+                height: 54,
+                padding: const pw.EdgeInsets.all(3),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.white,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+                  border: pw.Border.all(color: verdeClaroBorde, width: 1.2),
+                ),
+                child: logoImage != null
+                    ? pw.ClipRRect(
+                        horizontalRadius: 8,
+                        verticalRadius: 8,
+                        child: pw.Image(logoImage, fit: pw.BoxFit.contain),
+                      )
+                    : pw.Center(
+                        child: pw.Text(
+                          'PAW',
+                          style: pw.TextStyle(
+                            color: verdePrincipal,
+                            fontWeight: pw.FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+              ),
+              pw.SizedBox(width: 14),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      FundacionInfo.nombre.toUpperCase(),
+                      style: pw.TextStyle(
+                        color: verdePrincipal,
+                        fontSize: 13,
+                        fontWeight: pw.FontWeight.bold,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      FundacionInfo.ciudad,
+                      style: pw.TextStyle(color: grisOscuro, fontSize: 8.5),
+                    ),
+                    pw.Text(
+                      'WhatsApp: +57 ${FundacionInfo.whatsappNumero.replaceFirst(RegExp(r'^57'), '')}',
+                      style: pw.TextStyle(color: grisOscuro, fontSize: 8.5),
+                    ),
+                    pw.SizedBox(height: 1),
+                    pw.Text(
+                      'Protección, Bienestar y Rescate Animal',
+                      style: pw.TextStyle(
+                        color: verdeSecundario,
+                        fontSize: 8,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 10),
+          pw.Container(height: 1.2, color: verdeClaroBorde),
+          pw.SizedBox(height: 8),
+          pw.Center(
+            child: pw.Column(
+              children: [
+                pw.Text(
+                  'PAW MATCH',
+                  style: pw.TextStyle(
+                    color: verdePrincipal,
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'ACTA DE COMPROMISO Y TÉRMINOS DE ADOPCIÓN RESPONSABLE',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                    color: grisOscuro,
+                    fontSize: 10.5,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 1),
+                pw.Text(
+                  'DOCUMENTO DE ACEPTACIÓN ELECTRÓNICA',
+                  style: pw.TextStyle(
+                    color: grisMedio,
+                    fontSize: 7.5,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Container(height: 0.8, color: grisBorde),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            '1. Información de la adopción',
+            style: pw.TextStyle(
+              color: grisOscuro,
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            'Datos del adoptante, condiciones del hogar, mascota adoptada y fecha de aceptación expresa de los términos:',
+            style: pw.TextStyle(color: grisMedio, fontSize: 8),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromHex('#F9FAFB'),
+              border: pw.Border.all(color: grisBorde, width: 0.8),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            ),
+            child: pw.Column(
+              children: [
+                _filaDato('Nombre de la Fundación:', FundacionInfo.nombre),
+                _filaDato('Nombre del adoptante:', datos.nombreUsuario),
+                _filaDato('Número de identificación:', documento),
+                _filaDato('Correo del adoptante:', datos.correoUsuario),
+                if (datos.telefonoUsuario != null &&
+                    datos.telefonoUsuario!.trim().isNotEmpty)
+                  _filaDato('Teléfono de contacto:', datos.telefonoUsuario!.trim()),
+                _filaDato('Tipo de vivienda:', datos.tipoVivienda),
+                _filaDato('Patio o zona verde:', datos.tienePatio ? 'Sí' : 'No'),
+                _filaDato('Niños en el hogar:', datos.tieneNinos ? 'Sí' : 'No'),
+                _filaDato('Otras mascotas:', otrasTexto),
+                _filaDato('Tiempo disponible:', datos.tiempoDisponible),
+                _filaDato(
+                  'Adopción previa con la Fundación:',
+                  datos.experienciaPrevia ? 'Sí' : 'No',
+                ),
+                _filaDato(
+                  'Mascota adoptada:',
+                  '${datos.nombreMascota} (${datos.especieMascota} - $razaTexto - $sexoTexto - ${datos.edadMascota})',
+                ),
+                _filaDato('Fecha de aceptación:', fechaFormateada),
+                _filaDato(
+                  'Aceptación de términos:',
+                  'SÍ. El adoptante aceptó de forma expresa los términos y condiciones de adopción responsable.',
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'Motivación declarada por el adoptante:',
+            style: pw.TextStyle(
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex('#374151'),
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            motivacion,
+            style: pw.TextStyle(fontSize: 8, color: grisOscuro),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            '2. Términos y condiciones',
+            style: pw.TextStyle(
+              color: grisOscuro,
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            'Compromisos de adopción responsable de la Fundación Maritza Arévalo, aceptados por el solicitante:',
+            style: pw.TextStyle(color: grisMedio, fontSize: 8),
+          ),
+          pw.SizedBox(height: 6),
+          ...clausulasAdopcion.map((c) {
+            final esAlerta = c['alerta'] == 'si';
+            final contenido = pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Container(
+                  width: 14,
+                  child: pw.Text(
+                    '${c['num']}.',
+                    style: pw.TextStyle(
+                      fontSize: 8,
+                      fontWeight: pw.FontWeight.bold,
+                      color: esAlerta ? rojoAlerta : verdePrincipal,
+                    ),
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.RichText(
+                    text: pw.TextSpan(
+                      style: pw.TextStyle(
+                        fontSize: 8,
+                        color: esAlerta ? rojoAlerta : grisOscuro,
+                      ),
+                      children: [
+                        pw.TextSpan(
+                          text: '${c['titulo']}: ',
+                          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                        ),
+                        pw.TextSpan(text: c['cuerpo']!),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+
+            if (!esAlerta) {
+              return pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 4),
+                child: contenido,
+              );
+            }
+
+            return pw.Container(
+              margin: const pw.EdgeInsets.only(bottom: 6, top: 2),
+              padding: const pw.EdgeInsets.all(6),
+              decoration: pw.BoxDecoration(
+                color: fondoAlerta,
+                border: pw.Border.all(color: rojoAlerta, width: 0.7),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+              ),
+              child: contenido,
+            );
+          }),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            '3. Constancia de aceptación electrónica',
+            style: pw.TextStyle(
+              color: grisOscuro,
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            'Radicado, fecha y hora del registro, y constancia de que los términos fueron aceptados de forma expresa:',
+            style: pw.TextStyle(color: grisMedio, fontSize: 8),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Container(
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromHex('#F4F9F6'),
+              border: pw.Border.all(color: verdeClaroBorde, width: 0.9),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'CONSTANCIA DE ACEPTACIÓN ELECTRÓNICA REGISTRADA POR EL SISTEMA',
+                  style: pw.TextStyle(
+                    color: verdeSecundario,
+                    fontSize: 8,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'El adoptante marcó la casilla obligatoria de aceptación de los términos y condiciones de adopción responsable de la Fundación Maritza Arévalo y envió formalmente su solicitud a través de la plataforma Paw Match. La aceptación ha sido registrada de forma segura en la base de datos de la Fundación.',
+                  style: pw.TextStyle(fontSize: 7.5, color: grisOscuro),
+                ),
+                pw.SizedBox(height: 4),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Radicado / Ref: ${datos.idSolicitud}',
+                      style: pw.TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: grisOscuro,
+                      ),
+                    ),
+                    pw.Text(
+                      'Fecha: $fechaFormateada',
+                      style: pw.TextStyle(fontSize: 7.5, color: grisOscuro),
+                    ),
+                    pw.Text(
+                      'Estado: ACEPTADO Y REGISTRADO',
+                      style: pw.TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: verdeSecundario,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  static pw.Widget _filaDato(String etiqueta, String valor) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(
+            width: 158,
+            child: pw.Text(
+              etiqueta,
+              style: pw.TextStyle(
+                fontSize: 8,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColor.fromHex('#374151'),
+              ),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Text(
+              valor,
+              style: pw.TextStyle(
+                fontSize: 8,
+                color: PdfColor.fromHex('#111827'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Descarga y abre el acta en el dispositivo o en el navegador.
+  static Future<String?> descargarYGuardarPdf({
+    required Uint8List bytes,
+    required String nombreMascota,
+  }) async {
+    final sanitizedPet = nombreMascota.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    final filename = 'Acta_Compromiso_Adopcion_$sanitizedPet.pdf';
+
+    try {
+      if (kIsWeb) {
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+        return filename;
+      }
+
+      String? rutaGuardada;
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'];
+        if (userProfile != null) {
+          final downloadsDir = Directory('$userProfile\\Downloads');
+          if (await downloadsDir.exists()) {
+            final file = File('${downloadsDir.path}\\$filename');
+            await file.writeAsBytes(bytes);
+            rutaGuardada = file.path;
+          }
+        }
+      }
+
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+      return rutaGuardada ?? filename;
+    } catch (e) {
+      debugPrint('Error al guardar o compartir el acta de adopción: $e');
+      try {
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+        return filename;
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+}

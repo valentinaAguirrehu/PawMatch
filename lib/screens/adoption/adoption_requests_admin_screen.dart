@@ -181,7 +181,7 @@ class _Lista extends StatelessWidget {
         itemBuilder: (context, i) {
           final s = solicitudes[i];
           final color = switch (s.status) {
-            'aprobada' => Colors.green,
+            'aprobada' => s.hasContract ? Colors.green : Colors.amber.shade800,
             'rechazada' => Colors.redAccent,
             _ => Colors.orange,
           };
@@ -237,6 +237,7 @@ class _Lista extends StatelessWidget {
                           ),
                           child: Text(
                             s.status.toUpperCase(),
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               color: color,
                               fontWeight: FontWeight.bold,
@@ -246,6 +247,44 @@ class _Lista extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (s.isApproved) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: s.hasContract ? Colors.green.shade50 : Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: s.hasContract ? Colors.green.shade200 : Colors.amber.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              s.hasContract ? Icons.verified : Icons.hourglass_top_rounded,
+                              size: 14,
+                              color: s.hasContract ? Colors.green.shade800 : Colors.amber.shade900,
+                            ),
+                            const SizedBox(width: 5),
+                            Expanded(
+                              child: Text(
+                                s.hasContract
+                                    ? 'Contrato de adopción subido'
+                                    : 'Falta subir contrato de adopción',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: s.hasContract
+                                      ? Colors.green.shade800
+                                      : Colors.amber.shade900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const Divider(height: 20),
                     Text(
                       'Motivación:',

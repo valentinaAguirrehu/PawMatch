@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
@@ -26,6 +27,68 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
   Future<void> _recargar() async {
     setState(() => _future = AdoptionService.listMine());
     await _future.catchError((_) => <AdoptionRequest>[]);
+  }
+
+  Future<void> _verContrato(AdoptionRequest solicitud) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final bytes = await AdoptionService.fetchContract(solicitud.id);
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      final esPdf = bytes.length >= 4 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46;
+
+      if (esPdf) {
+        await Printing.layoutPdf(
+          onLayout: (_) => bytes,
+          name: 'Contrato_Adopcion_${solicitud.petName}.pdf',
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              title: Text('Contrato de adopción - ${solicitud.petName}'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            body: Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4,
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Error al cargar contrato: $e'),
+        ),
+      );
+    }
   }
 
   void _contactar(AdoptionRequest solicitud) {
@@ -115,7 +178,7 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
               itemBuilder: (context, i) {
                 final s = lista[i];
                 final color = switch (s.status) {
-                  'aprobada' => Colors.green,
+                  'aprobada' => s.hasContract ? Colors.green : Colors.amber.shade800,
                   'rechazada' => Colors.redAccent,
                   _ => Colors.orange,
                 };
@@ -137,6 +200,9 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                         Align(
                           alignment: Alignment.centerRight,
                           child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.sizeOf(context).width - 68,
+                            ),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 4,
@@ -147,7 +213,8 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                               border: Border.all(color: color),
                             ),
                             child: Text(
-                              s.status.toUpperCase(),
+                              s.contractPending ? s.statusLabel : s.status.toUpperCase(),
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: color,
                                 fontWeight: FontWeight.bold,
@@ -208,26 +275,136 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                           ),
                         ),
                         const Divider(height: 24),
-                        if (s.isApproved) ...[
+                        if (s.isApproved && !s.hasContract) ...[
                           Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.amber.shade400, width: 1.5),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.hourglass_top_rounded,
+                                      color: Colors.amber.shade900,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '¡Solicitud aprobada! Falta 1 paso',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: Colors.amber.shade900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Tu solicitud para adoptar a ${s.petName} fue aprobada.',
+                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade900),
+                                ),
+                                if (s.adoptionStartDateLabel != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '📅 Fecha oficial de inicio: ${s.adoptionStartDateLabel}',
+                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.amber.shade300),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        Icons.assignment_outlined,
+                                        color: Colors.amber.shade900,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Pendiente subir contrato de adopción. Debes esperar a que el administrador suba el contrato firmado. Cuando lo haga, podrás verlo y descargarlo aquí.',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.amber.shade900,
+                                            height: 1.35,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (s.hasObservations) ...[
+                                  const SizedBox(height: 8),
+                                  _CajaObservacion(
+                                    titulo: 'Observaciones de la fundación:',
+                                    texto: s.observations!,
+                                    color: Colors.amber.shade900,
+                                    borde: Colors.amber.shade300,
+                                  ),
+                                ],
+                                if (s.applicantEmail.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _AvisoCorreo(correo: s.applicantEmail.trim()),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF25D366),
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size.fromHeight(48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () => _contactar(s),
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: const Text(
+                              'Contactar por WhatsApp a la Fundación',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ] else if (s.isApproved) ...[
+                          Container(
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               color: Colors.green.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.green.shade200),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: Colors.green.shade300, width: 1.5),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Row(
                                   children: [
-                                    Icon(Icons.stars, color: Colors.green),
+                                    Icon(Icons.verified, color: Colors.green, size: 24),
                                     SizedBox(width: 8),
-                                    Text(
-                                      '¡Adopción aprobada!',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
+                                    Expanded(
+                                      child: Text(
+                                        '¡Contrato de adopción disponible!',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: Colors.green,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -237,6 +414,13 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                                   '📅 Fecha oficial de inicio: ${s.adoptionStartDateLabel ?? 'Activo'}',
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
+                                if (s.contractUploadedAtLabel != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Contrato cargado el ${s.contractUploadedAtLabel}',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                                  ),
+                                ],
                                 const SizedBox(height: 4),
                                 Text(
                                   'Contacto oficial: Fundación Maritza Arévalo (+$whatsapp)',
@@ -251,35 +435,30 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                                     borde: Colors.green.shade200,
                                   ),
                                 ],
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orange.shade50,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.orange.shade200),
-                                  ),
-                                  child: const Row(
-                                    children: [
-                                      Icon(Icons.info_outline, size: 16, color: Colors.orange),
-                                      SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          'Debes contactar a la fundación por WhatsApp para coordinar la entrega y los últimos requisitos.',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.deepOrange,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                if (s.applicantEmail.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _AvisoCorreo(correo: s.applicantEmail.trim()),
+                                ],
                               ],
                             ),
                           ),
                           const SizedBox(height: 14),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.rosa,
+                              minimumSize: const Size.fromHeight(48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () => _verContrato(s),
+                            icon: const Icon(Icons.assignment_turned_in),
+                            label: const Text(
+                              'Ver y descargar contrato',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           FilledButton.icon(
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(0xFF25D366),
@@ -325,6 +504,10 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                                       ? s.observations!
                                       : 'No se especificó motivo.',
                                 ),
+                                if (s.applicantEmail.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 8),
+                                  _AvisoCorreo(correo: s.applicantEmail.trim()),
+                                ],
                               ],
                             ),
                           ),
@@ -418,6 +601,36 @@ class _CajaObservacion extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(texto, style: const TextStyle(fontSize: 12.5, height: 1.35)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvisoCorreo extends StatelessWidget {
+  final String correo;
+  const _AvisoCorreo({required this.correo});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.mail_outline, size: 16, color: Colors.blue.shade700),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Esta respuesta también se envió a $correo.',
+              style: TextStyle(fontSize: 11.5, color: Colors.blue.shade900, height: 1.3),
+            ),
+          ),
         ],
       ),
     );

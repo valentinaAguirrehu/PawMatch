@@ -23,7 +23,8 @@ class AdoptionService {
   };
 
   /// Envía el formulario de adopción con la cédula y el recibo.
-  static Future<void> submit({
+  /// Devuelve el id de la solicitud creada para consignarlo en el acta PDF.
+  static Future<String?> submit({
     required String petId,
     required String housingType,
     required bool hasYard,
@@ -37,6 +38,7 @@ class AdoptionService {
     required String idCardName,
     required Uint8List utilityBillBytes,
     required String utilityBillName,
+    String? correoContacto,
   }) async {
     final req = http.MultipartRequest('POST', Uri.parse(_url));
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
@@ -50,6 +52,8 @@ class AdoptionService {
       'experiencia_previa': previousExperience.toString(),
       'informacion_adicional': additionalInfo,
       if (hasOtherPets && otherPets != null) 'otras_mascotas': otherPets,
+      if (correoContacto != null && correoContacto.trim().isNotEmpty)
+        'correo_contacto': correoContacto.trim(),
     });
     req.files.add(
       http.MultipartFile.fromBytes(
@@ -70,6 +74,14 @@ class AdoptionService {
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception(_mensaje(res, 'No se pudo enviar la solicitud'));
     }
+
+    try {
+      final data = jsonDecode(utf8.decode(res.bodyBytes));
+      if (data is Map && data['id_solicitud_adopcion'] != null) {
+        return data['id_solicitud_adopcion'].toString();
+      }
+    } catch (_) {}
+    return null;
   }
 
   static Future<List<AdoptionRequest>> listForAdmin() async {
@@ -163,6 +175,40 @@ class AdoptionService {
       );
       noLeidasUsuario.value = 0;
     } catch (_) {}
+  }
+
+  /// Sube el contrato firmado. Solo un administrador puede llamarlo.
+  static Future<void> subirContrato({
+    required String id,
+    required Uint8List bytes,
+    required String nombreArchivo,
+  }) async {
+    final req = http.MultipartRequest('POST', Uri.parse('$_url/$id/contrato'));
+    req.headers['x-usuario-id'] = Session.idUsuario ?? '';
+    req.files.add(
+      http.MultipartFile.fromBytes('contrato', bytes, filename: nombreArchivo),
+    );
+    final res = await http.Response.fromStream(await req.send());
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(_mensaje(res, 'No se pudo subir el contrato'));
+    }
+  }
+
+  static Future<Uint8List> fetchContract(String id) =>
+      _archivo('$_url/$id/contrato');
+
+  /// Quita el contrato. La solicitud aprobada vuelve a quedar pendiente de carga.
+  static Future<void> eliminarContrato(String id) async {
+    var res = await http.delete(Uri.parse('$_url/$id/contrato'), headers: _headers);
+    if (res.statusCode == 404 || res.statusCode == 405) {
+      res = await http.post(
+        Uri.parse('$_url/$id/contrato/eliminar'),
+        headers: _headers,
+      );
+    }
+    if (res.statusCode != 200) {
+      throw Exception(_mensaje(res, 'No se pudo eliminar el contrato'));
+    }
   }
 
   static Future<Uint8List> fetchIdCard(String id) =>
