@@ -2,20 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/screens/admin/pets_form_screen.dart';
-import 'package:paw_match/screens/adoption/adoption_requests_admin_screen.dart';
-import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
-import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
-import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
+import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
-/// Pantalla moderna de mascotas con diseño inspirado en la referencia:
-/// cabecera con ubicación y notificaciones, tarjeta de filtros superior,
-/// barra de búsqueda y tarjetas de mascotas.
+/// Pantalla de mascotas: cabecera, filtros, búsqueda y tarjetas.
 class PetScreen extends StatefulWidget {
   const PetScreen({super.key});
 
@@ -38,7 +36,9 @@ class _PetScreenState extends State<PetScreen> {
   String _especie = 'Todas';
   String _sexo = 'Todos'; // 'Todos', 'Macho', 'Hembra'
   String _tamano = 'Todos'; // 'Todos', 'Pequeño', 'Mediano', 'Grande'
-  String _edad = 'Todos'; // 'Todos', 'Cachorro', 'Joven', 'Adulto', 'Senior'
+  String _edad = 'Todos'; // 'Todos', 'Cachorro', 'Adulto'
+  /// 'Todas', 'Disponibles', 'Apadrinadas' o 'Adoptadas'.
+  String _estado = 'Todas';
 
   int get _filtrosActivosCount {
     int c = 0;
@@ -46,6 +46,7 @@ class _PetScreenState extends State<PetScreen> {
     if (_sexo != 'Todos') c++;
     if (_tamano != 'Todos') c++;
     if (_edad != 'Todos' && _edad != 'Todas') c++;
+    if (_estado != 'Todas') c++;
     return c;
   }
 
@@ -55,6 +56,7 @@ class _PetScreenState extends State<PetScreen> {
       _sexo = 'Todos';
       _tamano = 'Todos';
       _edad = 'Todos';
+      _estado = 'Todas';
     });
   }
 
@@ -104,6 +106,7 @@ class _PetScreenState extends State<PetScreen> {
       _sexo = 'Todos';
       _tamano = 'Todos';
       _edad = 'Todos';
+      _estado = 'Todas';
     });
     await _recargar();
     _programarIrAlInicio();
@@ -139,38 +142,67 @@ class _PetScreenState extends State<PetScreen> {
         if (objetivo.startsWith('gran') && !tam.startsWith('gran')) return false;
       }
 
+      if (!_coincideEstado(p)) return false;
+
       if (_edad != 'Todos' && _edad != 'Todas') {
-        final edad = p.edad;
-        if (edad == null) return false;
-        final enMeses = p.unidadEdad == 'meses' || p.unidadEdad == 'mes';
-        switch (_edad) {
-          case 'Cachorro':
-            if (enMeses) {
-              if (edad > 12) return false;
-            } else {
-              if (edad > 1) return false;
-            }
-            break;
-          case 'Joven':
-            if (enMeses) {
-              if (edad <= 12 || edad > 36) return false;
-            } else {
-              if (edad < 1 || edad > 3) return false;
-            }
-            break;
-          case 'Adulto':
-            if (enMeses) return false;
-            if (edad < 4 || edad > 7) return false;
-            break;
-          case 'Senior':
-            if (enMeses) return false;
-            if (edad < 8) return false;
-            break;
-        }
+        if (_edad == 'Cachorro' && !p.esCachorro) return false;
+        if (_edad == 'Adulto' && p.esCachorro) return false;
       }
 
       return true;
     }).toList();
+  }
+
+  /// Todas muestra los tres grupos. El resto deja solo el grupo elegido.
+  bool _coincideEstado(Pet p) {
+    return switch (_estado) {
+      'Disponibles' => p.ordenEstadoListado == 0,
+      'Apadrinadas' => p.ordenEstadoListado == 1,
+      'Adoptadas' => p.ordenEstadoListado == 2,
+      _ => true,
+    };
+  }
+
+  Widget _barraEstado() {
+    const opciones = ['Todas', 'Disponibles', 'Apadrinadas', 'Adoptadas'];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+      child: SizedBox(
+        height: 34,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: opciones.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (_, i) {
+            final valor = opciones[i];
+            final sel = _estado == valor;
+            return GestureDetector(
+              onTap: () => setState(() => _estado = valor),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: sel ? AppColors.rosa : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: sel ? AppColors.rosa : AppColors.bordeRosa,
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  valor,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: sel ? FontWeight.bold : FontWeight.w500,
+                    color: sel ? Colors.white : AppColors.texto,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   Widget _chipActivo(String label, VoidCallback onClear) {
@@ -214,7 +246,8 @@ class _PetScreenState extends State<PetScreen> {
             final activeInModal = (_especie != 'Todas' && _especie != 'Todos' ? 1 : 0) +
                 (_sexo != 'Todos' ? 1 : 0) +
                 (_tamano != 'Todos' ? 1 : 0) +
-                (_edad != 'Todos' && _edad != 'Todas' ? 1 : 0);
+                (_edad != 'Todos' && _edad != 'Todas' ? 1 : 0) +
+                (_estado != 'Todas' ? 1 : 0);
 
             Widget seccionTitulo(String titulo) {
               return Padding(
@@ -318,6 +351,15 @@ class _PetScreenState extends State<PetScreen> {
                     ),
                     const Divider(height: 18),
 
+                    seccionTitulo('Estado'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ['Todas', 'Disponibles', 'Apadrinadas', 'Adoptadas'].map((estado) {
+                        return chipFiltro(estado, _estado, (v) => _estado = v);
+                      }).toList(),
+                    ),
+
                     // Especie
                     seccionTitulo('Especie'),
                     Wrap(
@@ -353,7 +395,7 @@ class _PetScreenState extends State<PetScreen> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: ['Todos', 'Cachorro', 'Joven', 'Adulto', 'Senior'].map((e) {
+                      children: ['Todos', 'Cachorro', 'Adulto'].map((e) {
                         return chipFiltro(e, _edad, (v) => _edad = v);
                       }).toList(),
                     ),
@@ -393,128 +435,17 @@ class _PetScreenState extends State<PetScreen> {
     );
   }
 
-  void _mostrarMenuSolicitudes(BuildContext context) {
-    final bool esAdmin = Session.esAdmin;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  esAdmin ? Icons.inbox_outlined : Icons.assignment_outlined,
-                  color: AppColors.rosa,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  esAdmin ? 'Solicitudes Recibidas' : 'Mis Solicitudes',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: Colors.grey.shade200),
-              ),
-              leading: const CircleAvatar(
-                backgroundColor: AppColors.rosaClaro,
-                child: Icon(Icons.volunteer_activism, color: AppColors.rosa),
-              ),
-              title: Text(
-                esAdmin ? 'Solicitudes de Apadrinamiento' : 'Mis Apadrinamientos',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                esAdmin
-                    ? 'Revisar solicitudes enviadas por usuarios'
-                    : 'Consulta estado de apadrinamiento y contratos',
-              ),
-              trailing: ValueListenableBuilder<int>(
-                valueListenable: esAdmin
-                    ? ApadrinamientoService.noLeidasAdmin
-                    : ApadrinamientoService.noLeidasUsuario,
-                builder: (context, count, child) => count > 0
-                    ? Badge(label: Text('$count'), backgroundColor: Colors.redAccent)
-                    : const Icon(Icons.chevron_right),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => esAdmin
-                        ? const ApadrinamientoAdminScreen()
-                        : const MisApadrinamientosScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            ListTile(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: Colors.grey.shade200),
-              ),
-              leading: const CircleAvatar(
-                backgroundColor: AppColors.rosaClaro,
-                child: Icon(Icons.pets, color: AppColors.rosa),
-              ),
-              title: Text(
-                esAdmin ? 'Solicitudes de Adopción' : 'Mis Adopciones',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text(
-                esAdmin
-                    ? 'Revisar solicitudes y subir el contrato firmado'
-                    : 'Consulta el estado de tu adopción y el contrato',
-              ),
-              trailing: ValueListenableBuilder<int>(
-                valueListenable: esAdmin
-                    ? AdoptionService.noLeidasAdmin
-                    : AdoptionService.noLeidasUsuario,
-                builder: (context, count, child) => count > 0
-                    ? Badge(label: Text('$count'), backgroundColor: Colors.redAccent)
-                    : const Icon(Icons.chevron_right),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => esAdmin
-                        ? const AdoptionRequestsAdminScreen()
-                        : const MyAdoptionsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
+  Future<void> _confirmarCerrarSesion() async {
+    final confirmar = await DialogoCerrarSesion.mostrar(context);
+    if (!confirmar || !mounted) return;
+    ApadrinamientoService.detenerMonitoreo();
+    AdoptionService.detenerMonitoreo();
+    Session.cerrar();
+    Navegacion.ir(context, const WelcomeScreen());
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool puedeVolver = Navigator.canPop(context);
-
     final bool esAdmin = Session.esAdmin;
 
     return Scaffold(
@@ -529,150 +460,10 @@ class _PetScreenState extends State<PetScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ───────── ENCABEZADO SUPERIOR (ESTILO REFERENCIA) ─────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 6),
-              child: Row(
-                children: [
-                  // Botón Volver o Avatar del Usuario
-                  if (puedeVolver)
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.06),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          size: 18,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: AppColors.rosa.withValues(alpha: 0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.pets, color: AppColors.rosa, size: 22),
-                      ),
-                    ),
-
-                  const SizedBox(width: 12),
-
-                  // Ubicación central con pin (como en la imagen de referencia)
-                  Expanded(
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.location_on_rounded,
-                              size: 16,
-                              color: AppColors.rosa,
-                            ),
-                            const SizedBox(width: 4),
-                            const Flexible(
-                              child: Text(
-                                'Fundación Maritza Arévalo',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1F2937),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 2),
-                            Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              size: 16,
-                              color: Colors.grey.shade500,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  // Campanita de notificaciones (estilo botón circular blanco con sombra)
-                  GestureDetector(
-                    onTap: () => _mostrarMenuSolicitudes(context),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: AnimatedBuilder(
-                        animation: Listenable.merge([
-                          Session.esAdmin
-                              ? ApadrinamientoService.noLeidasAdmin
-                              : ApadrinamientoService.noLeidasUsuario,
-                          Session.esAdmin
-                              ? AdoptionService.noLeidasAdmin
-                              : AdoptionService.noLeidasUsuario,
-                        ]),
-                        builder: (context, child) {
-                          final total = Session.esAdmin
-                              ? (ApadrinamientoService.noLeidasAdmin.value +
-                                  AdoptionService.noLeidasAdmin.value)
-                              : (ApadrinamientoService.noLeidasUsuario.value +
-                                  AdoptionService.noLeidasUsuario.value);
-                          return Badge(
-                            isLabelVisible: total > 0,
-                            label: Text('$total'),
-                            backgroundColor: Colors.redAccent,
-                            child: const Icon(
-                              Icons.notifications_outlined,
-                              size: 20,
-                              color: AppColors.rosa,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            BarraSuperior(
+              iconoTitulo: Icons.favorite_rounded,
+              titulo: 'Nuestros Peluditos',
+              onCerrarSesion: _confirmarCerrarSesion,
             ),
 
             const SizedBox(height: 6),
@@ -819,6 +610,8 @@ class _PetScreenState extends State<PetScreen> {
               ),
             ),
 
+            _barraEstado(),
+
             if (_filtrosActivosCount > 0)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
@@ -835,6 +628,8 @@ class _PetScreenState extends State<PetScreen> {
                         _chipActivo(_tamano, () => setState(() => _tamano = 'Todos')),
                       if (_edad != 'Todos' && _edad != 'Todas')
                         _chipActivo(_edad, () => setState(() => _edad = 'Todos')),
+                      if (_estado != 'Todas')
+                        _chipActivo(_estado, () => setState(() => _estado = 'Todas')),
                       GestureDetector(
                         onTap: _limpiarFiltros,
                         child: Container(
@@ -905,7 +700,9 @@ class _PetScreenState extends State<PetScreen> {
                     );
                   }
 
-                  final pets = _conRecienAgregada(_filtrar(origen));
+                  final pets = ordenarMascotasPorEstado(
+                    _filtrar(_conRecienAgregada(origen)),
+                  );
                   _programarIrAlInicio();
 
                   if (pets.isEmpty) {
@@ -988,9 +785,21 @@ class _PetScreenState extends State<PetScreen> {
                         constraints: const BoxConstraints(maxWidth: 1120),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final crossAxisCount = constraints.maxWidth >= 720
-                                ? 3
-                                : (constraints.maxWidth >= 480 ? 2 : 1);
+                            // Celular y pantallas pequeñas: siempre 2 por fila.
+                            // En pantallas anchas se mantienen 3 para aprovechar el ancho.
+                            final crossAxisCount = constraints.maxWidth >= 720 ? 3 : 2;
+                            const crossAxisSpacing = 18.0;
+                            const paddingHorizontal = 32.0;
+                            final anchoCelda = (constraints.maxWidth -
+                                    paddingHorizontal -
+                                    crossAxisSpacing * (crossAxisCount - 1)) /
+                                crossAxisCount;
+                            // Bajo ~200 px la tarjeta apila chip y acción; si no, van en una fila.
+                            // La foto es cuadrada (1:1). El alto extra es solo descripción + pie,
+                            // para que todas las imágenes midan lo mismo y no haya overflow.
+                            final pieApilado = anchoCelda < 200;
+                            final altoInfo = pieApilado ? 156.0 : 120.0;
+                            final childAspectRatio = anchoCelda / (anchoCelda + altoInfo);
                             return GridView.builder(
                               controller: _scrollCtrl,
                               primary: false,
@@ -1003,9 +812,9 @@ class _PetScreenState extends State<PetScreen> {
                               ),
                               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: crossAxisCount,
-                                crossAxisSpacing: 18,
+                                crossAxisSpacing: crossAxisSpacing,
                                 mainAxisSpacing: 18,
-                                childAspectRatio: crossAxisCount == 1 ? 0.95 : 0.82,
+                                childAspectRatio: childAspectRatio,
                               ),
                               itemCount: pets.length,
                               itemBuilder: (_, i) => PetCard(

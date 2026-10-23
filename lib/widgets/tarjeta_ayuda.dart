@@ -23,7 +23,7 @@ class TarjetaAyuda extends StatelessWidget {
         border: Border.all(color: AppColors.bordeRosa),
       ),
       child: Column(
-        mainAxisSize: MainAxisSize.max,
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(

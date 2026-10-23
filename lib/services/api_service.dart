@@ -10,7 +10,7 @@ import 'package:paw_match/services/session.dart';
 class ApiService {
   // IP local de tu PC en la red Wi-Fi compartida con el celular.
   // Si cambias de red, actualízala: en PowerShell, ipconfig y mira la IPv4 de Wi-Fi.
-  static const String _servidorIp = '192.168.173.99';
+  static const String _servidorIp = '192.168.172.176';
 
   // Elige la URL según donde corra la app:
   // - Web (Chrome/Edge): localhost

@@ -8,10 +8,13 @@ import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
 
 /// Pestaña de Notificaciones y Solicitudes accesible desde el menú inferior.
 class NotificationsTab extends StatelessWidget {
-  const NotificationsTab({super.key});
+  final VoidCallback onCerrarSesion;
+
+  const NotificationsTab({super.key, required this.onCerrarSesion});
 
   void _abrirAdopciones(BuildContext context) {
     if (Session.esAdmin) {
@@ -50,7 +53,15 @@ class NotificationsTab extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF8F9),
       body: SafeArea(
-        child: AnimatedBuilder(
+        child: Column(
+          children: [
+            BarraSuperior(
+              iconoTitulo: Icons.notifications_rounded,
+              titulo: 'Mis Notificaciones',
+              onCerrarSesion: onCerrarSesion,
+            ),
+            Expanded(
+              child: AnimatedBuilder(
           animation: Listenable.merge([
             esAdmin
                 ? ApadrinamientoService.noLeidasAdmin
@@ -69,58 +80,20 @@ class NotificationsTab extends StatelessWidget {
             final total = noLeidasAdop + noLeidasApad;
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+              padding: const EdgeInsets.fromLTRB(18, 8, 18, 100),
               children: [
-                // Encabezado
-                Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.rosaSuave,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.bordeRosa),
-                      ),
-                      child: const Icon(
-                        Icons.notifications_active_rounded,
-                        color: AppColors.rosa,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            esAdmin
-                                ? 'Solicitudes Recibidas'
-                                : 'Mis Notificaciones',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1F2937),
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            total > 0
-                                ? 'Tienes $total notificación${total > 1 ? 'es' : ''} pendiente${total > 1 ? 's' : ''}'
-                                : 'Al día con tus notificaciones',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: total > 0 ? AppColors.rosa : Colors.grey.shade600,
-                              fontWeight: total > 0 ? FontWeight.w700 : FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                Text(
+                  total > 0
+                      ? 'Tienes $total notificación${total > 1 ? 'es' : ''} pendiente${total > 1 ? 's' : ''}'
+                      : 'Al día con tus notificaciones',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: total > 0 ? AppColors.rosa : Colors.grey.shade600,
+                    fontWeight: total > 0 ? FontWeight.w700 : FontWeight.w500,
+                  ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 // Tarjeta 1: Adopciones
                 _TarjetaNotificacion(
@@ -211,6 +184,9 @@ class NotificationsTab extends StatelessWidget {
               ],
             );
           },
+              ),
+            ),
+          ],
         ),
       ),
     );
