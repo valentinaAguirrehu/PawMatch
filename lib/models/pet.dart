@@ -90,15 +90,23 @@ class Pet {
     return edad == 1 ? '1 año' : '$edad años';
   }
 
-  bool get esCachorro {
-    if (edad == null) return false;
-    if (unidadEdad == 'meses' || unidadEdad == 'mes') return true;
-    return edad! <= 1;
-  }
+  /// La unidad decide el grupo: meses es cachorro y años es adulto.
+  bool get esCachorro => unidadEdad == 'meses' || unidadEdad == 'mes';
 
   String get estadoAdopcionTexto => etiquetaEstadoAdopcion(estadoAdopcion);
 
   bool get estaAdoptada => estadoAdopcion.trim().toLowerCase() == 'adoptado';
+
+  bool get estaApadrinada =>
+      estadoApadrinamiento.trim().toLowerCase() == 'apadrinado';
+
+  /// Prioridad de la lista: 0 disponibles, 1 apadrinadas, 2 adoptadas.
+  /// Adoptada gana sobre apadrinada cuando la mascota tiene ambos estados.
+  int get ordenEstadoListado {
+    if (estaAdoptada) return 2;
+    if (estaApadrinada) return 1;
+    return 0;
+  }
 
   /// True solo si esta mascota adoptada pertenece a quien está consultando.
   bool adoptadaPor(String? currentUserId) {
@@ -131,6 +139,19 @@ String etiquetaEstadoAdopcion(String e) {
     default:
       return e;
   }
+}
+
+/// Disponibles, luego apadrinadas y al final adoptadas.
+/// Dentro de cada grupo se conserva el orden original.
+List<Pet> ordenarMascotasPorEstado(List<Pet> mascotas) {
+  final entradas = mascotas.asMap().entries.toList();
+  entradas.sort((a, b) {
+    final porEstado =
+        a.value.ordenEstadoListado.compareTo(b.value.ordenEstadoListado);
+    if (porEstado != 0) return porEstado;
+    return a.key.compareTo(b.key);
+  });
+  return [for (final entrada in entradas) entrada.value];
 }
 
 String etiquetaEstadoApadrinamiento(String e) {

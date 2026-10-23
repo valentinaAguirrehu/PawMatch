@@ -11,13 +11,16 @@ import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 /// Las tres mascotas con mayor compatibilidad con la persona en sesión.
 class PerfectMatchScreen extends StatefulWidget {
-  const PerfectMatchScreen({super.key});
+  final VoidCallback onCerrarSesion;
+
+  const PerfectMatchScreen({super.key, required this.onCerrarSesion});
 
   @override
   State<PerfectMatchScreen> createState() => _PerfectMatchScreenState();
@@ -96,23 +99,39 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _cargar,
-      child: FutureBuilder<RankingMatch>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
-                SizedBox(height: 120),
-                Center(child: CircularProgressIndicator()),
-              ],
-            );
-          }
-          if (snap.hasError) return _error(snap.error);
-          return _contenido(snap.data!);
-        },
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBF8F9),
+      body: SafeArea(
+        child: Column(
+          children: [
+            BarraSuperior(
+              iconoTitulo: Icons.stars_rounded,
+              titulo: 'Mi Match Perfecto',
+              onCerrarSesion: widget.onCerrarSesion,
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _cargar,
+                child: FutureBuilder<RankingMatch>(
+                  future: _future,
+                  builder: (context, snap) {
+                    if (snap.connectionState != ConnectionState.done) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(child: CircularProgressIndicator()),
+                        ],
+                      );
+                    }
+                    if (snap.hasError) return _error(snap.error);
+                    return _contenido(snap.data!);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -160,9 +179,19 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
               children: [
                 const EncabezadoCuestionarioUsuario(
                   titulo: '¡Tu Alma Gemela Ideal!',
+                  mostrarLogo: false,
+                  estiloTitulo: TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 18,
+                    height: 1.25,
+                    fontWeight: FontWeight.w600,
+                    fontStyle: FontStyle.italic,
+                    letterSpacing: 0.3,
+                    color: AppColors.texto,
+                  ),
                   icono: FeatureIcon.compatibilidad(
                     color: AppColors.rosa,
-                    tamano: 28,
+                    tamano: 20,
                   ),
                   detalle:
                       'Comparamos tus respuestas con la personalidad de cada mascota para '
@@ -201,12 +230,6 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Tu match perfecto ${FeatureIcon.huella}',
-          textAlign: TextAlign.center,
-          style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
         _TarjetaDestacada(
           key: ValueKey(destacado.mascota.id),
           match: destacado,

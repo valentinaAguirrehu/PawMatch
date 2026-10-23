@@ -206,9 +206,9 @@ class _MenuScreenState extends State<MenuScreen> {
         onVerMatch: () => _irA(2),
       ),
       const PetScreen(),
-      const PerfectMatchScreen(),
-      const NotificationsTab(),
-      const ProfileScreen(),
+      PerfectMatchScreen(onCerrarSesion: _confirmarCerrarSesion),
+      NotificationsTab(onCerrarSesion: _confirmarCerrarSesion),
+      ProfileScreen(onCerrarSesion: _confirmarCerrarSesion),
     ];
     final paginaActual = paginas[_index];
 
@@ -223,7 +223,12 @@ class _MenuScreenState extends State<MenuScreen> {
         }
       },
       child: Scaffold(
-        appBar: (_index == 0 || _index == 1 || _index == 3 || _enDetalle)
+        appBar: (_index == 0 ||
+                _index == 1 ||
+                _index == 2 ||
+                _index == 3 ||
+                _index == 4 ||
+                _enDetalle)
             ? null
             : AppBar(
                 title: const Text('Paw Match'),

@@ -2,7 +2,10 @@
 
 import 'dart:ui' show Size;
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:paw_match/screens/auth/login_screen.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 
 import 'package:paw_match/main.dart';
 
@@ -36,16 +39,24 @@ void main() {
   testWidgets('la bienvenida se adapta a una pantalla de celular', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = const Size(371, 554);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(const PawMatchApp());
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpWidget(const MaterialApp(home: WelcomeScreen()));
+    await tester.pump();
 
-    expect(find.text('Nuestra rescatista'), findsOneWidget);
-    expect(find.text('Conoce a nuestros perritos'), findsOneWidget);
+    expect(find.text('NUESTRA RESCATISTA'), findsOneWidget);
+    expect(find.text('NUESTROS LOGROS'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+    await tester.pump();
+
+    expect(find.text('Ingresa tu correo y contraseña'), findsOneWidget);
+    expect(find.text('Recordar contraseña'), findsOneWidget);
+    expect(find.text('¿Olvidaste tu contraseña?'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

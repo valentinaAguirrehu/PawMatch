@@ -134,11 +134,9 @@ class _LoginScreenState extends State<LoginScreen> {
               validator: (v) => (v == null || v.isEmpty) ? 'Requerido' : null,
             ),
             const SizedBox(height: 8),
-            // Fila: Recordar contraseña & ¿Olvidaste tu contraseña?
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                InkWell(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final recordar = InkWell(
                   onTap: () {
                     setState(() => _recordarContrasena = !_recordarContrasena);
                   },
@@ -176,8 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
-                ),
-                TextButton(
+                );
+                final olvidar = TextButton(
                   style: blanco,
                   onPressed: () => Navigator.push(
                     context,
@@ -189,8 +187,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     '¿Olvidaste tu contraseña?',
                     style: TextStyle(fontSize: 13),
                   ),
-                ),
-              ],
+                );
+                if (constraints.maxWidth < 400) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [recordar, olvidar],
+                  );
+                }
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [recordar, olvidar],
+                );
+              },
             ),
             const SizedBox(height: 8),
             BotonBlanco(
@@ -199,8 +207,9 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: _iniciarSesion,
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   '¿No tienes cuenta?',
