@@ -1,10 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  DatosActaAdopcion datos({bool acepto = true, String motivacion = 'Quiero darle un hogar.'}) {
+  DatosActaAdopcion datos({
+    bool acepto = true,
+    String motivacion = 'Quiero darle un hogar.',
+    bool conFotos = false,
+  }) {
+    final foto = conFotos ? img.encodeJpg(img.Image(width: 40, height: 30)) : null;
     return DatosActaAdopcion(
       idSolicitud: '42',
       nombreUsuario: 'Ana Pérez',
@@ -26,6 +32,8 @@ void main() {
       sexoMascota: 'Hembra',
       fechaAceptacion: DateTime(2026, 10, 22, 13, 40),
       aceptoTerminos: acepto,
+      fotoCedula: foto,
+      fotoRecibo: foto,
     );
   }
 
@@ -42,6 +50,15 @@ void main() {
     );
 
     expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+  });
+
+  test('el acta anexa la cédula y el recibo sin desbordar la página', () async {
+    final bytes = await AcuerdoAdopcionPdfService.generarPdfBytes(
+      datos(conFotos: true),
+    );
+
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    expect(bytes.length, greaterThan(1500));
   });
 
   test('no genera el acta si los términos no fueron aceptados', () {

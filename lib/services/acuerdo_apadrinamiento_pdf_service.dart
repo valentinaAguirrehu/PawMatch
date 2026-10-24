@@ -137,13 +137,33 @@ La Fundación tratará tu información personal y los documentos suministrados b
         : 'Mestiza';
 
     pdf.addPage(
-      pw.Page(
+      pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 28),
-        build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: [
+        margin: const pw.EdgeInsets.symmetric(horizontal: 56, vertical: 40),
+        footer: (context) => pw.Column(
+          children: [
+            pw.SizedBox(height: 6),
+            pw.Container(height: 0.6, color: grisBorde),
+            pw.SizedBox(height: 4),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Expanded(
+                  child: pw.Text(
+                    'Documento electrónico emitido por Paw Match para la Fundación Maritza Arévalo.',
+                    style: pw.TextStyle(fontSize: 8.5, color: grisMedio),
+                  ),
+                ),
+                pw.SizedBox(width: 12),
+                pw.Text(
+                  'Página ${context.pageNumber} de ${context.pagesCount}',
+                  style: pw.TextStyle(fontSize: 8.5, color: grisMedio),
+                ),
+              ],
+            ),
+          ],
+        ),
+        build: (context) => [
               // ───────── ENCABEZADO SUPERIOR CON LOGO Y FUNDACIÓN ─────────
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.center,
@@ -170,7 +190,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                               style: pw.TextStyle(
                                 color: verdePrincipal,
                                 fontWeight: pw.FontWeight.bold,
-                                fontSize: 11,
+                                fontSize: 13,
                               ),
                             ),
                           ),
@@ -185,7 +205,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                           FundacionInfo.nombre.toUpperCase(),
                           style: pw.TextStyle(
                             color: verdePrincipal,
-                            fontSize: 13,
+                            fontSize: 15.5,
                             fontWeight: pw.FontWeight.bold,
                             letterSpacing: 0.3,
                           ),
@@ -195,14 +215,14 @@ La Fundación tratará tu información personal y los documentos suministrados b
                           FundacionInfo.ciudad,
                           style: pw.TextStyle(
                             color: grisOscuro,
-                            fontSize: 8.5,
+                            fontSize: 10.5,
                           ),
                         ),
                         pw.Text(
                           'WhatsApp: +57 ${FundacionInfo.whatsappNumero.replaceFirst(RegExp(r'^57'), '')}',
                           style: pw.TextStyle(
                             color: grisOscuro,
-                            fontSize: 8.5,
+                            fontSize: 10.5,
                           ),
                         ),
                         pw.SizedBox(height: 1),
@@ -210,7 +230,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                           'Protección, Bienestar y Rescate Animal',
                           style: pw.TextStyle(
                             color: verdeSecundario,
-                            fontSize: 8,
+                            fontSize: 10,
                             fontWeight: pw.FontWeight.bold,
                           ),
                         ),
@@ -232,7 +252,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                       'PAW MATCH',
                       style: pw.TextStyle(
                         color: verdePrincipal,
-                        fontSize: 14,
+                        fontSize: 16.5,
                         fontWeight: pw.FontWeight.bold,
                         letterSpacing: 1.2,
                       ),
@@ -243,7 +263,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                       textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         color: grisOscuro,
-                        fontSize: 10.5,
+                        fontSize: 13,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
@@ -252,7 +272,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                       'DOCUMENTO DE ACEPTACIÓN ELECTRÓNICA',
                       style: pw.TextStyle(
                         color: grisMedio,
-                        fontSize: 7.5,
+                        fontSize: 9.5,
                         letterSpacing: 0.8,
                       ),
                     ),
@@ -269,14 +289,14 @@ La Fundación tratará tu información personal y los documentos suministrados b
                 '1. Información del apadrinamiento',
                 style: pw.TextStyle(
                   color: grisOscuro,
-                  fontSize: 10,
+                  fontSize: 12.5,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
               pw.SizedBox(height: 2),
               pw.Text(
                 'Nombre del padrino, datos de contacto, mascota apadrinada, aporte mensual y fecha de aceptación, organizados en una ficha de lectura rápida:',
-                style: pw.TextStyle(color: grisMedio, fontSize: 8),
+                style: pw.TextStyle(color: grisMedio, fontSize: 10),
               ),
               pw.SizedBox(height: 6),
 
@@ -315,14 +335,14 @@ La Fundación tratará tu información personal y los documentos suministrados b
                 '2. Términos y condiciones',
                 style: pw.TextStyle(
                   color: grisOscuro,
-                  fontSize: 10,
+                  fontSize: 12.5,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
               pw.SizedBox(height: 2),
               pw.Text(
                 'Los cinco compromisos numerados, con subtítulos destacados y párrafos bien espaciados:',
-                style: pw.TextStyle(color: grisMedio, fontSize: 8),
+                style: pw.TextStyle(color: grisMedio, fontSize: 10),
               ),
               pw.SizedBox(height: 6),
 
@@ -333,11 +353,11 @@ La Fundación tratará tu información personal y los documentos suministrados b
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Container(
-                        width: 14,
+                        width: 20,
                         child: pw.Text(
                           '${c['num']}.',
                           style: pw.TextStyle(
-                            fontSize: 8,
+                            fontSize: 10,
                             fontWeight: pw.FontWeight.bold,
                             color: verdePrincipal,
                           ),
@@ -346,7 +366,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                       pw.Expanded(
                         child: pw.RichText(
                           text: pw.TextSpan(
-                            style: pw.TextStyle(fontSize: 8, color: grisOscuro),
+                            style: pw.TextStyle(fontSize: 10, color: grisOscuro),
                             children: [
                               pw.TextSpan(
                                 text: '${c['titulo']}: ',
@@ -369,14 +389,14 @@ La Fundación tratará tu información personal y los documentos suministrados b
                 '3. Constancia de aceptación electrónica',
                 style: pw.TextStyle(
                   color: grisOscuro,
-                  fontSize: 10,
+                  fontSize: 12.5,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
               pw.SizedBox(height: 2),
               pw.Text(
                 'Radicado, fecha y hora del registro, estado de la solicitud y una nota de validación del sistema:',
-                style: pw.TextStyle(color: grisMedio, fontSize: 8),
+                style: pw.TextStyle(color: grisMedio, fontSize: 10),
               ),
               pw.SizedBox(height: 6),
 
@@ -394,62 +414,38 @@ La Fundación tratará tu información personal y los documentos suministrados b
                       'CONSTANCIA DE ACEPTACIÓN ELECTRÓNICA REGISTRADA POR EL SISTEMA',
                       style: pw.TextStyle(
                         color: verdeSecundario,
-                        fontSize: 8,
+                        fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'El solicitante ha marcado la casilla obligatoria de aceptación del Acuerdo de Responsabilidad y Compromiso y ha enviado formalmente su solicitud a través de la plataforma Paw Match. La aceptación ha sido registrada de forma segura en la base de datos de la Fundación.',
-                      style: pw.TextStyle(fontSize: 7.5, color: grisOscuro),
+                      style: pw.TextStyle(fontSize: 9.5, color: grisOscuro),
                     ),
-                    pw.SizedBox(height: 4),
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          'Radicado / Ref: ${datos.idSolicitud}',
-                          style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: grisOscuro),
-                        ),
-                        pw.Text(
-                          'Fecha: $fechaFormateada',
-                          style: pw.TextStyle(fontSize: 7.5, color: grisOscuro),
-                        ),
-                        pw.Text(
-                          'Estado: ACEPTADO Y REGISTRADO',
-                          style: pw.TextStyle(
-                            fontSize: 7.5,
-                            fontWeight: pw.FontWeight.bold,
-                            color: verdeSecundario,
-                          ),
-                        ),
-                      ],
+                    pw.SizedBox(height: 6),
+                    pw.Text(
+                      'Radicado / Ref: ${datos.idSolicitud}',
+                      style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold, color: grisOscuro),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'Fecha: $fechaFormateada',
+                      style: pw.TextStyle(fontSize: 9.5, color: grisOscuro),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'Estado: ACEPTADO Y REGISTRADO',
+                      style: pw.TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: verdeSecundario,
+                      ),
                     ),
                   ],
                 ),
               ),
-
-              pw.Spacer(),
-
-              // ───────── PIE DE PÁGINA ─────────
-              pw.Container(height: 0.6, color: grisBorde),
-              pw.SizedBox(height: 4),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Documento electrónico emitido por Paw Match para la Fundación Maritza Arévalo.',
-                    style: pw.TextStyle(fontSize: 6.8, color: grisMedio),
-                  ),
-                  pw.Text(
-                    'Página 1 de 1',
-                    style: pw.TextStyle(fontSize: 6.8, color: grisMedio),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
+        ],
       ),
     );
 
@@ -458,16 +454,16 @@ La Fundación tratará tu información personal y los documentos suministrados b
 
   static pw.Widget _filaDato(String etiqueta, String valor) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
+      padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 140,
+            width: 180,
             child: pw.Text(
               etiqueta,
               style: pw.TextStyle(
-                fontSize: 8,
+                fontSize: 10,
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColor.fromHex('#374151'),
               ),
@@ -477,7 +473,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
             child: pw.Text(
               valor,
               style: pw.TextStyle(
-                fontSize: 8,
+                fontSize: 10,
                 color: PdfColor.fromHex('#111827'),
               ),
             ),

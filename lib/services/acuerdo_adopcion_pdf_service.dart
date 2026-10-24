@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/services/preparar_foto_pdf.dart';
 import 'package:paw_match/services/session.dart';
 
 /// Datos que quedan consignados en el acta de compromiso de adopción.
@@ -16,6 +17,7 @@ class DatosActaAdopcion {
   final String? documentoUsuario;
   final String correoUsuario;
   final String? telefonoUsuario;
+  final String? direccionUsuario;
   final String tipoVivienda;
   final bool tienePatio;
   final bool tieneNinos;
@@ -31,6 +33,8 @@ class DatosActaAdopcion {
   final String? sexoMascota;
   final DateTime fechaAceptacion;
   final bool aceptoTerminos;
+  final Uint8List? fotoCedula;
+  final Uint8List? fotoRecibo;
 
   DatosActaAdopcion({
     required this.idSolicitud,
@@ -38,6 +42,7 @@ class DatosActaAdopcion {
     this.documentoUsuario,
     required this.correoUsuario,
     this.telefonoUsuario,
+    this.direccionUsuario,
     required this.tipoVivienda,
     required this.tienePatio,
     required this.tieneNinos,
@@ -53,11 +58,25 @@ class DatosActaAdopcion {
     this.sexoMascota,
     required this.fechaAceptacion,
     required this.aceptoTerminos,
+    this.fotoCedula,
+    this.fotoRecibo,
   });
 }
 
 class AcuerdoAdopcionPdfService {
   AcuerdoAdopcionPdfService._();
+
+  /// Requisitos que el adoptante lee y acepta antes del formulario.
+  /// El mismo listado se muestra en la pantalla de pasos y en el acta PDF.
+  static const List<String> requisitosImportantes = [
+    'Asumir el compromiso de cuidarlo durante toda su vida.',
+    'Ofrecer un entorno familiar estable, protegido y lleno de amor.',
+    'Ser mayor de 18 años.',
+    'Contar con la solvencia para cubrir su alimentación, controles y gastos médicos.',
+    'Realizar la esterilización obligatoria si aún no está esterilizado.',
+    'Mantener su esquema de vacunación y desparasitación al día.',
+    'Mantener contacto constante con la fundación para el seguimiento (fotos vía WhatsApp y visitas domiciliarias).',
+  ];
 
   /// Cláusulas formales de la Fundación Maritza Arévalo.
   /// La clave `alerta` marca la cláusula de rescisión para destacarla en la UI y en el PDF.
@@ -160,6 +179,11 @@ class AcuerdoAdopcionPdfService {
             ? Session.documentoIdentidad.trim()
             : 'No registrado');
 
+    final direccionTexto = (datos.direccionUsuario != null &&
+            datos.direccionUsuario!.trim().isNotEmpty)
+        ? datos.direccionUsuario!.trim()
+        : 'No registrada';
+
     final otrasTexto = datos.tieneOtrasMascotas
         ? (datos.otrasMascotas.trim().isEmpty
             ? 'Sí'
@@ -170,10 +194,57 @@ class AcuerdoAdopcionPdfService {
         ? 'No especificada'
         : datos.motivacion.trim();
 
+    final jpgCedula = await prepararFotoParaPdf(datos.fotoCedula);
+    final jpgRecibo = await prepararFotoParaPdf(datos.fotoRecibo);
+    final fotoCedula = jpgCedula == null ? null : pw.MemoryImage(jpgCedula);
+    final fotoRecibo = jpgRecibo == null ? null : pw.MemoryImage(jpgRecibo);
+
+    pw.Widget anexo(String titulo, pw.MemoryImage? imagen) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 12),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              titulo,
+              style: pw.TextStyle(
+                color: grisOscuro,
+                fontSize: 11,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            if (imagen == null)
+              pw.Text(
+                'No se adjuntó este documento.',
+                style: pw.TextStyle(color: grisMedio, fontSize: 10),
+              )
+            else
+              pw.Container(
+                width: 478,
+                height: 470,
+                padding: const pw.EdgeInsets.all(8),
+                alignment: pw.Alignment.center,
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: grisBorde, width: 0.8),
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                ),
+                child: pw.Image(
+                  imagen,
+                  fit: pw.BoxFit.contain,
+                  width: 462,
+                  height: 454,
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 56, vertical: 40),
         footer: (context) => pw.Column(
           children: [
             pw.SizedBox(height: 6),
@@ -182,13 +253,16 @@ class AcuerdoAdopcionPdfService {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(
-                  'Documento electrónico emitido por Paw Match para la Fundación Maritza Arévalo.',
-                  style: pw.TextStyle(fontSize: 6.8, color: grisMedio),
+                pw.Expanded(
+                  child: pw.Text(
+                    'Documento electrónico emitido por Paw Match para la Fundación Maritza Arévalo.',
+                    style: pw.TextStyle(fontSize: 8.5, color: grisMedio),
+                  ),
                 ),
+                pw.SizedBox(width: 12),
                 pw.Text(
                   'Página ${context.pageNumber} de ${context.pagesCount}',
-                  style: pw.TextStyle(fontSize: 6.8, color: grisMedio),
+                  style: pw.TextStyle(fontSize: 8.5, color: grisMedio),
                 ),
               ],
             ),
@@ -219,7 +293,7 @@ class AcuerdoAdopcionPdfService {
                           style: pw.TextStyle(
                             color: verdePrincipal,
                             fontWeight: pw.FontWeight.bold,
-                            fontSize: 11,
+                            fontSize: 13,
                           ),
                         ),
                       ),
@@ -233,7 +307,7 @@ class AcuerdoAdopcionPdfService {
                       FundacionInfo.nombre.toUpperCase(),
                       style: pw.TextStyle(
                         color: verdePrincipal,
-                        fontSize: 13,
+                        fontSize: 15.5,
                         fontWeight: pw.FontWeight.bold,
                         letterSpacing: 0.3,
                       ),
@@ -241,18 +315,18 @@ class AcuerdoAdopcionPdfService {
                     pw.SizedBox(height: 2),
                     pw.Text(
                       FundacionInfo.ciudad,
-                      style: pw.TextStyle(color: grisOscuro, fontSize: 8.5),
+                      style: pw.TextStyle(color: grisOscuro, fontSize: 10.5),
                     ),
                     pw.Text(
                       'WhatsApp: +57 ${FundacionInfo.whatsappNumero.replaceFirst(RegExp(r'^57'), '')}',
-                      style: pw.TextStyle(color: grisOscuro, fontSize: 8.5),
+                      style: pw.TextStyle(color: grisOscuro, fontSize: 10.5),
                     ),
                     pw.SizedBox(height: 1),
                     pw.Text(
                       'Protección, Bienestar y Rescate Animal',
                       style: pw.TextStyle(
                         color: verdeSecundario,
-                        fontSize: 8,
+                        fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
@@ -271,7 +345,7 @@ class AcuerdoAdopcionPdfService {
                   'PAW MATCH',
                   style: pw.TextStyle(
                     color: verdePrincipal,
-                    fontSize: 14,
+                    fontSize: 16.5,
                     fontWeight: pw.FontWeight.bold,
                     letterSpacing: 1.2,
                   ),
@@ -282,7 +356,7 @@ class AcuerdoAdopcionPdfService {
                   textAlign: pw.TextAlign.center,
                   style: pw.TextStyle(
                     color: grisOscuro,
-                    fontSize: 10.5,
+                    fontSize: 13,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
@@ -291,7 +365,7 @@ class AcuerdoAdopcionPdfService {
                   'DOCUMENTO DE ACEPTACIÓN ELECTRÓNICA',
                   style: pw.TextStyle(
                     color: grisMedio,
-                    fontSize: 7.5,
+                    fontSize: 9.5,
                     letterSpacing: 0.8,
                   ),
                 ),
@@ -305,14 +379,14 @@ class AcuerdoAdopcionPdfService {
             '1. Información de la adopción',
             style: pw.TextStyle(
               color: grisOscuro,
-              fontSize: 10,
+              fontSize: 12.5,
               fontWeight: pw.FontWeight.bold,
             ),
           ),
           pw.SizedBox(height: 2),
           pw.Text(
             'Datos del adoptante, condiciones del hogar, mascota adoptada y fecha de aceptación expresa de los términos:',
-            style: pw.TextStyle(color: grisMedio, fontSize: 8),
+            style: pw.TextStyle(color: grisMedio, fontSize: 10),
           ),
           pw.SizedBox(height: 6),
           pw.Container(
@@ -331,6 +405,7 @@ class AcuerdoAdopcionPdfService {
                 if (datos.telefonoUsuario != null &&
                     datos.telefonoUsuario!.trim().isNotEmpty)
                   _filaDato('Teléfono de contacto:', datos.telefonoUsuario!.trim()),
+                _filaDato('Dirección:', direccionTexto),
                 _filaDato('Tipo de vivienda:', datos.tipoVivienda),
                 _filaDato('Patio o zona verde:', datos.tienePatio ? 'Sí' : 'No'),
                 _filaDato('Niños en el hogar:', datos.tieneNinos ? 'Sí' : 'No'),
@@ -356,7 +431,7 @@ class AcuerdoAdopcionPdfService {
           pw.Text(
             'Motivación declarada por el adoptante:',
             style: pw.TextStyle(
-              fontSize: 8,
+              fontSize: 10,
               fontWeight: pw.FontWeight.bold,
               color: PdfColor.fromHex('#374151'),
             ),
@@ -364,21 +439,73 @@ class AcuerdoAdopcionPdfService {
           pw.SizedBox(height: 2),
           pw.Text(
             motivacion,
-            style: pw.TextStyle(fontSize: 8, color: grisOscuro),
+            style: pw.TextStyle(fontSize: 10, color: grisOscuro),
           ),
           pw.SizedBox(height: 10),
           pw.Text(
-            '2. Términos y condiciones',
+            '2. Requisitos importantes',
             style: pw.TextStyle(
               color: grisOscuro,
+              fontSize: 12.5,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            'Condiciones de adopción responsable que el adoptante leyó y se comprometió a cumplir, en orden de importancia:',
+            style: pw.TextStyle(color: grisMedio, fontSize: 10),
+          ),
+          pw.SizedBox(height: 6),
+          ...requisitosImportantes.asMap().entries.map((entrada) {
+            final numero = entrada.key + 1;
+            return pw.Padding(
+              padding: const pw.EdgeInsets.only(bottom: 3),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Container(
+                    width: 20,
+                    child: pw.Text(
+                      '$numero.',
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                        color: verdePrincipal,
+                      ),
+                    ),
+                  ),
+                  pw.Expanded(
+                    child: pw.Text(
+                      entrada.value,
+                      style: pw.TextStyle(fontSize: 10, color: grisOscuro),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'El adoptante declaró: «He leído los términos de adopción y me comprometo a cumplir con todas las condiciones indicadas.»',
+            style: pw.TextStyle(
               fontSize: 10,
+              fontStyle: pw.FontStyle.italic,
+              color: grisOscuro,
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            '3. Términos y condiciones',
+            style: pw.TextStyle(
+              color: grisOscuro,
+              fontSize: 12.5,
               fontWeight: pw.FontWeight.bold,
             ),
           ),
           pw.SizedBox(height: 2),
           pw.Text(
             'Compromisos de adopción responsable de la Fundación Maritza Arévalo, aceptados por el solicitante:',
-            style: pw.TextStyle(color: grisMedio, fontSize: 8),
+            style: pw.TextStyle(color: grisMedio, fontSize: 10),
           ),
           pw.SizedBox(height: 6),
           ...clausulasAdopcion.map((c) {
@@ -387,11 +514,11 @@ class AcuerdoAdopcionPdfService {
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Container(
-                  width: 14,
+                  width: 20,
                   child: pw.Text(
                     '${c['num']}.',
                     style: pw.TextStyle(
-                      fontSize: 8,
+                      fontSize: 10,
                       fontWeight: pw.FontWeight.bold,
                       color: esAlerta ? rojoAlerta : verdePrincipal,
                     ),
@@ -401,7 +528,7 @@ class AcuerdoAdopcionPdfService {
                   child: pw.RichText(
                     text: pw.TextSpan(
                       style: pw.TextStyle(
-                        fontSize: 8,
+                        fontSize: 10,
                         color: esAlerta ? rojoAlerta : grisOscuro,
                       ),
                       children: [
@@ -437,17 +564,17 @@ class AcuerdoAdopcionPdfService {
           }),
           pw.SizedBox(height: 8),
           pw.Text(
-            '3. Constancia de aceptación electrónica',
+            '4. Constancia de aceptación electrónica',
             style: pw.TextStyle(
               color: grisOscuro,
-              fontSize: 10,
+              fontSize: 12.5,
               fontWeight: pw.FontWeight.bold,
             ),
           ),
           pw.SizedBox(height: 2),
           pw.Text(
             'Radicado, fecha y hora del registro, y constancia de que los términos fueron aceptados de forma expresa:',
-            style: pw.TextStyle(color: grisMedio, fontSize: 8),
+            style: pw.TextStyle(color: grisMedio, fontSize: 10),
           ),
           pw.SizedBox(height: 6),
           pw.Container(
@@ -464,44 +591,58 @@ class AcuerdoAdopcionPdfService {
                   'CONSTANCIA DE ACEPTACIÓN ELECTRÓNICA REGISTRADA POR EL SISTEMA',
                   style: pw.TextStyle(
                     color: verdeSecundario,
-                    fontSize: 8,
+                    fontSize: 10,
                     fontWeight: pw.FontWeight.bold,
                   ),
                 ),
                 pw.SizedBox(height: 2),
                 pw.Text(
                   'El adoptante marcó la casilla obligatoria de aceptación de los términos y condiciones de adopción responsable de la Fundación Maritza Arévalo y envió formalmente su solicitud a través de la plataforma Paw Match. La aceptación ha sido registrada de forma segura en la base de datos de la Fundación.',
-                  style: pw.TextStyle(fontSize: 7.5, color: grisOscuro),
+                  style: pw.TextStyle(fontSize: 9.5, color: grisOscuro),
                 ),
-                pw.SizedBox(height: 4),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Radicado / Ref: ${datos.idSolicitud}',
-                      style: pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: grisOscuro,
-                      ),
-                    ),
-                    pw.Text(
-                      'Fecha: $fechaFormateada',
-                      style: pw.TextStyle(fontSize: 7.5, color: grisOscuro),
-                    ),
-                    pw.Text(
-                      'Estado: ACEPTADO Y REGISTRADO',
-                      style: pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: verdeSecundario,
-                      ),
-                    ),
-                  ],
+                pw.SizedBox(height: 6),
+                pw.Text(
+                  'Radicado / Ref: ${datos.idSolicitud}',
+                  style: pw.TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: grisOscuro,
+                  ),
+                ),
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'Fecha: $fechaFormateada',
+                  style: pw.TextStyle(fontSize: 9.5, color: grisOscuro),
+                ),
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'Estado: ACEPTADO Y REGISTRADO',
+                  style: pw.TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: verdeSecundario,
+                  ),
                 ),
               ],
             ),
           ),
+          pw.SizedBox(height: 12),
+          pw.Text(
+            '5. Documentos adjuntos',
+            style: pw.TextStyle(
+              color: grisOscuro,
+              fontSize: 12.5,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 2),
+          pw.Text(
+            'Cédula de ciudadanía y recibo de servicio público que el adoptante anexó con la solicitud:',
+            style: pw.TextStyle(color: grisMedio, fontSize: 10),
+          ),
+          pw.SizedBox(height: 8),
+          anexo('Cédula de ciudadanía', fotoCedula),
+          anexo('Recibo de servicio público', fotoRecibo),
         ],
       ),
     );
@@ -509,18 +650,37 @@ class AcuerdoAdopcionPdfService {
     return pdf.save();
   }
 
+  /// Convierte la foto subida a JPG para poder incrustarla en el PDF.
+  static pw.MemoryImage? _prepararFoto(Uint8List? bytes) {
+    if (bytes == null || bytes.isEmpty) return null;
+    try {
+      final decodificada = img.decodeImage(bytes);
+      if (decodificada == null) return null;
+      var foto = decodificada;
+      const maxLado = 1600;
+      if (foto.width > maxLado || foto.height > maxLado) {
+        foto = foto.width >= foto.height
+            ? img.copyResize(foto, width: maxLado)
+            : img.copyResize(foto, height: maxLado);
+      }
+      return pw.MemoryImage(img.encodeJpg(foto, quality: 74));
+    } catch (_) {
+      return null;
+    }
+  }
+
   static pw.Widget _filaDato(String etiqueta, String valor) {
     return pw.Padding(
-      padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
+      padding: const pw.EdgeInsets.symmetric(vertical: 2.5),
       child: pw.Row(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 158,
+            width: 205,
             child: pw.Text(
               etiqueta,
               style: pw.TextStyle(
-                fontSize: 8,
+                fontSize: 10,
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColor.fromHex('#374151'),
               ),
@@ -530,7 +690,7 @@ class AcuerdoAdopcionPdfService {
             child: pw.Text(
               valor,
               style: pw.TextStyle(
-                fontSize: 8,
+                fontSize: 10,
                 color: PdfColor.fromHex('#111827'),
               ),
             ),
