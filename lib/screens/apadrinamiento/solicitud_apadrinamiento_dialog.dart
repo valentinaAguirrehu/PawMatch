@@ -9,6 +9,7 @@ import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
@@ -69,11 +70,31 @@ class SolicitudApadrinamientoDialog extends StatefulWidget {
 
 class _SolicitudApadrinamientoDialogState
     extends State<SolicitudApadrinamientoDialog> {
+  static const String tipoMonetario = 'Aporte monetario.';
+  static const String tipoEspecie =
+      'Aporte en especie (alimento, cobijas, camas, juguetes, medicamentos, productos de aseo u otros artículos).';
+  static const String tipoOtro = 'Otro tipo de ayuda.';
+
   final _formKey = GlobalKey<FormState>();
   final _motivacionCtrl = TextEditingController();
-  final _montoCtrl = TextEditingController(text: '30000');
   final _correoCtrl = TextEditingController(text: Session.correo);
-  String _frecuencia = 'mensual';
+
+  // Selección de tipo de aporte
+  String _tipoAporte = tipoMonetario;
+
+  // Campos para Aporte monetario
+  final _montoCtrl = TextEditingController(text: '30000');
+  String _frecuenciaMonetario = 'mensual'; // 'semanal', 'quincenal', 'mensual', 'aporte_unico'
+
+  // Campos para Aporte en especie
+  final _detalleEspecieCtrl = TextEditingController();
+  String _frecuenciaEspecie = 'mensual'; // 'semanal', 'quincenal', 'mensual', 'entrega_unica'
+
+  // Campos para Otro tipo de ayuda
+  final _otroAporteCtrl = TextEditingController();
+
+  late Pet _mascotaActual = widget.pet;
+  bool _cargandoSalud = false;
 
   int _paso = 0;
   Uint8List? _docBytes;
@@ -85,10 +106,33 @@ class _SolicitudApadrinamientoDialogState
   bool _actualizandoCorreo = false;
 
   @override
+  void initState() {
+    super.initState();
+    _consultarSaludMascota();
+  }
+
+  Future<void> _consultarSaludMascota() async {
+    try {
+      if (mounted) setState(() => _cargandoSalud = true);
+      final fresca = await PetsService.obtener(widget.pet.id);
+      if (mounted) {
+        setState(() {
+          _mascotaActual = fresca;
+          _cargandoSalud = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _cargandoSalud = false);
+    }
+  }
+
+  @override
   void dispose() {
     _motivacionCtrl.dispose();
     _montoCtrl.dispose();
     _correoCtrl.dispose();
+    _detalleEspecieCtrl.dispose();
+    _otroAporteCtrl.dispose();
     super.dispose();
   }
 
@@ -416,20 +460,24 @@ class _SolicitudApadrinamientoDialogState
                           _correoPerfilConfirmado = true;
                           _actualizandoCorreo = false;
                         });
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            backgroundColor: Colors.green,
-                            content: Text('¡Correo actualizado en tu perfil y base de datos con éxito!'),
-                          ),
-                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              backgroundColor: Colors.green,
+                              content: Text('¡Correo actualizado en tu perfil y base de datos con éxito!'),
+                            ),
+                          );
+                        }
                       } catch (e) {
-                        setModalState(() => _actualizandoCorreo = false);
-                        setState(() => _actualizandoCorreo = false);
+                        if (ctx.mounted) setModalState(() => _actualizandoCorreo = false);
+                        if (mounted) setState(() => _actualizandoCorreo = false);
                         final msg = e.toString().replaceFirst('Exception: ', '');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(backgroundColor: Colors.redAccent, content: Text(msg)),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(backgroundColor: Colors.redAccent, content: Text(msg)),
+                          );
+                        }
                       }
                     },
               child: _actualizandoCorreo
@@ -450,16 +498,35 @@ class _SolicitudApadrinamientoDialogState
     setState(() => _enviando = true);
 
     try {
-      final monto = int.tryParse(_montoCtrl.text.replaceAll(RegExp(r'\D'), ''));
       final motivacion = _motivacionCtrl.text.trim();
+
+      int? monto;
+      String frecuenciaFinal;
+      String? detalleFinal;
+
+      if (_tipoAporte == tipoMonetario) {
+        monto = int.tryParse(_montoCtrl.text.replaceAll(RegExp(r'\D'), ''));
+        frecuenciaFinal = _frecuenciaMonetario;
+        detalleFinal = null;
+      } else if (_tipoAporte == tipoEspecie) {
+        monto = null;
+        frecuenciaFinal = _frecuenciaEspecie;
+        detalleFinal = _detalleEspecieCtrl.text.trim();
+      } else {
+        monto = null;
+        frecuenciaFinal = 'aporte_unico';
+        detalleFinal = _otroAporteCtrl.text.trim();
+      }
 
       // 1. Enviar a base de datos en el backend (incluyendo el correo confirmado)
       final SolicitudApadrinamiento? solicitudCreada =
           await ApadrinamientoService.enviarSolicitud(
         idMascota: widget.pet.id,
         motivacion: motivacion,
+        tipoAporte: _tipoAporte,
         montoAporte: monto,
-        frecuenciaAporte: _frecuencia,
+        frecuenciaAporte: frecuenciaFinal,
+        detalleAporte: detalleFinal,
         bytesDocumento: _docBytes!,
         nombreArchivo: _docNombre!,
         correoContacto: correoConfirmado,
@@ -498,8 +565,10 @@ class _SolicitudApadrinamientoDialogState
         especieMascota: widget.pet.especie,
         razaMascota: widget.pet.raza,
         edadMascota: widget.pet.edadTexto,
+        tipoAporte: _tipoAporte,
+        detalleAporte: detalleFinal,
         montoAporte: monto,
-        frecuenciaAporte: _frecuencia,
+        frecuenciaAporte: frecuenciaFinal,
         motivacion: motivacion,
         fechaAceptacion: fechaAhora,
       );
@@ -993,70 +1062,989 @@ class _SolicitudApadrinamientoDialogState
           },
         ),
 
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
 
-        // Aporte voluntario y frecuencia
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Aporte voluntario (COP)',
-                    style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    controller: _montoCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      prefixText: '\$ ',
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+        // Forma de Contribuir (Tipo de aporte y campos dinámicos)
+        _seccionAporte(t),
+      ];
+
+  /// Sección interactiva de Tipo de Aporte con diseño moderno en tonos rosas
+  Widget _seccionAporte(TextTheme t) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.bordeRosa.withValues(alpha: 0.9),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppColors.rosaSuave,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.volunteer_activism_rounded,
+                  color: AppColors.rosa,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '¿Cómo deseas contribuir? *',
+                      style: t.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.texto,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      'Elige la forma en que apoyarás a ${widget.pet.nombre}',
+                      style: t.bodySmall?.copyWith(
+                        color: Colors.grey.shade600,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // 1. Selector de Tipo de Aporte (Dropdown)
+          DropdownButtonFormField<String>(
+            initialValue: _tipoAporte,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Tipo de aporte *',
+              labelStyle: const TextStyle(
+                color: AppColors.rosa,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+              prefixIcon: const Icon(
+                Icons.category_rounded,
+                color: AppColors.rosa,
+                size: 20,
+              ),
+              filled: true,
+              fillColor: const Color(0xFFFDF7F9),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.bordeRosa),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.bordeRosa),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: AppColors.rosa, width: 2),
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Frecuencia',
-                    style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 6),
-                  DropdownButtonFormField<String>(
-                    initialValue: _frecuencia,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+            selectedItemBuilder: (context) {
+              return [
+                tipoMonetario,
+                tipoEspecie,
+                tipoOtro,
+              ].map((opcion) {
+                final String labelCorto;
+                final IconData icono;
+                if (opcion == tipoMonetario) {
+                  labelCorto = 'Aporte monetario.';
+                  icono = Icons.payments_outlined;
+                } else if (opcion == tipoEspecie) {
+                  labelCorto = 'Aporte en especie';
+                  icono = Icons.inventory_2_outlined;
+                } else {
+                  labelCorto = 'Otro tipo de ayuda.';
+                  icono = Icons.handshake_outlined;
+                }
+                return Row(
+                  children: [
+                    Icon(icono, size: 18, color: AppColors.rosa),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        labelCorto,
+                        style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.texto,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'mensual', child: Text('Mensual')),
-                      DropdownMenuItem(value: 'quincenal', child: Text('Quincenal')),
-                      DropdownMenuItem(value: 'unica_vez', child: Text('Única vez')),
+                  ],
+                );
+              }).toList();
+            },
+            items: const [
+              DropdownMenuItem(
+                value: tipoMonetario,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.payments_outlined, color: AppColors.rosa, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Aporte monetario.',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.texto,
+                              ),
+                            ),
+                            Text(
+                              'Apoyo económico periódico o único',
+                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
-                    onChanged: (v) => setState(() => _frecuencia = v ?? 'mensual'),
                   ),
-                ],
+                ),
               ),
+              DropdownMenuItem(
+                value: tipoEspecie,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.inventory_2_outlined, color: AppColors.rosa, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Aporte en especie',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.texto,
+                              ),
+                            ),
+                            Text(
+                              'Alimento, cobijas, camas, juguetes, medicamentos, aseo u otros',
+                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              DropdownMenuItem(
+                value: tipoOtro,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.handshake_outlined, color: AppColors.rosa, size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Otro tipo de ayuda.',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.texto,
+                              ),
+                            ),
+                            Text(
+                              'Voluntariado, paseos, transporte o difusión',
+                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            onChanged: (v) {
+              if (v != null) {
+                setState(() => _tipoAporte = v);
+                if (v == tipoOtro) {
+                  _consultarSaludMascota();
+                }
+              }
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          // 2. Vistas dinámicas según la opción elegida
+          if (_tipoAporte == tipoMonetario) ...[
+            _camposAporteMonetario(t),
+          ] else if (_tipoAporte == tipoEspecie) ...[
+            _camposAporteEspecie(t),
+          ] else ...[
+            _camposOtroTipoAyuda(t),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Campos dinámicos para Aporte monetario
+  Widget _camposAporteMonetario(TextTheme t) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.rosaSuave,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.bordeRosa),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline, size: 18, color: AppColors.rosa),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'El dinero se destina a alimentación, vacunas y atención veterinaria de la mascota.',
+                  style: TextStyle(fontSize: 11.5, color: Color(0xFF6B213F)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final esAncho = constraints.maxWidth >= 480;
+
+            final campoMonto = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Valor del aporte (COP) *',
+                  style: t.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.texto,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _montoCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    prefixIcon: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Text(
+                        '\$ ',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.rosa,
+                        ),
+                      ),
+                    ),
+                    prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
+                    suffixText: 'COP',
+                    suffixStyle: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
+                    hintText: '50000',
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+                    ),
+                  ),
+                  validator: (v) {
+                    if (_tipoAporte != tipoMonetario) return null;
+                    final limpio = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                    final valor = int.tryParse(limpio);
+                    if (valor == null || valor <= 0) {
+                      return 'Ingresa un valor válido en pesos colombianos.';
+                    }
+                    if (valor < 5000) {
+                      return 'El aporte mínimo sugerido es de \$5.000 COP.';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            );
+
+            final campoFrecuencia = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Frecuencia del aporte *',
+                  style: t.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.texto,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue: _frecuenciaMonetario,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.event_repeat_rounded, color: AppColors.rosa, size: 20),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'semanal', child: Text('Semanal')),
+                    DropdownMenuItem(value: 'quincenal', child: Text('Quincenal')),
+                    DropdownMenuItem(value: 'mensual', child: Text('Mensual')),
+                    DropdownMenuItem(value: 'aporte_unico', child: Text('Aporte único')),
+                  ],
+                  onChanged: (v) => setState(() => _frecuenciaMonetario = v ?? 'mensual'),
+                ),
+              ],
+            );
+
+            if (esAncho) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 3, child: campoMonto),
+                  const SizedBox(width: 14),
+                  Expanded(flex: 2, child: campoFrecuencia),
+                ],
+              );
+            } else {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  campoMonto,
+                  const SizedBox(height: 12),
+                  campoFrecuencia,
+                ],
+              );
+            }
+          },
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Sugeridos:',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
             ),
+            ...[20000, 30000, 50000, 100000].map((montoSugerido) {
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () {
+                  setState(() {
+                    _montoCtrl.text = montoSugerido.toString();
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _montoCtrl.text == montoSugerido.toString()
+                        ? AppColors.rosa
+                        : AppColors.rosaSuave,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.bordeRosa),
+                  ),
+                  child: Text(
+                    '\$${(montoSugerido / 1000).toInt()}k COP',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: _montoCtrl.text == montoSugerido.toString()
+                          ? Colors.white
+                          : AppColors.rosa,
+                    ),
+                  ),
+                ),
+              );
+            }),
           ],
         ),
-      ];
+      ],
+    );
+  }
+
+  /// Campos dinámicos para Aporte en especie
+  Widget _camposAporteEspecie(TextTheme t) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.rosaSuave,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.bordeRosa),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.rosa),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Puedes entregar donaciones de alimento, cobijas, camas, medicamentos o productos de aseo.',
+                  style: TextStyle(fontSize: 11.5, color: Color(0xFF6B213F)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          '¿Qué deseas aportar? *',
+          style: t.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.texto,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: _detalleEspecieCtrl,
+          maxLines: 3,
+          maxLength: 400,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText:
+                'Ejemplo: 1 bulto de alimento para perros de 15kg, 2 cobijas térmicas, cama mediana y productos de aseo...',
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12.5),
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            contentPadding: const EdgeInsets.all(14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+            ),
+          ),
+          validator: (v) {
+            if (_tipoAporte != tipoEspecie) return null;
+            final txt = (v ?? '').trim();
+            if (txt.isEmpty) {
+              return 'Por favor describe qué elementos vas a entregar.';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Frecuencia de entrega *',
+          style: t.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.texto,
+          ),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String>(
+          initialValue: _frecuenciaEspecie,
+          decoration: InputDecoration(
+            prefixIcon: const Icon(Icons.calendar_month_rounded, color: AppColors.rosa, size: 20),
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+            ),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'semanal', child: Text('Semanal')),
+            DropdownMenuItem(value: 'quincenal', child: Text('Quincenal')),
+            DropdownMenuItem(value: 'mensual', child: Text('Mensual')),
+            DropdownMenuItem(value: 'entrega_unica', child: Text('Entrega única')),
+          ],
+          onChanged: (v) => setState(() => _frecuenciaEspecie = v ?? 'mensual'),
+        ),
+      ],
+    );
+  }
+
+  /// Campos dinámicos para Otro tipo de ayuda, consultando el estado de salud de la mascota
+  Widget _camposOtroTipoAyuda(TextTheme t) {
+    final pet = _mascotaActual;
+    final necesidades = pet.necesidadesPendientes;
+    final procedimientos = pet.procedimientosRealizados;
+    final sinPendientes = pet.noTieneNecesidadesPendientes || necesidades.isEmpty;
+    final tieneNecesidad = !sinPendientes;
+
+    // Ejemplos orientativos solicitados: vacunas, esterilización, desparasitación, exámenes médicos, medicamentos, consultas veterinarias o tratamientos.
+    final List<String> ejemplosOrientativos = [
+      'Vacunación',
+      'Esterilización',
+      'Desparasitación',
+      'Exámenes médicos',
+      'Medicamentos',
+      'Consultas veterinarias',
+      'Tratamientos veterinarios',
+      'Paseos y recreación',
+      'Difusión en redes',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Tarjeta con información del estado de salud de la mascota
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: tieneNecesidad ? const Color(0xFFFFF7ED) : const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: tieneNecesidad ? const Color(0xFFFDBA74) : const Color(0xFF86EFAC),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: (tieneNecesidad ? Colors.orange : Colors.green).withValues(alpha: 0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: tieneNecesidad ? const Color(0xFFFFEDD5) : const Color(0xFFDCFCE7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      tieneNecesidad ? Icons.healing_rounded : Icons.health_and_safety_rounded,
+                      color: tieneNecesidad ? const Color(0xFFEA580C) : const Color(0xFF16A34A),
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'Salud de ${pet.nombre}:',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: tieneNecesidad ? const Color(0xFF9A3412) : const Color(0xFF166534),
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_cargandoSalud)
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: tieneNecesidad ? const Color(0xFFFED7AA) : const Color(0xFFBBF7D0),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            tieneNecesidad ? 'Tiene necesidades registradas' : 'Saludable / Al día',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              color: tieneNecesidad ? const Color(0xFF7C2D12) : const Color(0xFF14532D),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // 1. Necesidades veterinarias pendientes confirmadas
+              if (necesidades.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.error_outline, size: 16, color: Color(0xFFEA580C)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Necesidades veterinarias registradas (Posibles formas de ayuda):',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9A3412),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: necesidades.map((necesidad) {
+                    return ActionChip(
+                      avatar: const Icon(Icons.add_circle, size: 15, color: Color(0xFFEA580C)),
+                      label: Text(
+                        necesidad,
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF7C2D12),
+                        ),
+                      ),
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: Color(0xFFFDBA74), width: 1.2),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      tooltip: 'Toca para agregar a tu propuesta de aporte',
+                      onPressed: () {
+                        final actual = _otroAporteCtrl.text.trim();
+                        final sugerencia = 'Apoyo para $necesidad';
+                        if (actual.isEmpty) {
+                          _otroAporteCtrl.text = '$sugerencia para ${pet.nombre}. ';
+                        } else if (!actual.contains(necesidad)) {
+                          _otroAporteCtrl.text = '$actual, $necesidad';
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 10),
+              ] else ...[
+                // Mensaje requerido cuando no hay necesidades veterinarias pendientes
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A), size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Actualmente no hay necesidades médicas específicas registradas.',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF166534),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // 2. Procedimientos y vacunas ya completados
+              if (procedimientos.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.verified, size: 16, color: Color(0xFF16A34A)),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Vacunas y procedimientos ya realizados:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: procedimientos.map((proc) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check, size: 14, color: Color(0xFF16A34A)),
+                          const SizedBox(width: 4),
+                          Text(
+                            proc,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF14532D),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Procedimientos atendidos por la fundación; no figuran como pendientes.',
+                  style: TextStyle(fontSize: 10.5, color: Colors.green.shade800, fontStyle: FontStyle.italic),
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // 3. Recomendaciones y observaciones veterinarias
+              if (pet.detalleSalud != null && pet.detalleSalud!.trim().isNotEmpty) ...[
+                const Text(
+                  'Recomendaciones y observaciones veterinarias:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF9A3412),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFED7AA)),
+                  ),
+                  child: Text(
+                    pet.detalleSalud!.trim(),
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFF431407),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // 4. Ejemplos orientativos de ayudas veterinarias (claramente diferenciados)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.lightbulb_outline, size: 16, color: AppColors.rosa),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'Ejemplos orientativos de ayudas veterinarias:',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.texto,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Ideas de apoyo general. No representan necesidades confirmadas de ${pet.nombre} a menos que aparezcan listadas arriba.',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: Colors.grey.shade600,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: ejemplosOrientativos.map((ejemplo) {
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            final actual = _otroAporteCtrl.text.trim();
+                            final prefijo = 'Apoyo en $ejemplo';
+                            if (actual.isEmpty) {
+                              _otroAporteCtrl.text = '$prefijo para ${pet.nombre}. ';
+                            } else if (!actual.contains(ejemplo)) {
+                              _otroAporteCtrl.text = '$actual, $ejemplo';
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.rosaSuave,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.bordeRosa),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.add, size: 12, color: AppColors.rosa),
+                                const SizedBox(width: 4),
+                                Text(
+                                  ejemplo,
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.rosa,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 14),
+
+        Text(
+          '¿Cómo deseas contribuir? *',
+          style: t.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.texto,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: _otroAporteCtrl,
+          maxLines: 3,
+          maxLength: 400,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(
+            hintText: tieneNecesidad
+                ? 'Describe cómo deseas apoyar sus necesidades médicas o veterinarias (ej: cubrir vacunas, medicamentos, exámenes o acompañar la consulta)...'
+                : 'Describe tu propuesta de ayuda (ej: voluntariado en eventos, paseos los fines de semana, transporte o fotografías)...',
+            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12.5),
+            filled: true,
+            fillColor: Colors.grey.shade50,
+            contentPadding: const EdgeInsets.all(14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.rosa, width: 2),
+            ),
+          ),
+          validator: (v) {
+            if (_tipoAporte != tipoOtro) return null;
+            final txt = (v ?? '').trim();
+            if (txt.isEmpty) {
+              return 'Por favor describe en qué consiste tu ayuda.';
+            }
+            return null;
+          },
+        ),
+      ],
+    );
+  }
 
   /// Paso 2: Fotografía del documento de identidad
   List<Widget> _pasoDocumento(TextTheme t) => [
@@ -1149,9 +2137,33 @@ class _SolicitudApadrinamientoDialogState
 
   /// Paso 3: Resumen y Acuerdo de Responsabilidad y Compromiso
   List<Widget> _pasoCompromiso(TextTheme t) {
-    final montoTexto = _montoCtrl.text.trim().isNotEmpty
-        ? '\$ ${_montoCtrl.text.trim()} COP'
-        : '\$ 0 COP';
+    final String aporteResumen;
+    if (_tipoAporte == tipoMonetario) {
+      final montoTexto = _montoCtrl.text.trim().isNotEmpty
+          ? '\$ ${_montoCtrl.text.trim()} COP'
+          : '\$ 0 COP';
+      final frec = switch (_frecuenciaMonetario) {
+        'semanal' => 'Semanal',
+        'quincenal' => 'Quincenal',
+        'mensual' => 'Mensual',
+        'aporte_unico' => 'Aporte único',
+        _ => _frecuenciaMonetario,
+      };
+      aporteResumen = '$montoTexto ($frec)';
+    } else if (_tipoAporte == tipoEspecie) {
+      final frec = switch (_frecuenciaEspecie) {
+        'semanal' => 'Semanal',
+        'quincenal' => 'Quincenal',
+        'mensual' => 'Mensual',
+        'entrega_unica' => 'Entrega única',
+        _ => _frecuenciaEspecie,
+      };
+      final detalle = _detalleEspecieCtrl.text.trim();
+      aporteResumen = 'En especie ($frec)${detalle.isNotEmpty ? ': $detalle' : ''}';
+    } else {
+      final detalle = _otroAporteCtrl.text.trim();
+      aporteResumen = 'Otro tipo de ayuda${detalle.isNotEmpty ? ': $detalle' : ''}';
+    }
 
     return [
       Text(
@@ -1186,7 +2198,9 @@ class _SolicitudApadrinamientoDialogState
             const Divider(height: 14),
             _resumenFila('Notificación al correo:', _correoCtrl.text.trim()),
             const Divider(height: 14),
-            _resumenFila('Aporte voluntario:', '$montoTexto ($_frecuencia)'),
+            _resumenFila('Tipo de aporte:', _tipoAporte),
+            const Divider(height: 14),
+            _resumenFila('Modalidad y Detalle:', aporteResumen),
             const Divider(height: 14),
             _resumenFila('Documento:', _docNombre ?? 'Adjuntado'),
           ],

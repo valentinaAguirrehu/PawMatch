@@ -71,6 +71,9 @@ flutter:
   assets:
     - assets/images/logo.png
     - assets/images/inicio/
+    - assets/images/inicio/fundacion_hero.jpg
+    - assets/images/inicio/familia.jpg
+    - assets/images/inicio/juntos.jpg
     - assets/fundacion/
   # To add assets to your application, add an assets section, like this:
   # assets:

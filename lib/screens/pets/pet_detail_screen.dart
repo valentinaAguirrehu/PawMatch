@@ -1237,6 +1237,254 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         ],
                       ),
 
+                      // ───────── ESTADO DE SALUD Y CUIDADOS VETERINARIOS ─────────
+                      const SizedBox(height: 18),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDF7F9),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.bordeRosa.withValues(alpha: 0.9)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.rosa.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.rosaSuave,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.health_and_safety_outlined, size: 20, color: AppColors.rosa),
+                                ),
+                                const SizedBox(width: 10),
+                                const Text(
+                                  'Estado de Salud y Cuidados',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1E272E),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // 1. Necesidades veterinarias pendientes (solo si existen)
+                            if (p.necesidadesPendientes.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF7ED),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFFDBA74)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFEA580C)),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Necesidades veterinarias pendientes:',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF9A3412),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: p.necesidadesPendientes.map((n) {
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: const Color(0xFFFED7AA)),
+                                          ),
+                                          child: Text(
+                                            n,
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF7C2D12),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // 2. Vacunas y procedimientos ya realizados (solo si existen)
+                            if (p.procedimientosRealizados.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF0FDF4),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFF86EFAC)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.check_circle_outline_rounded, size: 16, color: Color(0xFF16A34A)),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Vacunas y procedimientos realizados:',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF166534),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: p.procedimientosRealizados.map((pr) {
+                                        return Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: const Color(0xFFBBF7D0)),
+                                          ),
+                                          child: Text(
+                                            pr,
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF14532D),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+
+                            // 3. Estado general de salud y cuidados especiales
+                            if (p.noTieneNecesidadesPendientes ||
+                                p.estadosSalud.contains('Requiere cuidados especiales.') ||
+                                (p.detalleSalud != null && p.detalleSalud!.trim().isNotEmpty)) ...[
+                              const SizedBox(height: 10),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: AppColors.bordeRosa),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.info_outline, size: 16, color: AppColors.rosa),
+                                        const SizedBox(width: 6),
+                                        const Text(
+                                          'Estado general de salud:',
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppColors.texto,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        if (p.noTieneNecesidadesPendientes)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFDCFCE7),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: const Text(
+                                              'Sin necesidades pendientes',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF166534),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    if (p.estadosSalud.contains('Requiere cuidados especiales.')) ...[
+                                      const SizedBox(height: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFF1F2),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: const Color(0xFFFECDD3)),
+                                        ),
+                                        child: const Text(
+                                          'Requiere cuidados especiales veterinarios',
+                                          style: TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF9F1239),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (p.detalleSalud != null && p.detalleSalud!.trim().isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        'Recomendaciones y observaciones:',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black54,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        p.detalleSalud!.trim(),
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          color: Colors.grey.shade800,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
                       // ───────── SECCIÓN: PERSONALIDAD Y COMPORTAMIENTO (ARRIBA DE BOTONES) ─────────
                       const SizedBox(height: 22),
                       const Text(

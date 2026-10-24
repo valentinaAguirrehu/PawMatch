@@ -43,6 +43,16 @@ class FotoTarjeta extends StatelessWidget {
                   height: alto,
                   width: double.infinity,
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: alto,
+                    color: AppColors.rosaSuave,
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.pets_rounded,
+                      size: 48,
+                      color: AppColors.rosa,
+                    ),
+                  ),
                 ),
                 if (pie != null) ...[
                   Positioned.fill(

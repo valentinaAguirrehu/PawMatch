@@ -18,7 +18,7 @@ async function obtenerTransporter() {
         service: 'gmail',
         auth: {
           user: process.env.GMAIL_USER.trim(),
-          pass: process.env.GMAIL_PASS.trim(),
+          pass: process.env.GMAIL_PASS.replace(/\s+/g, ''),
         },
       }),
       remitente: process.env.SMTP_FROM || process.env.GMAIL_USER.trim(),
@@ -568,6 +568,7 @@ module.exports = {
   enviarCorreoAprobacionAdopcion,
   enviarCorreoRechazoAdopcion,
   enviarCorreoContratoAdopcion,
+  enviarEmailGenerico,
   obtenerTransporter,
 };
 
