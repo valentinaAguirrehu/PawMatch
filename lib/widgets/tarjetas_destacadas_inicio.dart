@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:paw_match/services/pets_service.dart';
 
 /// Sección destacada con dos tarjetas limpias (sin fondo de foto),
 /// colocadas SIEMPRE de lado y lado en modo celular, con bordes de color vibrante (Verde y Rosado).
@@ -11,6 +12,13 @@ class TarjetasDestacadasInicio extends StatelessWidget {
     this.onAdopta,
     this.onApadrina,
   });
+
+  String _tituloAdopcion(int conteo) {
+    if (conteo == 1) {
+      return '“Hay 1 peludito esperando un hogar”';
+    }
+    return '“Hay $conteo peluditos esperando un hogar”';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,18 +35,23 @@ class TarjetasDestacadasInicio extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Cuadro 1: Adopción (Borde Verde Lima)
+            // Cuadro 1: Adopción (Borde Verde Lima) con conteo dinámico desde la BD
             Expanded(
-              child: _TarjetaDestacadaLimpia(
-                colorTema: const Color(0xFF8EB827),
-                colorTextoDestacado: const Color(0xFF658A14),
-                titulo: '“100 peluditos esperan un hogar”',
-                textoMayusculas: 'CONVIÉRTETE EN HOGAR, ',
-                textoNormal:
-                    'y permíteles volver a saber qué se siente tener un hogar.',
-                botonTexto: 'Adoptar',
-                iconoBoton: Icons.favorite_rounded,
-                onTap: onAdopta,
+              child: ValueListenableBuilder<int>(
+                valueListenable: PetsService.peluditosEsperando,
+                builder: (context, conteo, _) {
+                  return _TarjetaDestacadaLimpia(
+                    colorTema: const Color(0xFF8EB827),
+                    colorTextoDestacado: const Color(0xFF658A14),
+                    titulo: _tituloAdopcion(conteo),
+                    textoMayusculas: 'CONVIÉRTETE EN HOGAR, ',
+                    textoNormal:
+                        'y permíteles volver a saber qué se siente tener un hogar.',
+                    botonTexto: 'Adoptar',
+                    iconoBoton: Icons.favorite_rounded,
+                    onTap: onAdopta,
+                  );
+                },
               ),
             ),
 
