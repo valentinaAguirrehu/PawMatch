@@ -450,7 +450,7 @@ class _PetScreenState extends State<PetScreen> {
         constraints: const BoxConstraints(maxWidth: 820),
         child: Container(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(22),
@@ -476,45 +476,24 @@ class _PetScreenState extends State<PetScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Text(
-                'Detrás de cada peludito rescatado existe una historia de lucha, esperanza y ganas de volver a confiar. Aquí podrás conocer a nuestros pequeños compañeros, seres únicos que merecen una vida llena de amor, cuidados y bienestar.',
+                'Cada peludito rescatado merece una oportunidad para vivir rodeado de amor y cuidado. Con pequeños gestos podemos hacer una gran diferencia en sus vidas. Tu apoyo nos ayuda a brindarles bienestar, esperanza y un futuro mejor.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13.5,
-                  height: 1.55,
+                  height: 1.5,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF374151),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               const Text(
-                'En nuestra misión de proteger a los animales, creemos que cada gesto de solidaridad puede marcar una gran diferencia. Hay muchas maneras de contribuir a su bienestar, ya sea brindándoles un hogar lleno de cariño o apoyando su proceso de recuperación y cuidado. No importa qué tan grande o pequeño sea tu aporte, toda ayuda representa una nueva esperanza para quienes más lo necesitan.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.55,
-                  fontWeight: FontWeight.normal,
-                  color: Color(0xFF4B5563),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: 44,
-                height: 2.5,
-                decoration: BoxDecoration(
-                  color: AppColors.rosa.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Nuestro compromiso es seguir trabajando por aquellos que no tienen voz, ofreciéndoles protección, atención y la oportunidad de vivir en mejores condiciones. Con tu apoyo, podemos continuar construyendo un futuro donde ningún peludito tenga que enfrentar el abandono sin una mano amiga.',
+                '¡Cada ayuda cuenta, cada huellita importa!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13.5,
-                  height: 1.55,
-                  fontWeight: FontWeight.w600,
-                  fontStyle: FontStyle.italic,
-                  color: Color(0xFF1F2937),
+                  height: 1.4,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.rosa,
                 ),
               ),
             ],
