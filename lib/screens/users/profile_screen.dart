@@ -461,7 +461,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _campo(
               controller: _direccionCtrl,
-              etiqueta: 'Dirección',
+              etiqueta: 'Dirección Completa y detallada',
               icono: const FeatureIcon.direccion(color: AppColors.rosa),
               capitalizacion: TextCapitalization.sentences,
             ),

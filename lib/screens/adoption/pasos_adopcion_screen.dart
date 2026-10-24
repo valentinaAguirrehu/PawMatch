@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 
 /// Primera pantalla de la adopción: pasos y requisitos, antes del formulario.
 class PasosAdopcionScreen extends StatefulWidget {
@@ -43,12 +44,7 @@ class _PasosAdopcionScreenState extends State<PasosAdopcionScreen> {
     ),
   ];
 
-  static const _requisitos = [
-    'Ser mayor de 18 años.',
-    'Ofrecer un entorno familiar estable, protegido y lleno de amor.',
-    'Asumir el compromiso de cuidarlo durante toda su vida.',
-    'Contar con la solvencia para cubrir su alimentación, controles y gastos médicos.',
-  ];
+  static const _requisitos = AcuerdoAdopcionPdfService.requisitosImportantes;
 
   @override
   Widget build(BuildContext context) {

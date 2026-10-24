@@ -9,6 +9,7 @@ import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/api_service.dart';
+import 'package:paw_match/services/compartir_acta_whatsapp.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
@@ -47,12 +48,13 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   final _otrasCtrl = TextEditingController();
   final _infoCtrl = TextEditingController();
   final _correoCtrl = TextEditingController(text: Session.correo);
+  final _scrollCtrl = ScrollController();
 
   int _paso = 0;
   bool _revisando = true;
   bool _enviando = false;
   bool _mostrarError = false;
-  bool _correoPerfilConfirmado = true;
+  bool _correoPerfilConfirmado = false;
   bool _actualizandoCorreo = false;
   bool _aceptoTerminos = false;
   String? _error;
@@ -80,7 +82,16 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     _otrasCtrl.dispose();
     _infoCtrl.dispose();
     _correoCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  /// El siguiente paso debe verse desde el inicio, no desde donde quedó el anterior.
+  void _mostrarDesdeArriba() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollCtrl.hasClients) return;
+      _scrollCtrl.jumpTo(0);
+    });
   }
 
   Future<void> _revisarSiPuedeEnviar() async {
@@ -120,13 +131,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
 
   String? _validarPaso() {
     if (_paso == 0) {
-      final correo = _correoCtrl.text.trim();
-      if (correo.isEmpty) {
-        return 'Ingresa tu correo para recibir la notificación.';
-      }
-      if (!correo.contains('@') || !correo.contains('.')) {
-        return 'Ingresa un correo electrónico válido.';
-      }
       if (_vivienda == null) return 'Elige el tipo de vivienda.';
       if (_patio == null) return 'Indica si la vivienda tiene patio.';
       if (_ninos == null) return 'Indica si hay niños en el hogar.';
@@ -172,6 +176,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       _mostrarError = false;
       _paso += 1;
     });
+    _mostrarDesdeArriba();
   }
 
   Future<void> _elegirFoto({required bool cedula}) async {
@@ -310,11 +315,15 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           ? idCreado
           : 'ADOP-${fechaAhora.millisecondsSinceEpoch}';
 
-      if (Session.documentoIdentidad.trim().isEmpty && Session.idUsuario != null) {
+      String? direccionUsuario;
+      if (Session.idUsuario != null) {
         try {
           final usuario = await ApiService.obtenerUsuario(Session.idUsuario!);
           if (usuario.documentoIdentidad.trim().isNotEmpty) {
             Session.documentoIdentidad = usuario.documentoIdentidad.trim();
+          }
+          if (usuario.direccion.trim().isNotEmpty) {
+            direccionUsuario = usuario.direccion.trim();
           }
         } catch (_) {}
       }
@@ -335,6 +344,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                 : null,
             correoUsuario: correoFinal,
             telefonoUsuario: Session.telefono.isNotEmpty ? Session.telefono : null,
+            direccionUsuario: direccionUsuario,
             tipoVivienda: _vivienda!,
             tienePatio: _patio!,
             tieneNinos: _ninos!,
@@ -350,6 +360,8 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
             sexoMascota: widget.pet.sexo,
             fechaAceptacion: fechaAhora,
             aceptoTerminos: true,
+            fotoCedula: _cedulaBytes,
+            fotoRecibo: _reciboBytes,
           ),
         );
         await AcuerdoAdopcionPdfService.descargarYGuardarPdf(
@@ -363,11 +375,13 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
 
       if (!mounted) return;
       final navigator = Navigator.of(context);
+      FocusManager.instance.primaryFocus?.unfocus();
       navigator.pop(true);
 
       showDialog<void>(
         context: navigator.context,
         builder: (ctx) => AlertDialog(
+          scrollable: true,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 52),
           title: Text(
@@ -454,25 +468,66 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
               ),
             ],
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           actions: [
-            if (pdfBytes != null)
-              OutlinedButton.icon(
-                icon: const Icon(Icons.download, size: 18),
-                label: const Text('Descargar copia'),
-                onPressed: () {
-                  AcuerdoAdopcionPdfService.descargarYGuardarPdf(
-                    bytes: pdfBytes!,
-                    nombreMascota: widget.pet.nombre,
-                  );
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Descargando copia del acta de adopción...')),
-                  );
-                },
+            SizedBox(
+              width: double.infinity,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.rosa,
+                      minimumSize: const Size.fromHeight(46),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Aceptar'),
+                  ),
+                  if (pdfBytes != null) ...[
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF25D366),
+                        minimumSize: const Size.fromHeight(46),
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                      onPressed: () async {
+                        final seguro = widget.pet.nombre.replaceAll(
+                          RegExp(r'[^a-zA-Z0-9_\-]'),
+                          '_',
+                        );
+                        final abrio = await compartirActaPorWhatsApp(
+                          bytes: pdfBytes!,
+                          nombreArchivo: 'Acta_Compromiso_Adopcion_$seguro.pdf',
+                          mensaje:
+                              'Hola, te comparto el acta de compromiso de adopción de ${widget.pet.nombre}.',
+                        );
+                        if (!ctx.mounted || abrio) return;
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No se pudo adjuntar el PDF en WhatsApp. Ábrelo desde el celular para enviarlo con el documento.',
+                            ),
+                          ),
+                        );
+                      },
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.chat_rounded, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'Compartir vía WhatsApp',
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Aceptar'),
             ),
           ],
         ),
@@ -557,6 +612,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                           _Pasos(paso: _paso),
                           Flexible(
                             child: ListView(
+                              controller: _scrollCtrl,
                               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
                               children: [
                                 _MascotaResumen(pet: widget.pet),
@@ -687,7 +743,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                         if (!mounted || !ctx.mounted) return;
                         setState(() {
                           _correoCtrl.text = nuevo;
-                          _correoPerfilConfirmado = true;
+                          _correoPerfilConfirmado = false;
                           _actualizandoCorreo = false;
                         });
                         Navigator.pop(ctx);
@@ -724,12 +780,10 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
 
   List<Widget> _pasoHogar(TextTheme t) => [
     Text(
-      'Su hogar',
+      'Informacion sobre su hogar',
       style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
     ),
     const SizedBox(height: 14),
-    _campoCorreoInicial(t),
-    const SizedBox(height: 18),
     _Opciones(
       titulo: '¿En qué tipo de hogar vivirá el peludito?',
       opciones: _viviendas,
@@ -837,76 +891,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       onElegir: () => _elegirFoto(cedula: false),
     ),
   ];
-
-  Widget _campoCorreoInicial(TextTheme t) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.rosa.withValues(alpha: 0.35)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.rosa.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.mark_email_read_outlined, size: 20, color: AppColors.rosa),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Correo para recibir la respuesta *',
-                  style: t.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.rosa,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Confirma o modifica el correo electrónico donde la Fundación te informará si tu solicitud fue aprobada o rechazada:',
-            style: t.bodySmall?.copyWith(color: Colors.grey.shade700, height: 1.3),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _correoCtrl,
-            keyboardType: TextInputType.emailAddress,
-            onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
-            },
-            decoration: InputDecoration(
-              hintText: 'ejemplo@correo.com',
-              prefixIcon: const Icon(Icons.email_outlined, color: AppColors.rosa),
-              filled: true,
-              fillColor: Colors.grey.shade50,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: AppColors.rosa, width: 2),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   /// Tarjeta del último paso: confirma el correo o abre el mismo diálogo de cambio.
   Widget _tarjetaConfirmacionCorreoPerfil(TextTheme t) {
@@ -1024,6 +1008,35 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           Row(
             children: [
               Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.rosa,
+                    disabledBackgroundColor: AppColors.rosa.withValues(alpha: 0.45),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onPressed: _correoPerfilConfirmado
+                      ? null
+                      : () {
+                          setState(() => _correoPerfilConfirmado = true);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 2),
+                              content: Text(
+                                'Correo $correoPerfil confirmado para recibir la notificación.',
+                              ),
+                            ),
+                          );
+                        },
+                  child: const Text(
+                    'Confirmar',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.grey.shade800,
@@ -1037,33 +1050,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
                   onPressed: _dialogoEditarCorreoPerfil,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _correoPerfilConfirmado ? Colors.green.shade600 : AppColors.rosa,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  icon: const Icon(Icons.check, size: 17),
-                  label: Text(
-                    _correoPerfilConfirmado ? '✓ Correo Confirmado' : 'Sí, confirmar correo',
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                  ),
-                  onPressed: () {
-                    setState(() => _correoPerfilConfirmado = true);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 2),
-                        content: Text(
-                          'Correo $correoPerfil confirmado para recibir la notificación.',
-                        ),
-                      ),
-                    );
-                  },
                 ),
               ),
             ],
@@ -1348,11 +1334,16 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
             if (_paso > 0)
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _enviando ? null : () => setState(() {
-                    _paso -= 1;
-                    _error = null;
-                    _mostrarError = false;
-                  }),
+                  onPressed: _enviando
+                      ? null
+                      : () {
+                          setState(() {
+                            _paso -= 1;
+                            _error = null;
+                            _mostrarError = false;
+                          });
+                          _mostrarDesdeArriba();
+                        },
                   child: const Text('Atrás'),
                 ),
               ),
@@ -1374,7 +1365,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                         ),
                       )
                     : Text(
-                        _paso < 3 ? 'Continuar' : 'Enviar solicitud de adopción',
+                        _paso < 3 ? 'Continuar' : 'Enviar Solicitud',
                         textAlign: TextAlign.center,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
@@ -1471,9 +1462,9 @@ class _MascotaResumen extends StatelessWidget {
                 ),
                 Text(
                   [
-                    pet.especie,
-                    if ((pet.raza ?? '').isNotEmpty) pet.raza!,
                     pet.edadTexto,
+                    pet.especie,
+                    if ((pet.sexo ?? '').trim().isNotEmpty) pet.sexo!.trim(),
                   ].join(' · '),
                   style: const TextStyle(color: Colors.black54),
                 ),
@@ -1515,6 +1506,7 @@ class _Opciones extends StatelessWidget {
                 label: Text(opcion),
                 selected: valor == opcion,
                 selectedColor: AppColors.rosa,
+                checkmarkColor: Colors.white,
                 labelStyle: TextStyle(
                   color: valor == opcion ? Colors.white : AppColors.texto,
                   fontWeight: FontWeight.w600,
@@ -1553,6 +1545,7 @@ class _SiNo extends StatelessWidget {
               label: const Text('Sí'),
               selected: valor == true,
               selectedColor: AppColors.rosa,
+              checkmarkColor: Colors.white,
               labelStyle: TextStyle(
                 color: valor == true ? Colors.white : AppColors.texto,
                 fontWeight: FontWeight.w600,
@@ -1563,6 +1556,7 @@ class _SiNo extends StatelessWidget {
               label: const Text('No'),
               selected: valor == false,
               selectedColor: AppColors.rosa,
+              checkmarkColor: Colors.white,
               labelStyle: TextStyle(
                 color: valor == false ? Colors.white : AppColors.texto,
                 fontWeight: FontWeight.w600,
