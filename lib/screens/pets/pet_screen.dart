@@ -444,6 +444,407 @@ class _PetScreenState extends State<PetScreen> {
     Navegacion.ir(context, const WelcomeScreen());
   }
 
+  Widget _seccionIntroTexto() {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 820),
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: AppColors.bordeRosa.withValues(alpha: 0.8),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.rosa.withValues(alpha: 0.06),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.rosaSuave,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: AppColors.bordeRosa,
+                    width: 1.0,
+                  ),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.pets_rounded,
+                      size: 14,
+                      color: AppColors.rosa,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'HISTORIAS CON FINAL FELIZ',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: AppColors.rosa,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Detrás de cada mirada hay una historia que merece un final feliz. En este espacio encontrarás perritos rescatados que esperan la oportunidad de conocer el amor de una familia y comenzar una nueva etapa llena de cariño, seguridad y felicidad.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.55,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF374151),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Adoptar es mucho más que abrirle las puertas de tu hogar a una mascota; es comprometerte a cuidarla, protegerla y acompañarla durante toda su vida. Cada uno de estos peluditos necesita tiempo, paciencia, atención veterinaria, una buena alimentación y paseos diarios que le permitan explorar y disfrutar del mundo que lo rodea.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.55,
+                  fontWeight: FontWeight.normal,
+                  color: Color(0xFF4B5563),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Creemos que todos los animales merecen una vida digna, lejos del abandono y cerca del amor que siempre necesitaron. Por eso, buscamos personas dispuestas a brindarles un hogar seguro y permanente, donde sean tratados como parte de la familia y nunca como una responsabilidad pasajera.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.55,
+                  fontWeight: FontWeight.normal,
+                  color: Color(0xFF4B5563),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: 44,
+                height: 2.5,
+                decoration: BoxDecoration(
+                  color: AppColors.rosa.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Tal vez no puedas cambiar la historia de todos, pero puedes transformar por completo la vida de uno. Conoce a nuestros peluditos, descubre sus personalidades y encuentra a ese compañero de cuatro patas que está esperando escribir una nueva historia contigo.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  height: 1.55,
+                  fontWeight: FontWeight.w600,
+                  fontStyle: FontStyle.italic,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _barraBusqueda() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: _busqueda.isNotEmpty
+                      ? AppColors.rosa
+                      : AppColors.bordeRosa.withValues(alpha: 0.8),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.rosa.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 6,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: 'Buscar por nombre o raza...',
+                  hintStyle: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: 13.5,
+                  ),
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.only(left: 12, right: 8),
+                    child: Icon(
+                      Icons.search_rounded,
+                      color: AppColors.rosa,
+                      size: 21,
+                    ),
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 42,
+                    minHeight: 24,
+                  ),
+                  suffixIcon: _busqueda.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            size: 19,
+                            color: AppColors.rosa,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _searchCtrl.clear();
+                              _busqueda = '';
+                            });
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 13,
+                    horizontal: 6,
+                  ),
+                ),
+                onChanged: (v) => setState(() => _busqueda = v.trim()),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _mostrarModalFiltros,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: _filtrosActivosCount > 0 ? AppColors.rosa : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _filtrosActivosCount > 0
+                      ? AppColors.rosa
+                      : AppColors.bordeRosa.withValues(alpha: 0.9),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.rosa.withValues(
+                      alpha: _filtrosActivosCount > 0 ? 0.28 : 0.06,
+                    ),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.tune_rounded,
+                    size: 22,
+                    color: _filtrosActivosCount > 0 ? Colors.white : AppColors.rosa,
+                  ),
+                  if (_filtrosActivosCount > 0)
+                    Positioned(
+                      top: 6,
+                      right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$_filtrosActivosCount',
+                            style: const TextStyle(
+                              color: AppColors.rosa,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chipsActivos() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: SizedBox(
+        height: 32,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            if (_especie != 'Todas' && _especie != 'Todos')
+              _chipActivo(_especie, () => setState(() => _especie = 'Todas')),
+            if (_sexo != 'Todos')
+              _chipActivo(_sexo, () => setState(() => _sexo = 'Todos')),
+            if (_tamano != 'Todos')
+              _chipActivo(_tamano, () => setState(() => _tamano = 'Todos')),
+            if (_edad != 'Todos' && _edad != 'Todas')
+              _chipActivo(_edad, () => setState(() => _edad = 'Todos')),
+            if (_estado != 'Todas')
+              _chipActivo(_estado, () => setState(() => _estado = 'Todas')),
+            GestureDetector(
+              onTap: _limpiarFiltros,
+              child: Container(
+                margin: const EdgeInsets.only(left: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Center(
+                  child: Text(
+                    'Borrar filtros',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _vistaError() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey),
+          const SizedBox(height: 10),
+          const Text(
+            'No pudimos cargar las mascotas',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+            onPressed: _recargar,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _vistaVacia() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: AppColors.rosaSuave,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.rosa.withValues(alpha: 0.12),
+                    blurRadius: 16,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.pets_rounded,
+                size: 36,
+                color: AppColors.rosa,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No encontramos mascotas con este criterio',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D3436),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Intenta cambiar los filtros o el término de búsqueda.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+            if (_filtrosActivosCount > 0 || _busqueda.isNotEmpty || _especie != 'Todas') ...[
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.rosa,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  _limpiarFiltros();
+                  setState(() => _busqueda = '');
+                },
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Limpiar todos los filtros'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool esAdmin = Session.esAdmin;
@@ -465,200 +866,6 @@ class _PetScreenState extends State<PetScreen> {
               titulo: 'Nuestros Peluditos',
               onCerrarSesion: _confirmarCerrarSesion,
             ),
-
-            const SizedBox(height: 6),
-
-            // ───────── BARRA DE BÚSQUEDA Y BOTÓN DE FILTRO A SU LADO ─────────
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: _busqueda.isNotEmpty
-                              ? AppColors.rosa
-                              : AppColors.bordeRosa.withValues(alpha: 0.8),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.rosa.withValues(alpha: 0.06),
-                            blurRadius: 12,
-                            offset: const Offset(0, 3),
-                          ),
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 6,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _searchCtrl,
-                        decoration: InputDecoration(
-                          hintText: 'Buscar por nombre o raza...',
-                          hintStyle: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 13.5,
-                          ),
-                          prefixIcon: const Padding(
-                            padding: EdgeInsets.only(left: 12, right: 8),
-                            child: Icon(
-                              Icons.search_rounded,
-                              color: AppColors.rosa,
-                              size: 21,
-                            ),
-                          ),
-                          prefixIconConstraints: const BoxConstraints(
-                            minWidth: 42,
-                            minHeight: 24,
-                          ),
-                          suffixIcon: _busqueda.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(
-                                    Icons.close_rounded,
-                                    size: 19,
-                                    color: AppColors.rosa,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _searchCtrl.clear();
-                                      _busqueda = '';
-                                    });
-                                  },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(
-                            vertical: 13,
-                            horizontal: 6,
-                          ),
-                        ),
-                        onChanged: (v) => setState(() => _busqueda = v.trim()),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: _mostrarModalFiltros,
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _filtrosActivosCount > 0 ? AppColors.rosa : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _filtrosActivosCount > 0
-                              ? AppColors.rosa
-                              : AppColors.bordeRosa.withValues(alpha: 0.9),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.rosa.withValues(
-                              alpha: _filtrosActivosCount > 0 ? 0.28 : 0.06,
-                            ),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Icon(
-                            Icons.tune_rounded,
-                            size: 22,
-                            color: _filtrosActivosCount > 0 ? Colors.white : AppColors.rosa,
-                          ),
-                          if (_filtrosActivosCount > 0)
-                            Positioned(
-                              top: 6,
-                              right: 6,
-                              child: Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 16,
-                                  minHeight: 16,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '$_filtrosActivosCount',
-                                    style: const TextStyle(
-                                      color: AppColors.rosa,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            _barraEstado(),
-
-            if (_filtrosActivosCount > 0)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                child: SizedBox(
-                  height: 32,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: [
-                      if (_especie != 'Todas' && _especie != 'Todos')
-                        _chipActivo(_especie, () => setState(() => _especie = 'Todas')),
-                      if (_sexo != 'Todos')
-                        _chipActivo(_sexo, () => setState(() => _sexo = 'Todos')),
-                      if (_tamano != 'Todos')
-                        _chipActivo(_tamano, () => setState(() => _tamano = 'Todos')),
-                      if (_edad != 'Todos' && _edad != 'Todas')
-                        _chipActivo(_edad, () => setState(() => _edad = 'Todos')),
-                      if (_estado != 'Todas')
-                        _chipActivo(_estado, () => setState(() => _estado = 'Todas')),
-                      GestureDetector(
-                        onTap: _limpiarFiltros,
-                        child: Container(
-                          margin: const EdgeInsets.only(left: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: const Center(
-                            child: Text(
-                              'Borrar filtros',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 4),
-
-            // ───────── LISTA DE TARJETAS DE MASCOTAS ─────────
             Expanded(
               child: FutureBuilder<List<Pet>>(
                 future: _future,
@@ -667,171 +874,121 @@ class _PetScreenState extends State<PetScreen> {
                     _listaVisible = snap.data;
                   }
                   final origen = snap.hasData ? snap.data : _listaVisible;
-                  if (origen == null) {
-                    if (snap.connectionState != ConnectionState.done) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: AppColors.rosa),
-                      );
-                    }
-                    if (snap.hasError) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey),
-                            const SizedBox(height: 10),
-                            const Text(
-                              'No pudimos cargar las mascotas',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            const SizedBox(height: 6),
-                            FilledButton.icon(
-                              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
-                              onPressed: _recargar,
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: const Text('Reintentar'),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    return const Center(
-                      child: CircularProgressIndicator(color: AppColors.rosa),
-                    );
-                  }
 
-                  final pets = ordenarMascotasPorEstado(
-                    _filtrar(_conRecienAgregada(origen)),
-                  );
-                  _programarIrAlInicio();
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1120),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final crossAxisCount = constraints.maxWidth >= 720 ? 3 : 2;
+                          const crossAxisSpacing = 18.0;
+                          const paddingHorizontal = 32.0;
+                          final anchoCelda = (constraints.maxWidth -
+                                  paddingHorizontal -
+                                  crossAxisSpacing * (crossAxisCount - 1)) /
+                              crossAxisCount;
+                          const altoInfo = 176.0;
+                          final childAspectRatio = anchoCelda / (anchoCelda + altoInfo);
 
-                  if (pets.isEmpty) {
-                    return RefreshIndicator(
-                      color: AppColors.rosa,
-                      onRefresh: _recargar,
-                      child: ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: [
-                          const SizedBox(height: 100),
-                          Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 72,
-                                  height: 72,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.rosaSuave,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.rosa.withValues(alpha: 0.12),
-                                        blurRadius: 16,
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(
-                                    Icons.pets_rounded,
-                                    size: 36,
-                                    color: AppColors.rosa,
-                                  ),
+                          Widget contenidoSliver;
+
+                          if (origen == null) {
+                            if (snap.connectionState != ConnectionState.done) {
+                              contenidoSliver = const SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: Center(
+                                  child: CircularProgressIndicator(color: AppColors.rosa),
                                 ),
-                                const SizedBox(height: 16),
-                                const Text(
-                                  'No encontramos mascotas con este criterio',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF2D3436),
+                              );
+                            } else if (snap.hasError) {
+                              contenidoSliver = SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: _vistaError(),
+                              );
+                            } else {
+                              contenidoSliver = const SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: Center(
+                                  child: CircularProgressIndicator(color: AppColors.rosa),
+                                ),
+                              );
+                            }
+                          } else {
+                            final pets = ordenarMascotasPorEstado(
+                              _filtrar(_conRecienAgregada(origen)),
+                            );
+                            _programarIrAlInicio();
+
+                            if (pets.isEmpty) {
+                              contenidoSliver = SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: _vistaVacia(),
+                              );
+                            } else {
+                              contenidoSliver = SliverPadding(
+                                padding: EdgeInsets.fromLTRB(
+                                  16,
+                                  10,
+                                  16,
+                                  esAdmin ? 88 : 28,
+                                ),
+                                sliver: SliverGrid(
+                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: crossAxisCount,
+                                    crossAxisSpacing: crossAxisSpacing,
+                                    mainAxisSpacing: 18,
+                                    childAspectRatio: childAspectRatio,
                                   ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Intenta cambiar los filtros o el término de búsqueda.',
-                                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                                ),
-                                if (_filtrosActivosCount > 0 || _busqueda.isNotEmpty || _especie != 'Todas') ...[
-                                  const SizedBox(height: 14),
-                                  FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: AppColors.rosa,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, i) => PetCard(
+                                      pet: pets[i],
+                                      onTap: () async {
+                                        final cambio = await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PetDetailScreen(pet: pets[i]),
+                                          ),
+                                        );
+                                        if (cambio == true && mounted) {
+                                          _recargar();
+                                        }
+                                      },
                                     ),
-                                    onPressed: () {
-                                      _searchCtrl.clear();
-                                      _limpiarFiltros();
-                                      setState(() => _busqueda = '');
-                                    },
-                                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                                    label: const Text('Limpiar todos los filtros'),
+                                    childCount: pets.length,
                                   ),
-                                ],
+                                ),
+                              );
+                            }
+                          }
+
+                          return RefreshIndicator(
+                            color: AppColors.rosa,
+                            onRefresh: _recargar,
+                            child: CustomScrollView(
+                              controller: _scrollCtrl,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              slivers: [
+                                SliverToBoxAdapter(
+                                  child: _seccionIntroTexto(),
+                                ),
+                                SliverToBoxAdapter(
+                                  child: _barraBusqueda(),
+                                ),
+                                SliverToBoxAdapter(
+                                  child: _barraEstado(),
+                                ),
+                                if (_filtrosActivosCount > 0)
+                                  SliverToBoxAdapter(
+                                    child: _chipsActivos(),
+                                  ),
+                                const SliverToBoxAdapter(
+                                  child: SizedBox(height: 6),
+                                ),
+                                contenidoSliver,
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return RefreshIndicator(
-                    color: AppColors.rosa,
-                    onRefresh: _recargar,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1120),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            // Celular y pantallas pequeñas: siempre 2 por fila.
-                            // En pantallas anchas se mantienen 3 para aprovechar el ancho.
-                            final crossAxisCount = constraints.maxWidth >= 720 ? 3 : 2;
-                            const crossAxisSpacing = 18.0;
-                            const paddingHorizontal = 32.0;
-                            final anchoCelda = (constraints.maxWidth -
-                                    paddingHorizontal -
-                                    crossAxisSpacing * (crossAxisCount - 1)) /
-                                crossAxisCount;
-                            // La foto es cuadrada (1:1). El alto extra cubre la descripción,
-                            // el chip de tamaño y el botón de ancho completo.
-                            const altoInfo = 176.0;
-                            final childAspectRatio = anchoCelda / (anchoCelda + altoInfo);
-                            return GridView.builder(
-                              controller: _scrollCtrl,
-                              primary: false,
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              padding: EdgeInsets.fromLTRB(
-                                16,
-                                10,
-                                16,
-                                esAdmin ? 88 : 28,
-                              ),
-                              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: crossAxisCount,
-                                crossAxisSpacing: crossAxisSpacing,
-                                mainAxisSpacing: 18,
-                                childAspectRatio: childAspectRatio,
-                              ),
-                              itemCount: pets.length,
-                              itemBuilder: (_, i) => PetCard(
-                                pet: pets[i],
-                                onTap: () async {
-                                  final cambio = await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => PetDetailScreen(pet: pets[i]),
-                                    ),
-                                  );
-                                  if (cambio == true && mounted) {
-                                    _recargar();
-                                  }
-                                },
-                              ),
-                            );
-                          },
-                        ),
+                          );
+                        },
                       ),
                     ),
                   );
