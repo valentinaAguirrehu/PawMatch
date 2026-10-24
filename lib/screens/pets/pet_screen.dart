@@ -476,7 +476,7 @@ class _PetScreenState extends State<PetScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Text(
-                'Detrás de cada mirada hay una historia que merece un final feliz. En este espacio encontrarás perritos rescatados que esperan la oportunidad de conocer el amor de una familia y comenzar una nueva etapa llena de cariño, seguridad y felicidad.',
+                'Detrás de cada peludito rescatado existe una historia de lucha, esperanza y ganas de volver a confiar. Aquí podrás conocer a nuestros pequeños compañeros, seres únicos que merecen una vida llena de amor, cuidados y bienestar.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13.5,
@@ -487,18 +487,7 @@ class _PetScreenState extends State<PetScreen> {
               ),
               const SizedBox(height: 10),
               const Text(
-                'Adoptar es mucho más que abrirle las puertas de tu hogar a una mascota; es comprometerte a cuidarla, protegerla y acompañarla durante toda su vida. Cada uno de estos peluditos necesita tiempo, paciencia, atención veterinaria, una buena alimentación y paseos diarios que le permitan explorar y disfrutar del mundo que lo rodea.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.55,
-                  fontWeight: FontWeight.normal,
-                  color: Color(0xFF4B5563),
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Creemos que todos los animales merecen una vida digna, lejos del abandono y cerca del amor que siempre necesitaron. Por eso, buscamos personas dispuestas a brindarles un hogar seguro y permanente, donde sean tratados como parte de la familia y nunca como una responsabilidad pasajera.',
+                'En nuestra misión de proteger a los animales, creemos que cada gesto de solidaridad puede marcar una gran diferencia. Hay muchas maneras de contribuir a su bienestar, ya sea brindándoles un hogar lleno de cariño o apoyando su proceso de recuperación y cuidado. No importa qué tan grande o pequeño sea tu aporte, toda ayuda representa una nueva esperanza para quienes más lo necesitan.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -518,7 +507,7 @@ class _PetScreenState extends State<PetScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Tal vez no puedas cambiar la historia de todos, pero puedes transformar por completo la vida de uno. Conoce a nuestros peluditos, descubre sus personalidades y encuentra a ese compañero de cuatro patas que está esperando escribir una nueva historia contigo.',
+                'Nuestro compromiso es seguir trabajando por aquellos que no tienen voz, ofreciéndoles protección, atención y la oportunidad de vivir en mejores condiciones. Con tu apoyo, podemos continuar construyendo un futuro donde ningún peludito tenga que enfrentar el abandono sin una mano amiga.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13.5,
