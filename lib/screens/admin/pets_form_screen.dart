@@ -40,6 +40,10 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
       widget.pet?.estadoAdopcion ?? 'disponible';
   late final String _estadoApadrinamiento =
       widget.pet?.estadoApadrinamiento ?? 'disponible';
+  late String _estadoSalud = widget.pet?.estadoSalud ?? 'Saludable.';
+  late final _detalleSalud = TextEditingController(
+    text: widget.pet?.detalleSalud,
+  );
 
   // Foto: la que ya tenía (ruta en el servidor) o una nueva elegida del equipo
   late String? _fotoActual = widget.pet?.foto;
@@ -75,6 +79,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
     _raza.dispose();
     _edad.dispose();
     _descripcion.dispose();
+    _detalleSalud.dispose();
     super.dispose();
   }
 
@@ -187,6 +192,10 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
         foto: ruta,
         estadoAdopcion: _estadoAdopcion,
         estadoApadrinamiento: _estadoApadrinamiento,
+        estadoSalud: _estadoSalud,
+        detalleSalud: _detalleSalud.text.trim().isEmpty
+            ? null
+            : _detalleSalud.text.trim(),
         personalidad: _personalidad.personalidad,
       );
 
@@ -539,6 +548,35 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                       title: const Text('Esterilizado'),
                       value: _esterilizado,
                       onChanged: (v) => setState(() => _esterilizado = v),
+                    ),
+                    const SizedBox(height: 6),
+                    _campo(
+                      'Estado de salud de la mascota *',
+                      DropdownButtonFormField<String>(
+                        initialValue: _estadoSalud,
+                        isExpanded: true,
+                        decoration: _deco('Seleccionar estado de salud'),
+                        items: _items(opcionesEstadoSalud, _estadoSalud),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'El estado de salud es obligatorio'
+                            : null,
+                        onChanged: (v) {
+                          if (v != null) setState(() => _estadoSalud = v);
+                        },
+                        onSaved: (v) {
+                          if (v != null) _estadoSalud = v;
+                        },
+                      ),
+                    ),
+                    _campo(
+                      'Condición de salud y recomendaciones veterinarias',
+                      TextFormField(
+                        controller: _detalleSalud,
+                        decoration: _deco(
+                          'Describe la condición actual, necesidades y recomendaciones veterinarias...',
+                        ),
+                        maxLines: 3,
+                      ),
                     ),
 
                     const SizedBox(height: 12),

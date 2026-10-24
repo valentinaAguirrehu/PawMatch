@@ -14,6 +14,8 @@ class Pet {
   final String? foto;
   final String estadoAdopcion;
   final String estadoApadrinamiento;
+  final String estadoSalud;
+  final String? detalleSalud;
 
   /// Usuario con la solicitud de adopción aprobada. Vacío si nadie la adoptó.
   final String? idAdoptante;
@@ -36,6 +38,8 @@ class Pet {
     this.foto,
     this.estadoAdopcion = 'disponible',
     this.estadoApadrinamiento = 'disponible',
+    this.estadoSalud = 'Saludable.',
+    this.detalleSalud,
     this.idAdoptante,
     this.personalidad = const {},
   });
@@ -56,6 +60,10 @@ class Pet {
     estadoAdopcion: (j['estado_adopcion'] ?? 'disponible') as String,
     estadoApadrinamiento:
         (j['estado_apadrinamiento'] ?? 'disponible') as String,
+    estadoSalud: (j['estado_salud'] as String?)?.trim().isNotEmpty == true
+        ? (j['estado_salud'] as String).trim()
+        : 'Saludable.',
+    detalleSalud: j['detalle_salud'] as String?,
     idAdoptante: _id(j['id_usuario_adoptante']),
 
     // Si el backend devuelve personalidad, la cargamos.
@@ -79,6 +87,8 @@ class Pet {
     'fotos': foto,
     'estado_adopcion': estadoAdopcion,
     'estado_apadrinamiento': estadoApadrinamiento,
+    'estado_salud': estadoSalud,
+    'detalle_salud': detalleSalud,
     'personalidad': personalidad,
   };
 
@@ -121,7 +131,28 @@ class Pet {
     if (adoptadaPor(currentUserId)) return '¡Ya es parte de tu familia! 💖';
     return '¡Ya es parte de una familia! 💖';
   }
+
+  /// Retorna si la mascota tiene alguna necesidad médica o de salud que atender.
+  bool get tieneNecesidadSalud {
+    final s = estadoSalud.trim().toLowerCase();
+    final esSaludable = s == 'saludable.' || s == 'saludable' || s.isEmpty;
+    if (!esSaludable) return true;
+    return detalleSalud != null && detalleSalud!.trim().isNotEmpty;
+  }
+
+  String get estadoSaludTexto => estadoSalud.trim().isEmpty ? 'Saludable.' : estadoSalud.trim();
 }
+
+/// Opciones oficiales para el estado de salud de la mascota
+const List<String> opcionesEstadoSalud = [
+  'Saludable.',
+  'En tratamiento veterinario.',
+  'Requiere vacunación.',
+  'Requiere esterilización.',
+  'Requiere desparasitación.',
+  'Necesita exámenes médicos.',
+  'Requiere medicamentos o cuidados especiales.',
+];
 
 String? _id(dynamic value) {
   final texto = value?.toString().trim() ?? '';

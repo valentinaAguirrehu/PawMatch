@@ -28,7 +28,9 @@ const personalityColumns = [
 // La edad puede estar en meses o años. Sin esta columna, el listado falla.
 const esquemaListo = pool.query(`
   ALTER TABLE mascota
-    ADD COLUMN IF NOT EXISTS unidad_edad VARCHAR(10) NOT NULL DEFAULT 'anos'
+    ADD COLUMN IF NOT EXISTS unidad_edad VARCHAR(10) NOT NULL DEFAULT 'anos',
+    ADD COLUMN IF NOT EXISTS estado_salud TEXT NOT NULL DEFAULT 'Saludable.',
+    ADD COLUMN IF NOT EXISTS detalle_salud TEXT;
 `).catch((err) => {
   console.error('No se pudo preparar la tabla mascota:', err.message);
   throw err;
@@ -74,6 +76,8 @@ const petSelect = `
   SELECT m.id_mascota, m.nombre, m.especie, m.raza, m.edad, m.unidad_edad, m.sexo,
          m.tamano, m.descripcion, m.esterilizado, m.vacunas, m.fotos,
          m.estado_adopcion, m.estado_apadrinamiento,
+         COALESCE(m.estado_salud, 'Saludable.') AS estado_salud,
+         m.detalle_salud,
          to_char(m.fecha_ingreso, 'YYYY-MM-DD') AS fecha_ingreso,
          (SELECT s.id_usuario
             FROM solicitudadopcion s
@@ -136,7 +140,10 @@ router.post('/', requireAdmin, async (req, res) => {
   const {
     nombre, especie, raza, edad, unidad_edad: unidadEdad = 'anos', sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion = 'disponible',
-    estado_apadrinamiento: estadoApadrinamiento = 'disponible', personalidad,
+    estado_apadrinamiento: estadoApadrinamiento = 'disponible',
+    estado_salud: estadoSalud = 'Saludable.',
+    detalle_salud: detalleSalud = null,
+    personalidad,
   } = req.body;
   if (!nombre || !especie) return res.status(400).json({ error: 'Nombre y especie son obligatorios' });
 
@@ -147,12 +154,13 @@ router.post('/', requireAdmin, async (req, res) => {
       `INSERT INTO mascota
        (id_mascota, nombre, especie, raza, edad, unidad_edad, sexo, tamano, descripcion,
         esterilizado, vacunas, fotos, fecha_ingreso, estado_adopcion,
-        estado_apadrinamiento, id_administrador)
+        estado_apadrinamiento, estado_salud, detalle_salud, id_administrador)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_DATE,
-               $13, $14, $15) RETURNING id_mascota`,
+               $13, $14, $15, $16, $17) RETURNING id_mascota`,
       [randomUUID(), nombre, especie, raza || null, edad || null, unidadEdad || 'anos', sexo || null,
         tamano || null, descripcion || null, esterilizado === true, vacunas === true,
-        fotos || null, estadoAdopcion, estadoApadrinamiento, req.adminId],
+        fotos || null, estadoAdopcion, estadoApadrinamiento,
+        estadoSalud || 'Saludable.', detalleSalud || null, req.adminId],
     );
     const idMascota = pet.rows[0].id_mascota;
     await client.query(
@@ -177,6 +185,8 @@ router.put('/:id', requireAdmin, async (req, res) => {
   const {
     nombre, especie, raza, edad, unidad_edad: unidadEdad = 'anos', sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion, estado_apadrinamiento: estadoApadrinamiento,
+    estado_salud: estadoSalud = 'Saludable.',
+    detalle_salud: detalleSalud = null,
     personalidad,
   } = req.body;
   const client = await pool.connect();
@@ -185,11 +195,13 @@ router.put('/:id', requireAdmin, async (req, res) => {
     const pet = await client.query(
       `UPDATE mascota SET nombre = $1, especie = $2, raza = $3, edad = $4, unidad_edad = $5, sexo = $6,
        tamano = $7, descripcion = $8, esterilizado = $9, vacunas = $10, fotos = $11,
-       estado_adopcion = $12, estado_apadrinamiento = $13 WHERE id_mascota = $14
+       estado_adopcion = $12, estado_apadrinamiento = $13,
+       estado_salud = $14, detalle_salud = $15 WHERE id_mascota = $16
        RETURNING id_mascota`,
       [nombre, especie, raza || null, edad || null, unidadEdad || 'anos', sexo || null, tamano || null,
         descripcion || null, esterilizado === true, vacunas === true, fotos || null,
-        estadoAdopcion, estadoApadrinamiento, req.params.id],
+        estadoAdopcion, estadoApadrinamiento,
+        estadoSalud || 'Saludable.', detalleSalud || null, req.params.id],
     );
     if (pet.rows.length === 0) {
       await client.query('ROLLBACK');

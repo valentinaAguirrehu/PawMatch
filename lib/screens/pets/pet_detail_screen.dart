@@ -1093,6 +1093,75 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         ],
                       ),
 
+                      // ───────── ESTADO DE SALUD Y RECOMENDACIONES VETERINARIAS ─────────
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: p.tieneNecesidadSalud ? const Color(0xFFFFF7ED) : const Color(0xFFFDF2F4),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: p.tieneNecesidadSalud ? const Color(0xFFFDBA74) : AppColors.bordeRosa,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  p.tieneNecesidadSalud ? Icons.healing_rounded : Icons.health_and_safety_rounded,
+                                  color: p.tieneNecesidadSalud ? const Color(0xFFEA580C) : AppColors.rosa,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Estado de salud:',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1E272E),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: p.tieneNecesidadSalud ? const Color(0xFFFED7AA) : AppColors.rosaSuave,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        p.estadoSaludTexto,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: p.tieneNecesidadSalud ? const Color(0xFF7C2D12) : AppColors.rosa,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (p.detalleSalud != null && p.detalleSalud!.trim().isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                p.detalleSalud!.trim(),
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Colors.grey.shade800,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
                       // ───────── SECCIÓN: PERSONALIDAD Y COMPORTAMIENTO (ARRIBA DE BOTONES) ─────────
                       const SizedBox(height: 22),
                       const Text(
