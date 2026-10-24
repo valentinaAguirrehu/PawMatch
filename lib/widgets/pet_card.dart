@@ -120,8 +120,9 @@ class PetCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. Foto con el nombre en la esquina inferior izquierda
-              Expanded(
+              // 1. Foto cuadrada, igual en todas las tarjetas, con el nombre encima
+              AspectRatio(
+                aspectRatio: 1.0,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -216,70 +217,87 @@ class PetCard extends StatelessWidget {
                 ),
               ),
 
-              // 3. Pie de la tarjeta: Tamaño a la izquierda, Acción a la derecha
+              // 3. Pie de la tarjeta: Tamaño a la izquierda, Acción a la derecha.
+              // En celdas angostas (2 columnas en celular) se apilan para no desbordar.
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.rosaSuave,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.bordeRosa,
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          (pet.tamano ?? 'mediano').toLowerCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.rosa,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    if (pet.estaAdoptada)
-                      Flexible(
-                        child: Text(
-                          pet.mensajeFamiliaPara(Session.idUsuario),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: const TextStyle(
-                            color: AppColors.rosa,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      )
-                    else
-                      const Row(
-                        mainAxisSize: MainAxisSize.min,
+                child: LayoutBuilder(
+                  builder: (context, footerConstraints) {
+                    final chip = _chipTamano();
+                    if (footerConstraints.maxWidth < 176) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Apadrinar →',
-                            style: TextStyle(
-                              color: AppColors.rosa,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
+                          chip,
+                          const SizedBox(height: 6),
+                          _accionTarjeta(),
                         ],
-                      ),
-                  ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        chip,
+                        const SizedBox(width: 8),
+                        Expanded(child: _accionTarjeta(align: TextAlign.end)),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _chipTamano() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.rosaSuave,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.bordeRosa,
+          width: 1,
+        ),
+      ),
+      child: Text(
+        (pet.tamano ?? 'mediano').toLowerCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.rosa,
+          fontWeight: FontWeight.bold,
+          fontSize: 11.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _accionTarjeta({TextAlign align = TextAlign.start}) {
+    if (pet.estaAdoptada) {
+      return Text(
+        pet.mensajeFamiliaPara(Session.idUsuario),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        textAlign: align,
+        style: const TextStyle(
+          color: AppColors.rosa,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
+      );
+    }
+    return Text(
+      'Apadrinar →',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: align,
+      style: const TextStyle(
+        color: AppColors.rosa,
+        fontWeight: FontWeight.bold,
+        fontSize: 12.5,
       ),
     );
   }

@@ -267,34 +267,44 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   /// Imagen de presentación de la Fundación, sin fotos de mascotas de la base de datos.
+  /// En celular el círculo se reduce al ancho disponible para no desbordar la columna.
   Widget _heroImagen(double alto) {
-    return SizedBox(
-      height: alto,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Container(
-            width: alto * 0.92,
-            height: alto * 0.92,
-            decoration: const BoxDecoration(
-              color: AppColors.rosa,
-              shape: BoxShape.circle,
-            ),
-          ),
-          SizedBox(
-            width: alto * 0.74,
-            height: alto * 0.86,
-            child: ClipOval(
-              child: FundacionImagen(
-                ruta: FundacionInfo.imagenPrincipal,
-                fit: BoxFit.cover,
-                icono: Icons.volunteer_activism,
-                tamanoIcono: 80,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final disponible = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : alto;
+        final lado = math.min(alto, math.max(0.0, disponible));
+        return SizedBox(
+          height: lado,
+          width: double.infinity,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: lado * 0.92,
+                height: lado * 0.92,
+                decoration: const BoxDecoration(
+                  color: AppColors.rosa,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
+              SizedBox(
+                width: lado * 0.74,
+                height: lado * 0.86,
+                child: ClipOval(
+                  child: FundacionImagen(
+                    ruta: FundacionInfo.imagenPrincipal,
+                    fit: BoxFit.cover,
+                    icono: Icons.volunteer_activism,
+                    tamanoIcono: 80,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -469,9 +479,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         const SizedBox(height: 24),
         LayoutBuilder(
           builder: (context, constraints) {
-            final columnas = constraints.maxWidth >= 800 ? 4 : 2;
-            final anchoTarjeta =
-                (constraints.maxWidth - sep * (columnas - 1)) / columnas;
+            final maxW = constraints.maxWidth.isFinite
+                ? math.max(0.0, constraints.maxWidth)
+                : 0.0;
+            if (maxW <= 0) return const SizedBox.shrink();
+            final columnas = maxW >= 800 ? 4 : (maxW >= 280 ? 2 : 1);
+            final anchoTarjeta = math.max(
+              0.0,
+              (maxW - sep * (columnas - 1)) / columnas,
+            );
             return Wrap(
               spacing: sep,
               runSpacing: sep,
@@ -521,10 +537,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     } else {
       cuerpo = LayoutBuilder(
         builder: (context, constraints) {
-          final maxW = math.max(0.0, constraints.maxWidth);
+          final maxW = constraints.maxWidth.isFinite
+              ? math.max(0.0, constraints.maxWidth)
+              : 0.0;
+          if (maxW <= 0) return const SizedBox.shrink();
           final columnas = maxW >= 900 ? 4 : (maxW >= 560 ? 2 : 1);
           const sep = 14.0;
-          final w = math.max(120.0, (maxW - sep * (columnas - 1)) / columnas);
+          final w = math.max(0.0, (maxW - sep * (columnas - 1)) / columnas);
           return Wrap(
             spacing: sep,
             runSpacing: sep,
@@ -585,22 +604,30 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(32),
-          child: SizedBox(
-            width: double.infinity,
-            height: m.escritorio ? 350 : 460,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: m.escritorio ? 350 : 0),
             child: Stack(
-              fit: StackFit.expand,
+              alignment: Alignment.center,
               children: [
-                FundacionImagen(
-                  ruta: FundacionInfo.fotoFondoAyudas,
-                  fit: BoxFit.cover,
-                  icono: Icons.pets,
-                  fondo: AppColors.rosa,
+                Positioned.fill(
+                  child: FundacionImagen(
+                    ruta: FundacionInfo.fotoFondoAyudas,
+                    fit: BoxFit.cover,
+                    icono: Icons.pets,
+                    fondo: AppColors.rosa,
+                  ),
                 ),
-                ColoredBox(color: AppColors.rosa.withValues(alpha: 0.82)),
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: AppColors.rosa.withValues(alpha: 0.82),
+                  ),
+                ),
                 Padding(
-                  padding: EdgeInsets.all(m.interior),
-                  child: Center(child: _logros(m)),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: m.interior,
+                    vertical: m.escritorio ? 36 : 28,
+                  ),
+                  child: _logros(m),
                 ),
               ],
             ),
@@ -623,17 +650,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               const SizedBox(height: 20),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final maxW = math.max(0.0, constraints.maxWidth);
+                  final maxW = constraints.maxWidth.isFinite
+                      ? math.max(0.0, constraints.maxWidth)
+                      : 0.0;
+                  if (maxW <= 0) return const SizedBox.shrink();
                   final columnas = maxW >= Layout.tablet ? 2 : 1;
                   const sep = 14.0;
-                  final w = math.max(120.0, (maxW - sep * (columnas - 1)) / columnas);
+                  final w = math.max(
+                    0.0,
+                    (maxW - sep * (columnas - 1)) / columnas,
+                  );
                   return Wrap(
                     spacing: sep,
                     runSpacing: sep,
                     alignment: WrapAlignment.center,
                     children: [
                       for (final tarjeta in tarjetas)
-                        SizedBox(width: w, height: 220, child: tarjeta),
+                        SizedBox(width: w, child: tarjeta),
                     ],
                   );
                 },
