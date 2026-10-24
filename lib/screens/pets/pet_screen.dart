@@ -794,11 +794,9 @@ class _PetScreenState extends State<PetScreen> {
                                     paddingHorizontal -
                                     crossAxisSpacing * (crossAxisCount - 1)) /
                                 crossAxisCount;
-                            // Bajo ~200 px la tarjeta apila chip y acción; si no, van en una fila.
-                            // La foto es cuadrada (1:1). El alto extra es solo descripción + pie,
-                            // para que todas las imágenes midan lo mismo y no haya overflow.
-                            final pieApilado = anchoCelda < 200;
-                            final altoInfo = pieApilado ? 156.0 : 120.0;
+                            // La foto es cuadrada (1:1). El alto extra cubre la descripción,
+                            // el chip de tamaño y el botón de ancho completo.
+                            const altoInfo = 176.0;
                             final childAspectRatio = anchoCelda / (anchoCelda + altoInfo);
                             return GridView.builder(
                               controller: _scrollCtrl,

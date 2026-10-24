@@ -217,31 +217,20 @@ class PetCard extends StatelessWidget {
                 ),
               ),
 
-              // 3. Pie de la tarjeta: Tamaño a la izquierda, Acción a la derecha.
-              // En celdas angostas (2 columnas en celular) se apilan para no desbordar.
+              // 3. Pie: el tamaño queda arriba y el botón ocupa todo el ancho,
+              // con el texto centrado.
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: LayoutBuilder(
-                  builder: (context, footerConstraints) {
-                    final chip = _chipTamano();
-                    if (footerConstraints.maxWidth < 176) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          chip,
-                          const SizedBox(height: 6),
-                          _accionTarjeta(),
-                        ],
-                      );
-                    }
-                    return Row(
-                      children: [
-                        chip,
-                        const SizedBox(width: 8),
-                        Expanded(child: _accionTarjeta(align: TextAlign.end)),
-                      ],
-                    );
-                  },
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _chipTamano(),
+                    ),
+                    const SizedBox(height: 8),
+                    _accionTarjeta(),
+                  ],
                 ),
               ),
             ],
@@ -275,29 +264,109 @@ class PetCard extends StatelessWidget {
     );
   }
 
-  Widget _accionTarjeta({TextAlign align = TextAlign.start}) {
-    if (pet.estaAdoptada) {
-      return Text(
-        pet.mensajeFamiliaPara(Session.idUsuario),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        textAlign: align,
-        style: const TextStyle(
-          color: AppColors.rosa,
-          fontWeight: FontWeight.w800,
-          fontSize: 12,
+  /// Si ya fue adoptada, el aviso de familia ocupa el lugar del botón.
+  Widget _accionTarjeta() {
+    if (pet.estaAdoptada) return _avisoFamilia();
+
+    const radio = 16.0;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radio),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.34),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(radio),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Ink(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFFF6FB3),
+                  AppColors.rosa,
+                ],
+              ),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Text(
+                'Conoce más sobre mí',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  height: 1.2,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ),
         ),
-      );
-    }
-    return Text(
-      'Apadrinar →',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      textAlign: align,
-      style: const TextStyle(
-        color: AppColors.rosa,
-        fontWeight: FontWeight.bold,
-        fontSize: 12.5,
+      ),
+    );
+  }
+
+  Widget _avisoFamilia() {
+    final esMia = pet.adoptadaPor(Session.idUsuario);
+    final texto = pet
+        .mensajeFamiliaPara(Session.idUsuario)
+        .replaceAll('💖', '')
+        .trim();
+
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 40),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.rosaClaro,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.bordeRosa),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            esMia ? Icons.favorite_rounded : Icons.home_rounded,
+            size: 15,
+            color: AppColors.rosa,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              texto,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.rosa,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                height: 1.15,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

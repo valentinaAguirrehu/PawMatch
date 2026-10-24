@@ -119,7 +119,7 @@ class NotificationsTab extends StatelessWidget {
                       : 'Revisa tus mascotas apadrinadas, estado y contratos oficiales.',
                   icono: Icons.volunteer_activism_rounded,
                   contador: noLeidasApad,
-                  colorIcono: const Color(0xFFE91E63),
+                  colorIcono: AppColors.rosa,
                   onTap: () => _abrirApadrinamientos(context),
                 ),
 
