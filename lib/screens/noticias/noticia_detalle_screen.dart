@@ -31,7 +31,6 @@ class NoticiaDetalleScreen extends StatefulWidget {
 
 class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
   late Noticia _noticia = widget.noticia;
-  int _tabSeleccionada = 0; // 0: Overview (Noticia), 1: Detalles
 
   Future<void> _toggleLike() async {
     final prevLike = _noticia.dioLike;
@@ -460,18 +459,33 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Pestañas "Overview" / "Detalles" (estilo imagen 2)
-                  Row(
+                  // Encabezado "Detalles"
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _itemTab(0, 'Overview'),
-                      const SizedBox(width: 24),
-                      _itemTab(1, 'Detalles'),
+                      const Text(
+                        'Detalles',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1F2937),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        width: 18,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: AppColors.rosa,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ],
                   ),
 
                   const SizedBox(height: 18),
 
-                  // Chips de información rápida (estilo imagen 2: 🕒 [Fecha] 📍 [Lugar] ❤️ [Likes])
+                  // Chips de información rápida: 🕒 [Fecha] 📍 [Lugar] ❤️ [Likes]
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -497,41 +511,16 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
 
                   const SizedBox(height: 22),
 
-                  // Contenido según pestaña
-                  if (_tabSeleccionada == 0) ...[
-                    // Vista Overview: Texto completo de la noticia
-                    Text(
-                      _noticia.contenido,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: Colors.grey.shade800,
-                        height: 1.65,
-                        letterSpacing: 0.15,
-                      ),
+                  // Texto completo de la noticia
+                  Text(
+                    _noticia.contenido,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.grey.shade800,
+                      height: 1.65,
+                      letterSpacing: 0.15,
                     ),
-                  ] else ...[
-                    // Vista Detalles: Ficha informativa de la Fundación y la Noticia
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFAF9FA),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _filaDetalle(Icons.apartment_rounded, 'Organizado por', FundacionInfo.nombre),
-                          const Divider(height: 20),
-                          _filaDetalle(Icons.pin_drop_rounded, 'Lugar del evento', _noticia.lugar),
-                          const Divider(height: 20),
-                          _filaDetalle(Icons.event_available_rounded, 'Fecha de publicación', _noticia.fechaFormateada),
-                          const Divider(height: 20),
-                          _filaDetalle(Icons.thumb_up_alt_outlined, 'Impacto social', '${_noticia.totalLikes} personas interesadas'),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
 
                   const SizedBox(height: 32),
 
@@ -617,37 +606,6 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
     );
   }
 
-  Widget _itemTab(int index, String label) {
-    final activo = _tabSeleccionada == index;
-    return GestureDetector(
-      onTap: () => setState(() => _tabSeleccionada = index),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: activo ? FontWeight.w900 : FontWeight.w600,
-              color: activo ? const Color(0xFF1F2937) : Colors.grey.shade400,
-            ),
-          ),
-          const SizedBox(height: 4),
-          if (activo)
-            Container(
-              width: 18,
-              height: 3,
-              decoration: BoxDecoration(
-                color: AppColors.rosa,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            )
-          else
-            const SizedBox(height: 3),
-        ],
-      ),
-    );
-  }
 
   Widget _chipInfo({
     required IconData icono,
@@ -678,29 +636,4 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
     );
   }
 
-  Widget _filaDetalle(IconData icon, String titulo, String valor) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: AppColors.rosa),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                titulo,
-                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                valor,
-                style: const TextStyle(fontSize: 13.5, color: Color(0xFF1F2937), fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }

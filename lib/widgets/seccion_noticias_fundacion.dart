@@ -181,7 +181,7 @@ class _SeccionNoticiasFundacionState extends State<SeccionNoticiasFundacion> {
       padding: const EdgeInsets.fromLTRB(0, 26, 0, 20),
       color: Colors.transparent,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 1. Encabezado de la sección
           Padding(
@@ -308,9 +308,11 @@ class _SeccionNoticiasFundacionState extends State<SeccionNoticiasFundacion> {
 
 
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Carrusel de tarjetas
                   SizedBox(
+                    width: double.infinity,
                     height: 295,
                     child: PageView.builder(
                       controller: _pageController,
@@ -344,34 +346,41 @@ class _SeccionNoticiasFundacionState extends State<SeccionNoticiasFundacion> {
                   // 4. PUNTITOS DE SELECCIÓN (INDICADOR INFERIOR ESTILO REFERENCIA)
                   if (lista.length > 1) ...[
                     const SizedBox(height: 14),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        lista.length,
-                        (i) {
-                          final activo = _paginaActual == i;
-                          return GestureDetector(
-                            onTap: () {
-                              _pageController?.animateToPage(
-                                i,
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeInOut,
+                    Center(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const NeverScrollableScrollPhysics(),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: List.generate(
+                            lista.length,
+                            (i) {
+                              final activo = _paginaActual == i;
+                              return GestureDetector(
+                                onTap: () {
+                                  _pageController?.animateToPage(
+                                    i,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeInOut,
+                                  );
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  width: activo ? 24 : 7,
+                                  height: 7,
+                                  decoration: BoxDecoration(
+                                    color: activo
+                                        ? AppColors.rosa
+                                        : AppColors.rosa.withValues(alpha: 0.28),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
                               );
                             },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 250),
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              width: activo ? 24 : 7,
-                              height: 7,
-                              decoration: BoxDecoration(
-                                color: activo
-                                    ? AppColors.rosa
-                                    : AppColors.rosa.withValues(alpha: 0.28),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          );
-                        },
+                          ),
+                        ),
                       ),
                     ),
                   ],

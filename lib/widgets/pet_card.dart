@@ -222,32 +222,42 @@ class PetCard extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.rosaSuave,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: AppColors.bordeRosa,
-                          width: 1,
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.rosaSuave,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.bordeRosa,
+                            width: 1,
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        (pet.tamano ?? 'mediano').toLowerCase(),
-                        style: const TextStyle(
-                          color: AppColors.rosa,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11.5,
+                        child: Text(
+                          (pet.tamano ?? 'mediano').toLowerCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.rosa,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                     ),
+                    const SizedBox(width: 6),
                     if (pet.estaAdoptada)
-                      Text(
-                        pet.mensajeFamiliaPara(Session.idUsuario),
-                        style: const TextStyle(
-                          color: AppColors.rosa,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 12,
+                      Flexible(
+                        child: Text(
+                          pet.mensajeFamiliaPara(Session.idUsuario),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(
+                            color: AppColors.rosa,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11.5,
+                          ),
                         ),
                       )
                     else
@@ -259,7 +269,7 @@ class PetCard extends StatelessWidget {
                             style: TextStyle(
                               color: AppColors.rosa,
                               fontWeight: FontWeight.bold,
-                              fontSize: 12.5,
+                              fontSize: 12,
                             ),
                           ),
                         ],

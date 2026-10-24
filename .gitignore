@@ -52,3 +52,21 @@ paw_match_backend/.npm/
 paw_match_backend/uploads/
 paw_match_backend/private_uploads/
 android/build/
+
+# Variables de entorno
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Configuración local de Gradle y Android (rutas de SDK, claves y cachés)
+**/android/local.properties
+**/android/key.properties
+**/android/.gradle/
+**/android/app/build/
+**/android/gradle.properties
+local.properties
+key.properties
+.gradle/
+*.keystore
+*.jks
