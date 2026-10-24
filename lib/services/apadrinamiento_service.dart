@@ -24,8 +24,10 @@ class ApadrinamientoService {
   static Future<SolicitudApadrinamiento?> enviarSolicitud({
     required String idMascota,
     required String motivacion,
+    String tipoAporte = 'Aporte monetario.',
     int? montoAporte,
     String frecuenciaAporte = 'mensual',
+    String? detalleAporte,
     required Uint8List bytesDocumento,
     required String nombreArchivo,
     String? correoContacto,
@@ -37,7 +39,11 @@ class ApadrinamientoService {
     req.fields['id_mascota'] = idMascota;
     req.fields['informacion_adicional'] = motivacion;
     req.fields['acuerdo_responsabilidad'] = 'true';
+    req.fields['tipo_aporte'] = tipoAporte;
     req.fields['frecuencia_aporte'] = frecuenciaAporte;
+    if (detalleAporte != null && detalleAporte.trim().isNotEmpty) {
+      req.fields['detalle_especie'] = detalleAporte.trim();
+    }
     if (montoAporte != null && montoAporte > 0) {
       req.fields['monto_aporte'] = montoAporte.toString();
     }

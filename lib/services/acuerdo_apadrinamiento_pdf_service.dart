@@ -18,6 +18,8 @@ class DatosAcuerdoApadrinamiento {
   final String especieMascota;
   final String? razaMascota;
   final String edadMascota;
+  final String tipoAporte;
+  final String? detalleAporte;
   final int? montoAporte;
   final String frecuenciaAporte;
   final String motivacion;
@@ -33,6 +35,8 @@ class DatosAcuerdoApadrinamiento {
     required this.especieMascota,
     this.razaMascota,
     required this.edadMascota,
+    this.tipoAporte = 'Aporte monetario.',
+    this.detalleAporte,
     this.montoAporte,
     required this.frecuenciaAporte,
     required this.motivacion,
@@ -122,15 +126,36 @@ La Fundación tratará tu información personal y los documentos suministrados b
     final minuto = datos.fechaAceptacion.minute.toString().padLeft(2, '0');
     final fechaFormateada = '$dia/$mes/$anio a las $hora:$minuto';
 
-    final montoTexto = datos.montoAporte != null && datos.montoAporte! > 0
-        ? '\$ ${datos.montoAporte.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} COP'
-        : 'Aporte en especie / voluntario';
+    final frecuenciaTexto = switch (datos.frecuenciaAporte) {
+      'semanal' => 'Semanal',
+      'quincenal' => 'Quincenal',
+      'mensual' => 'Mensual',
+      'aporte_unico' => 'Aporte único',
+      'entrega_unica' => 'Entrega única',
+      'unica_vez' => 'Única vez',
+      _ => datos.frecuenciaAporte,
+    };
 
-    final frecuenciaTexto = datos.frecuenciaAporte == 'unica_vez'
-        ? 'Única vez'
-        : datos.frecuenciaAporte == 'quincenal'
-            ? 'Quincenal'
-            : 'Mensual';
+    final esMonetario = datos.tipoAporte.toLowerCase().contains('monetario');
+    final esEspecie = datos.tipoAporte.toLowerCase().contains('especie');
+
+    final String modalidadTexto;
+    if (esMonetario) {
+      final monto = datos.montoAporte != null && datos.montoAporte! > 0
+          ? '\$ ${datos.montoAporte.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} COP'
+          : '\$ 0 COP';
+      modalidadTexto = 'Aporte monetario: $monto ($frecuenciaTexto)';
+    } else if (esEspecie) {
+      final detalle = (datos.detalleAporte != null && datos.detalleAporte!.trim().isNotEmpty)
+          ? ': ${datos.detalleAporte!.trim()}'
+          : '';
+      modalidadTexto = 'Aporte en especie$detalle ($frecuenciaTexto)';
+    } else {
+      final detalle = (datos.detalleAporte != null && datos.detalleAporte!.trim().isNotEmpty)
+          ? ': ${datos.detalleAporte!.trim()}'
+          : '';
+      modalidadTexto = 'Otro tipo de ayuda$detalle';
+    }
 
     final razaTexto = (datos.razaMascota != null && datos.razaMascota!.trim().isNotEmpty)
         ? datos.razaMascota!
@@ -302,7 +327,7 @@ La Fundación tratará tu información personal y los documentos suministrados b
                       'Mascota Apadrinada:',
                       '${datos.nombreMascota} (${datos.especieMascota} - $razaTexto - ${datos.edadMascota})',
                     ),
-                    _filaDato('Modalidad y Aporte:', '$montoTexto ($frecuenciaTexto)'),
+                    _filaDato('Modalidad y Aporte:', modalidadTexto),
                     _filaDato('Fecha de Aceptación:', fechaFormateada),
                   ],
                 ),

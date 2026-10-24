@@ -19,12 +19,14 @@ fs.mkdirSync(privateUploadsDir, { recursive: true });
 const contratosDir = path.join(__dirname, '..', 'private_uploads', 'contratos_apadrinamiento');
 fs.mkdirSync(contratosDir, { recursive: true });
 
-// Garantiza las columnas contrato_apadrinamiento_archivo, veces_rechazada y correo_contacto en PostgreSQL
+// Garantiza las columnas contrato_apadrinamiento_archivo, veces_rechazada, correo_contacto, tipo_aporte y detalle_especie en PostgreSQL
 pool.query(`
   ALTER TABLE solicitudapadrinamiento
     ADD COLUMN IF NOT EXISTS contrato_apadrinamiento_archivo TEXT,
     ADD COLUMN IF NOT EXISTS veces_rechazada INTEGER DEFAULT 1,
-    ADD COLUMN IF NOT EXISTS correo_contacto TEXT
+    ADD COLUMN IF NOT EXISTS correo_contacto TEXT,
+    ADD COLUMN IF NOT EXISTS tipo_aporte TEXT DEFAULT 'Aporte monetario.',
+    ADD COLUMN IF NOT EXISTS detalle_especie TEXT
 `).catch(err => console.error('Error preparando tabla solicitudapadrinamiento:', err.message));
 
 const upload = multer({
@@ -107,7 +109,16 @@ router.post('/', upload.single('documento'), async (req, res) => {
     return res.status(401).json({ error: 'Debes iniciar sesión para apadrinar' });
   }
 
-  const { id_mascota, monto_aporte, frecuencia_aporte, informacion_adicional, acuerdo_responsabilidad, correo_contacto } = req.body;
+  const {
+    id_mascota,
+    monto_aporte,
+    frecuencia_aporte,
+    informacion_adicional,
+    acuerdo_responsabilidad,
+    correo_contacto,
+    tipo_aporte,
+    detalle_especie,
+  } = req.body;
 
   if (!id_mascota) {
     if (req.file) fs.unlinkSync(req.file.path);
@@ -170,7 +181,10 @@ router.post('/', upload.single('documento'), async (req, res) => {
       });
     }
 
-    const monto = monto_aporte ? parseInt(monto_aporte, 10) : null;
+    const tipoAporteFinal = (tipo_aporte || 'Aporte monetario.').trim();
+    const detalleEspecieFinal = (detalle_especie || '').trim();
+    const esMonetario = tipoAporteFinal.toLowerCase().includes('monetario');
+    const monto = esMonetario && monto_aporte ? parseInt(monto_aporte, 10) : null;
     const frecuencia = (frecuencia_aporte || 'mensual').trim();
     const archivoDoc = req.file.filename;
     const correoFinal = (correo_contacto || usuario.correo || '').trim();
@@ -188,10 +202,12 @@ router.post('/', upload.single('documento'), async (req, res) => {
         estado,
         leido_admin,
         leido_usuario,
-        correo_contacto
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), 'pendiente', false, true, $8)
+        correo_contacto,
+        tipo_aporte,
+        detalle_especie
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), 'pendiente', false, true, $8, $9, $10)
       RETURNING *`,
-      [usuario.id_usuario, id_mascota, monto, frecuencia, motivacion, archivoDoc, true, correoFinal]
+      [usuario.id_usuario, id_mascota, monto, frecuencia, motivacion, archivoDoc, true, correoFinal, tipoAporteFinal, detalleEspecieFinal]
     );
 
     res.status(201).json({
