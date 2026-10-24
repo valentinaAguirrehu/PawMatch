@@ -5,6 +5,8 @@ class SolicitudApadrinamiento {
   final String fechaSolicitud;
   final int? montoAporte;
   final String frecuenciaAporte;
+  final String tipoAporte;
+  final String? detalleEspecie;
   final String motivacion;
   final String estado;
   final String? observaciones;
@@ -40,6 +42,8 @@ class SolicitudApadrinamiento {
     required this.fechaSolicitud,
     this.montoAporte,
     this.frecuenciaAporte = 'mensual',
+    this.tipoAporte = 'Aporte monetario.',
+    this.detalleEspecie,
     required this.motivacion,
     required this.estado,
     this.observaciones,
@@ -90,6 +94,8 @@ class SolicitudApadrinamiento {
       fechaSolicitud: json['fecha_solicitud']?.toString() ?? '',
       montoAporte: json['monto_aporte'] != null ? int.tryParse(json['monto_aporte'].toString()) : null,
       frecuenciaAporte: json['frecuencia_aporte']?.toString() ?? 'mensual',
+      tipoAporte: json['tipo_aporte']?.toString() ?? 'Aporte monetario.',
+      detalleEspecie: json['detalle_especie']?.toString(),
       motivacion: (json['informacion_adicional'] ?? json['motivacion'] ?? '').toString(),
       estado: json['estado']?.toString() ?? 'pendiente',
       observaciones: json['observaciones']?.toString(),
