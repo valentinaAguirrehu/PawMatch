@@ -13,6 +13,7 @@ import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/navegacion.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/nav_flotante.dart';
@@ -58,12 +59,14 @@ class _MenuScreenState extends State<MenuScreen> {
     _index = (pedido >= 0 && pedido <= maximo) ? pedido : 0;
     ApadrinamientoService.iniciarMonitoreo();
     AdoptionService.iniciarMonitoreo();
+    PetsService.iniciarMonitoreo();
   }
 
   @override
   void dispose() {
     ApadrinamientoService.detenerMonitoreo();
     AdoptionService.detenerMonitoreo();
+    PetsService.detenerMonitoreo();
     super.dispose();
   }
 

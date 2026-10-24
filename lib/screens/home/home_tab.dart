@@ -4,6 +4,7 @@ import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/navegacion.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/banner_hero_inicio.dart';
 import 'package:paw_match/widgets/cabecera_inicio.dart';
@@ -28,9 +29,16 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
+  @override
+  void initState() {
+    super.initState();
+    PetsService.iniciarMonitoreo();
+  }
+
   Future<void> _confirmarCerrarSesion() async {
     final confirmar = await DialogoCerrarSesion.mostrar(context);
     if (confirmar && mounted) {
+      PetsService.detenerMonitoreo();
       ApadrinamientoService.detenerMonitoreo();
       AdoptionService.detenerMonitoreo();
       Session.cerrar();
