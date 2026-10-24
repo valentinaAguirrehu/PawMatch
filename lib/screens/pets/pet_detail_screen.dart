@@ -1193,77 +1193,82 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             ),
           ),
 
-          // ───────── CABECERA FLOTANTE (BOTÓN ATRÁS Y OPCIONES) ─────────
+          // ───────── CABECERA FIJA (ATRÁS, TÍTULO Y OPCIONES) ─────────
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Botón circular blanco Atrás
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.chevron_left_rounded,
-                          size: 26,
-                          color: Color(0xFF1F2937),
-                        ),
-                      ),
-                    ),
-
-                    // Título central
-                    const Text(
-                      'Detalles',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1E272E),
-                      ),
-                    ),
-
-                    // Botón circular blanco Opciones (...)
-                    GestureDetector(
-                      onTap: () => _mostrarOpciones(context),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.08),
-                              blurRadius: 10,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.more_horiz_rounded,
-                          size: 22,
-                          color: Color(0xFF1F2937),
+            child: Material(
+              color: const Color(0xFFFFF5F7),
+              elevation: 2,
+              shadowColor: Colors.black26,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 10),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.chevron_left_rounded,
+                            size: 26,
+                            color: Color(0xFF1F2937),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                      const Expanded(
+                        child: Text(
+                          '¡Más sobre mí!',
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1E272E),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => _mostrarOpciones(context),
+                        child: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.more_horiz_rounded,
+                            size: 22,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
