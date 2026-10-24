@@ -78,14 +78,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     try {
       final fecha = DateTime.tryParse(solicitud.requestedAt.replaceFirst(' ', 'T')) ??
           DateTime.now();
-      Uint8List? cedula;
-      Uint8List? recibo;
-      try {
-        cedula = await AdoptionService.fetchIdCard(solicitud.id);
-      } catch (_) {}
-      try {
-        recibo = await AdoptionService.fetchUtilityBill(solicitud.id);
-      } catch (_) {}
+      final fotos = await Future.wait([
+        _traerFoto(AdoptionService.fetchIdCard(solicitud.id)),
+        _traerFoto(AdoptionService.fetchUtilityBill(solicitud.id)),
+      ]);
+      final cedula = fotos[0];
+      final recibo = fotos[1];
       final bytes = await AcuerdoAdopcionPdfService.generarPdfBytes(
         DatosActaAdopcion(
           idSolicitud: solicitud.id,
@@ -147,6 +145,14 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       );
     } finally {
       if (mounted) setState(() => _descargandoActa = false);
+    }
+  }
+
+  Future<Uint8List?> _traerFoto(Future<Uint8List> carga) async {
+    try {
+      return await carga;
+    } catch (_) {
+      return null;
     }
   }
 
