@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
@@ -54,7 +55,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   bool _revisando = true;
   bool _enviando = false;
   bool _mostrarError = false;
-  bool _correoPerfilConfirmado = false;
   bool _actualizandoCorreo = false;
   bool _aceptoTerminos = false;
   String? _error;
@@ -265,16 +265,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       return;
     }
 
-    if (!_correoPerfilConfirmado) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.orange,
-          content: Text('Por favor confirma tu correo electrónico en la sección inferior.'),
-        ),
-      );
-      return;
-    }
-
     if (!_aceptoTerminos) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -332,6 +322,16 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           ? 'Usuario Registrado'
           : '${Session.nombre} ${Session.apellidos}'.trim();
 
+      // Traer foto de la mascota para el PDF si existe
+      Uint8List? petFotoBytes;
+      try {
+        if (widget.pet.foto != null && widget.pet.foto!.trim().isNotEmpty) {
+          final url = urlFoto(widget.pet.foto!);
+          final resImg = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+          if (resImg.statusCode == 200) petFotoBytes = resImg.bodyBytes;
+        }
+      } catch (_) {}
+
       Uint8List? pdfBytes;
       String? avisoPdf;
       try {
@@ -362,6 +362,9 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
             aceptoTerminos: true,
             fotoCedula: _cedulaBytes,
             fotoRecibo: _reciboBytes,
+            fotoMascota: petFotoBytes,
+            estadoProceso: 'pendiente',
+            estadoCorreo: 'pendiente',
           ),
         );
         await AcuerdoAdopcionPdfService.descargarYGuardarPdf(
@@ -743,7 +746,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                         if (!mounted || !ctx.mounted) return;
                         setState(() {
                           _correoCtrl.text = nuevo;
-                          _correoPerfilConfirmado = false;
                           _actualizandoCorreo = false;
                         });
                         Navigator.pop(ctx);
@@ -904,12 +906,12 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _correoPerfilConfirmado ? Colors.green.shade400 : AppColors.rosa,
-          width: 1.8,
+          color: AppColors.bordeRosa,
+          width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (_correoPerfilConfirmado ? Colors.green : AppColors.rosa).withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -922,13 +924,13 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _correoPerfilConfirmado ? Colors.green.shade50 : AppColors.rosaSuave,
+                decoration: const BoxDecoration(
+                  color: AppColors.rosaSuave,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  _correoPerfilConfirmado ? Icons.mark_email_read_rounded : Icons.mail_outline_rounded,
-                  color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
+                child: const Icon(
+                  Icons.mail_outline_rounded,
+                  color: AppColors.rosa,
                   size: 24,
                 ),
               ),
@@ -938,22 +940,17 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Correo electrónico de tu perfil',
+                      'Correo electrónico para notificaciones',
                       style: t.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     Text(
-                      'Confirmación requerida para notificación',
+                      'Recibirás el correo de verificación y el estado de tu solicitud',
                       style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
                     ),
                   ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Este es el correo electrónico de tu perfil. Por favor confirmar ya que recibirás una notificación con tu solicitud:',
-            style: TextStyle(fontSize: 13, height: 1.38, color: Colors.black87),
           ),
           const SizedBox(height: 12),
           Container(
@@ -978,81 +975,57 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (_correoPerfilConfirmado)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle, size: 14, color: Colors.green.shade800),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Confirmado',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade800,
-                          ),
-                        ),
-                      ],
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.hourglass_top_rounded,
+                        size: 13,
+                        color: Colors.amber.shade900,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Verificación al enviar',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.rosa,
-                    disabledBackgroundColor: AppColors.rosa.withValues(alpha: 0.45),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  onPressed: _correoPerfilConfirmado
-                      ? null
-                      : () {
-                          setState(() => _correoPerfilConfirmado = true);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              backgroundColor: Colors.green,
-                              duration: const Duration(seconds: 2),
-                              content: Text(
-                                'Correo $correoPerfil confirmado para recibir la notificación.',
-                              ),
-                            ),
-                          );
-                        },
-                  child: const Text(
-                    'Confirmar',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                  ),
-                ),
+          const SizedBox(height: 10),
+          const Text(
+            'Al enviar la solicitud, el sistema te enviará automáticamente un correo electrónico con un enlace para confirmar tu dirección.',
+            style: TextStyle(fontSize: 12, height: 1.35, color: Color(0xFF4B5563)),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey.shade800,
+                side: BorderSide(color: Colors.grey.shade400),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey.shade800,
-                    side: BorderSide(color: Colors.grey.shade400),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
-                  label: const Text(
-                    'No es / Cambiar',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                  ),
-                  onPressed: _dialogoEditarCorreoPerfil,
-                ),
+              icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
+              label: const Text(
+                'No es / Cambiar correo',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
               ),
-            ],
+              onPressed: _dialogoEditarCorreoPerfil,
+            ),
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
+import 'package:paw_match/screens/apadrinamiento/pasos_apadrinamiento_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
@@ -95,6 +96,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     if (!listo || !mounted) return;
     final enviada = await AdoptionFormScreen.mostrar(context, pet: pet);
     if (enviada == true && mounted) _cargarAdopciones();
+  }
+
+  Future<void> _abrirApadrinamiento(Pet pet) async {
+    final seguir = await PasosApadrinamientoScreen.mostrar(context, pet: pet);
+    if (!seguir || !mounted) return;
+    SolicitudApadrinamientoDialog.mostrar(
+      context,
+      pet: pet,
+    );
   }
 
   @override
@@ -238,10 +248,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
           yaEsFamilia: _yaEsFamilia(destacado.mascota.id),
           adoptada: destacado.mascota.estaAdoptada,
           onAdoptar: () => _abrirAdopcion(destacado.mascota),
-          onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
-            context,
-            pet: destacado.mascota,
-          ),
+          onApadrinar: () => _abrirApadrinamiento(destacado.mascota),
         ),
         if (siguientes.isNotEmpty) ...[
           const SizedBox(height: 22),
@@ -265,10 +272,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                     yaEsFamilia: _yaEsFamilia(siguientes[i].mascota.id),
                     adoptada: siguientes[i].mascota.estaAdoptada,
                     onAdoptar: () => _abrirAdopcion(siguientes[i].mascota),
-                    onApadrinar: () => SolicitudApadrinamientoDialog.mostrar(
-                      context,
-                      pet: siguientes[i].mascota,
-                    ),
+                    onApadrinar: () => _abrirApadrinamiento(siguientes[i].mascota),
                   ),
               ];
               if (!ladoALado) {

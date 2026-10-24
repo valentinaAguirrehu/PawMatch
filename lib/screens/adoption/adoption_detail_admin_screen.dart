@@ -664,6 +664,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                     children: [
                       _Dato('Nombre completo', s.applicantFullName),
                       _Dato('Correo electrónico', _vacio(s.applicantEmail)),
+                      _Dato('Confirmación de correo', s.emailStatusLabel),
                       _Dato('Teléfono de contacto', _vacio(s.applicantPhone)),
                       _Dato('Dirección', _vacio(s.applicantAddress)),
                       if (s.applicantIdNumber.trim().isNotEmpty)

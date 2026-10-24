@@ -35,6 +35,9 @@ class DatosActaAdopcion {
   final bool aceptoTerminos;
   final Uint8List? fotoCedula;
   final Uint8List? fotoRecibo;
+  final Uint8List? fotoMascota;
+  final String estadoCorreo;
+  final String estadoProceso;
 
   DatosActaAdopcion({
     required this.idSolicitud,
@@ -60,6 +63,9 @@ class DatosActaAdopcion {
     required this.aceptoTerminos,
     this.fotoCedula,
     this.fotoRecibo,
+    this.fotoMascota,
+    this.estadoCorreo = 'pendiente',
+    this.estadoProceso = 'pendiente',
   });
 }
 
@@ -196,8 +202,22 @@ class AcuerdoAdopcionPdfService {
 
     final jpgCedula = await prepararFotoParaPdf(datos.fotoCedula);
     final jpgRecibo = await prepararFotoParaPdf(datos.fotoRecibo);
+    final jpgMascota = await prepararFotoParaPdf(datos.fotoMascota);
     final fotoCedula = jpgCedula == null ? null : pw.MemoryImage(jpgCedula);
     final fotoRecibo = jpgRecibo == null ? null : pw.MemoryImage(jpgRecibo);
+    final fotoMascota = jpgMascota == null ? null : pw.MemoryImage(jpgMascota);
+
+    final estadoCorreoTexto =
+        datos.estadoCorreo.toLowerCase() == 'confirmado'
+            ? 'Correo confirmado ✓'
+            : 'Correo pendiente de confirmación ⏳';
+
+    final estadoProcesoTexto = switch (datos.estadoProceso.toLowerCase()) {
+      'aprobada' => 'Aprobada',
+      'rechazada' => 'Rechazada',
+      'cancelada' => 'Cancelada',
+      _ => 'Pendiente de revisión',
+    };
 
     pw.Widget anexo(String titulo, pw.MemoryImage? imagen) {
       const anchoMax = 480.0;
@@ -217,7 +237,17 @@ class AcuerdoAdopcionPdfService {
           alto = altoMax;
           ancho = alto * relacion;
         }
-        foto = pw.Image(imagen, width: ancho, height: alto);
+        foto = pw.Container(
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: grisBorde, width: 1),
+            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+          ),
+          child: pw.ClipRRect(
+            horizontalRadius: 8,
+            verticalRadius: 8,
+            child: pw.Image(imagen, width: ancho, height: alto),
+          ),
+        );
       }
 
       return pw.SizedBox(
@@ -397,11 +427,57 @@ class AcuerdoAdopcionPdfService {
               borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
             ),
             child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
+                pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    if (fotoMascota != null) ...[
+                      pw.Container(
+                        width: 52,
+                        height: 52,
+                        decoration: pw.BoxDecoration(
+                          color: PdfColors.white,
+                          shape: pw.BoxShape.circle,
+                          border: pw.Border.all(color: verdeClaroBorde, width: 1.5),
+                        ),
+                        child: pw.ClipOval(
+                          child: pw.Image(fotoMascota, fit: pw.BoxFit.cover),
+                        ),
+                      ),
+                      pw.SizedBox(width: 12),
+                    ],
+                    pw.Expanded(
+                      child: pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.start,
+                        children: [
+                          pw.Text(
+                            'Mascota en adopción: ${datos.nombreMascota}',
+                            style: pw.TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: pw.FontWeight.bold,
+                              color: verdePrincipal,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            '${datos.especieMascota} · $razaTexto · $sexoTexto · ${datos.edadMascota}',
+                            style: pw.TextStyle(fontSize: 9.5, color: grisOscuro),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 8),
+                pw.Container(height: 0.5, color: grisBorde),
+                pw.SizedBox(height: 6),
+
                 _filaDato('Nombre de la Fundación:', FundacionInfo.nombre),
                 _filaDato('Nombre del adoptante:', datos.nombreUsuario),
                 _filaDato('Número de identificación:', documento),
                 _filaDato('Correo del adoptante:', datos.correoUsuario),
+                _filaDato('Confirmación del correo:', estadoCorreoTexto),
                 if (datos.telefonoUsuario != null &&
                     datos.telefonoUsuario!.trim().isNotEmpty)
                   _filaDato('Teléfono de contacto:', datos.telefonoUsuario!.trim()),
@@ -415,11 +491,8 @@ class AcuerdoAdopcionPdfService {
                   'Adopción previa con la Fundación:',
                   datos.experienciaPrevia ? 'Sí' : 'No',
                 ),
-                _filaDato(
-                  'Mascota adoptada:',
-                  '${datos.nombreMascota} (${datos.especieMascota} - $razaTexto - $sexoTexto - ${datos.edadMascota})',
-                ),
-                _filaDato('Fecha de aceptación:', fechaFormateada),
+                _filaDato('Fecha de solicitud:', fechaFormateada),
+                _filaDato('Estado de la solicitud:', estadoProcesoTexto),
                 _filaDato(
                   'Aceptación de términos:',
                   'SÍ. El adoptante aceptó de forma expresa los términos y condiciones de adopción responsable.',

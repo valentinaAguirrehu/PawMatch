@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
@@ -102,7 +103,6 @@ class _SolicitudApadrinamientoDialogState
 
   bool _aceptoAcuerdo = false;
   bool _enviando = false;
-  bool _correoPerfilConfirmado = true;
   bool _actualizandoCorreo = false;
 
   @override
@@ -354,18 +354,6 @@ class _SolicitudApadrinamientoDialogState
       return;
     }
 
-    if (!_correoPerfilConfirmado) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.orange,
-          content: Text(
-            'Por favor confirma tu correo electrónico en la sección inferior.',
-          ),
-        ),
-      );
-      return;
-    }
-
     await _ejecutarEnvioFinal(correoFinal);
   }
 
@@ -457,11 +445,10 @@ class _SolicitudApadrinamientoDialogState
                         if (!mounted) return;
                         setState(() {
                           _correoCtrl.text = nuevo;
-                          _correoPerfilConfirmado = true;
                           _actualizandoCorreo = false;
                         });
                         if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               backgroundColor: Colors.green,
@@ -473,7 +460,7 @@ class _SolicitudApadrinamientoDialogState
                         if (ctx.mounted) setModalState(() => _actualizandoCorreo = false);
                         if (mounted) setState(() => _actualizandoCorreo = false);
                         final msg = e.toString().replaceFirst('Exception: ', '');
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(backgroundColor: Colors.redAccent, content: Text(msg)),
                           );
@@ -552,7 +539,17 @@ class _SolicitudApadrinamientoDialogState
         } catch (_) {}
       }
 
-      // 2. Generar el PDF oficial del Acuerdo breve con datos reales
+      // Obtener imagen de la mascota si está disponible
+      Uint8List? petFotoBytes;
+      try {
+        if (widget.pet.foto != null && widget.pet.foto!.trim().isNotEmpty) {
+          final url = urlFoto(widget.pet.foto!);
+          final resImg = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+          if (resImg.statusCode == 200) petFotoBytes = resImg.bodyBytes;
+        }
+      } catch (_) {}
+
+      // 2. Generar el PDF oficial del Acuerdo breve con datos reales y fotos integradas
       final datosAcuerdo = DatosAcuerdoApadrinamiento(
         idSolicitud: idRadicado,
         nombreUsuario: nombreCompletoUsuario,
@@ -571,6 +568,10 @@ class _SolicitudApadrinamientoDialogState
         frecuenciaAporte: frecuenciaFinal,
         motivacion: motivacion,
         fechaAceptacion: fechaAhora,
+        fotoCedula: _docBytes,
+        fotoMascota: petFotoBytes,
+        estadoProceso: 'pendiente',
+        estadoCorreo: 'pendiente',
       );
 
       final pdfBytes = await AcuerdoApadrinamientoPdfService.generarPdfBytes(datosAcuerdo);
@@ -586,7 +587,7 @@ class _SolicitudApadrinamientoDialogState
 
       widget.onEnviadaExitosamente?.call();
 
-      // 4. Diálogo de confirmación con opción de volver a descargar
+      // 4. Diálogo de confirmación con indicación del correo de verificación
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -597,7 +598,7 @@ class _SolicitudApadrinamientoDialogState
             size: 56,
           ),
           title: const Text(
-            '¡Solicitud Enviada y Acuerdo Descargado!',
+            '¡Solicitud y Correo de Verificación Enviados!',
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
@@ -626,11 +627,11 @@ class _SolicitudApadrinamientoDialogState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Acuerdo en PDF generado',
+                            'Acuerdo en PDF descargado',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
                           ),
                           Text(
-                            'Se descargó el comprobante con tu constancia de aceptación electrónica.',
+                            'Incluye tus datos, los de ${widget.pet.nombre}, tu aporte y la fotografía de tu documento.',
                             style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                           ),
                         ],
@@ -639,22 +640,37 @@ class _SolicitudApadrinamientoDialogState
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue.shade200),
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.mail_outline, color: Colors.blue.shade700, size: 20),
+                    Icon(Icons.mark_email_unread_outlined, color: Colors.amber.shade900, size: 22),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'Notificación: Te llegará un correo a $correoConfirmado cuando la fundación apruebe o rechace tu solicitud.',
-                        style: TextStyle(fontSize: 11.5, color: Colors.blue.shade900),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Verifica tu correo electrónico',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Enviamos un enlace de verificación a $correoConfirmado. Haz clic en el enlace para actualizar tu estado a «Correo confirmado».',
+                            style: TextStyle(fontSize: 11.5, height: 1.35, color: Colors.grey.shade900),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -2284,7 +2300,7 @@ class _SolicitudApadrinamientoDialogState
     ];
   }
 
-  /// Tarjeta que muestra el correo actual del perfil con opción de confirmarlo o editarlo en la BD
+  /// Tarjeta que muestra el correo actual del perfil con información de verificación
   Widget _tarjetaConfirmacionCorreoPerfil(TextTheme t) {
     final correoPerfil = _correoCtrl.text.trim().isNotEmpty
         ? _correoCtrl.text.trim()
@@ -2296,12 +2312,12 @@ class _SolicitudApadrinamientoDialogState
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _correoPerfilConfirmado ? Colors.green.shade400 : AppColors.rosa,
-          width: 1.8,
+          color: AppColors.bordeRosa,
+          width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (_correoPerfilConfirmado ? Colors.green : AppColors.rosa).withValues(alpha: 0.1),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -2314,13 +2330,13 @@ class _SolicitudApadrinamientoDialogState
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: _correoPerfilConfirmado ? Colors.green.shade50 : AppColors.rosaSuave,
+                decoration: const BoxDecoration(
+                  color: AppColors.rosaSuave,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  _correoPerfilConfirmado ? Icons.mark_email_read_rounded : Icons.mail_outline_rounded,
-                  color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
+                child: const Icon(
+                  Icons.mail_outline_rounded,
+                  color: AppColors.rosa,
                   size: 24,
                 ),
               ),
@@ -2330,22 +2346,17 @@ class _SolicitudApadrinamientoDialogState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Correo electrónico de tu perfil',
+                      'Correo electrónico para notificaciones',
                       style: t.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     Text(
-                      'Confirmación requerida para notificación',
+                      'Recibirás el correo de verificación y el estado de tu solicitud',
                       style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
                     ),
                   ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Este es el correo electrónico de tu perfil. Por favor confirmar ya que recibirás una notificación con tu solicitud:',
-            style: TextStyle(fontSize: 13, height: 1.38, color: Colors.black87),
           ),
           const SizedBox(height: 12),
           Container(
@@ -2366,70 +2377,54 @@ class _SolicitudApadrinamientoDialogState
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (_correoPerfilConfirmado)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle, size: 14, color: Colors.green.shade800),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Confirmado',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800),
-                        ),
-                      ],
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.hourglass_top_rounded,
+                        size: 13,
+                        color: Colors.amber.shade900,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Verificación al enviar',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey.shade800,
-                    side: BorderSide(color: Colors.grey.shade400),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
-                  label: const Text('No es / Cambiar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                  onPressed: _dialogoEditarCorreoPerfil,
-                ),
+          const SizedBox(height: 10),
+          const Text(
+            'Al enviar la solicitud, el sistema te enviará automáticamente un correo electrónico con un enlace para confirmar tu dirección.',
+            style: TextStyle(fontSize: 12, height: 1.35, color: Color(0xFF4B5563)),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.grey.shade800,
+                side: BorderSide(color: Colors.grey.shade400),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 10),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _correoPerfilConfirmado ? Colors.green.shade600 : AppColors.rosa,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  icon: const Icon(Icons.check, size: 17),
-                  label: Text(
-                    _correoPerfilConfirmado ? '✓ Correo Confirmado' : 'Sí, confirmar correo',
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                  ),
-                  onPressed: () {
-                    setState(() => _correoPerfilConfirmado = true);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 2),
-                        content: Text('Correo $correoPerfil confirmado para recibir la notificación.'),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+              icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
+              label: const Text('No es / Cambiar correo', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+              onPressed: _dialogoEditarCorreoPerfil,
+            ),
           ),
         ],
       ),
