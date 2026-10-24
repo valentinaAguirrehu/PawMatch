@@ -475,38 +475,6 @@ class _PetScreenState extends State<PetScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.rosaSuave,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.bordeRosa,
-                    width: 1.0,
-                  ),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.pets_rounded,
-                      size: 14,
-                      color: AppColors.rosa,
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      'HISTORIAS CON FINAL FELIZ',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: AppColors.rosa,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
               const Text(
                 'Detrás de cada mirada hay una historia que merece un final feliz. En este espacio encontrarás perritos rescatados que esperan la oportunidad de conocer el amor de una familia y comenzar una nueva etapa llena de cariño, seguridad y felicidad.',
                 textAlign: TextAlign.center,
