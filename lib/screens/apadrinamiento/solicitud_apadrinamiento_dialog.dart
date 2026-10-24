@@ -460,20 +460,24 @@ class _SolicitudApadrinamientoDialogState
                           _correoPerfilConfirmado = true;
                           _actualizandoCorreo = false;
                         });
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            backgroundColor: Colors.green,
-                            content: Text('¡Correo actualizado en tu perfil y base de datos con éxito!'),
-                          ),
-                        );
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              backgroundColor: Colors.green,
+                              content: Text('¡Correo actualizado en tu perfil y base de datos con éxito!'),
+                            ),
+                          );
+                        }
                       } catch (e) {
-                        setModalState(() => _actualizandoCorreo = false);
-                        setState(() => _actualizandoCorreo = false);
+                        if (ctx.mounted) setModalState(() => _actualizandoCorreo = false);
+                        if (mounted) setState(() => _actualizandoCorreo = false);
                         final msg = e.toString().replaceFirst('Exception: ', '');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(backgroundColor: Colors.redAccent, content: Text(msg)),
-                        );
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(backgroundColor: Colors.redAccent, content: Text(msg)),
+                          );
+                        }
                       }
                     },
               child: _actualizandoCorreo
@@ -1633,25 +1637,22 @@ class _SolicitudApadrinamientoDialogState
   /// Campos dinámicos para Otro tipo de ayuda, consultando el estado de salud de la mascota
   Widget _camposOtroTipoAyuda(TextTheme t) {
     final pet = _mascotaActual;
-    final tieneNecesidad = pet.tieneNecesidadSalud;
+    final necesidades = pet.necesidadesPendientes;
+    final procedimientos = pet.procedimientosRealizados;
+    final sinPendientes = pet.noTieneNecesidadesPendientes || necesidades.isEmpty;
+    final tieneNecesidad = !sinPendientes;
 
-    // Ejemplos de ayuda médica solicitados: vacunas, esterilización, desparasitación, exámenes médicos, medicamentos, consultas veterinarias o tratamientos necesarios.
-    final List<String> sugerenciasMedicas = [
+    // Ejemplos orientativos solicitados: vacunas, esterilización, desparasitación, exámenes médicos, medicamentos, consultas veterinarias o tratamientos.
+    final List<String> ejemplosOrientativos = [
       'Vacunación',
       'Esterilización',
       'Desparasitación',
       'Exámenes médicos',
       'Medicamentos',
       'Consultas veterinarias',
-      'Tratamientos necesarios',
-    ];
-
-    final List<String> sugerenciasSaludable = [
+      'Tratamientos veterinarios',
       'Paseos y recreación',
-      'Difusión en redes sociales',
-      'Fotografía para adopción',
-      'Voluntariado en eventos',
-      'Transporte y acompañamiento',
+      'Difusión en redes',
     ];
 
     return Column(
@@ -1702,7 +1703,7 @@ class _SolicitudApadrinamientoDialogState
                         Row(
                           children: [
                             Text(
-                              'Estado de salud de ${pet.nombre}:',
+                              'Salud de ${pet.nombre}:',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -1726,9 +1727,9 @@ class _SolicitudApadrinamientoDialogState
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            pet.estadoSaludTexto,
+                            tieneNecesidad ? 'Tiene necesidades registradas' : 'Saludable / Al día',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontWeight: FontWeight.w800,
                               color: tieneNecesidad ? const Color(0xFF7C2D12) : const Color(0xFF14532D),
                             ),
@@ -1740,139 +1741,258 @@ class _SolicitudApadrinamientoDialogState
                 ],
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-              // Descripción de necesidades o mensaje de mascota saludable
-              if (tieneNecesidad) ...[
-                if (pet.detalleSalud != null && pet.detalleSalud!.trim().isNotEmpty) ...[
-                  const Text(
-                    'Descripción de las necesidades a atender:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF9A3412),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFED7AA)),
-                    ),
-                    child: Text(
-                      pet.detalleSalud!.trim(),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF431407),
-                        height: 1.35,
+              // 1. Necesidades veterinarias pendientes confirmadas
+              if (necesidades.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.error_outline, size: 16, color: Color(0xFFEA580C)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Necesidades veterinarias registradas (Posibles formas de ayuda):',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9A3412),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                ] else ...[
-                  Text(
-                    '${pet.nombre} tiene necesidades veterinarias activas para su recuperación y bienestar.',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF7C2D12),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-
-                const Text(
-                  '💡 Ejemplos de cómo podrías ayudar:',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF7C2D12),
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: sugerenciasMedicas.map((ejemplo) {
+                  children: necesidades.map((necesidad) {
                     return ActionChip(
-                      avatar: const Icon(Icons.add_circle_outline, size: 14, color: Color(0xFFEA580C)),
+                      avatar: const Icon(Icons.add_circle, size: 15, color: Color(0xFFEA580C)),
                       label: Text(
-                        ejemplo,
+                        necesidad,
                         style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
                           color: Color(0xFF7C2D12),
                         ),
                       ),
                       backgroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFFFDBA74)),
+                      side: const BorderSide(color: Color(0xFFFDBA74), width: 1.2),
                       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      tooltip: 'Toca para agregar a tu propuesta de aporte',
                       onPressed: () {
                         final actual = _otroAporteCtrl.text.trim();
-                        final prefijo = 'Apoyo para $ejemplo';
+                        final sugerencia = 'Apoyo para $necesidad';
                         if (actual.isEmpty) {
-                          _otroAporteCtrl.text = '$prefijo para ${pet.nombre}. ';
-                        } else if (!actual.contains(ejemplo)) {
-                          _otroAporteCtrl.text = '$actual, $ejemplo';
+                          _otroAporteCtrl.text = '$sugerencia para ${pet.nombre}. ';
+                        } else if (!actual.contains(necesidad)) {
+                          _otroAporteCtrl.text = '$actual, $necesidad';
                         }
                       },
                     );
                   }).toList(),
                 ),
+                const SizedBox(height: 10),
               ] else ...[
-                // Mascota saludable y sin necesidades pendientes
-                Text(
-                  '¡Buenas noticias! ${pet.nombre} se encuentra saludable y no tiene necesidades médicas ni veterinarias pendientes en este momento.',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF166534),
-                    height: 1.35,
+                // Mensaje requerido cuando no hay necesidades veterinarias pendientes
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF86EFAC)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline, color: Color(0xFF16A34A), size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Actualmente no hay necesidades médicas específicas registradas.',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF166534),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Text(
-                  '💡 Ejemplos de cómo podrías ayudar a su bienestar:',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF166534),
-                  ),
+              ],
+
+              // 2. Procedimientos y vacunas ya completados
+              if (procedimientos.isNotEmpty) ...[
+                Row(
+                  children: [
+                    const Icon(Icons.verified, size: 16, color: Color(0xFF16A34A)),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Vacunas y procedimientos ya realizados:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: sugerenciasSaludable.map((ejemplo) {
-                    return ActionChip(
-                      avatar: const Icon(Icons.favorite_border_rounded, size: 14, color: Color(0xFF16A34A)),
-                      label: Text(
-                        ejemplo,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF166534),
-                        ),
+                  children: procedimientos.map((proc) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
                       ),
-                      backgroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0xFF86EFAC)),
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      onPressed: () {
-                        final actual = _otroAporteCtrl.text.trim();
-                        final prefijo = 'Apoyo en $ejemplo';
-                        if (actual.isEmpty) {
-                          _otroAporteCtrl.text = '$prefijo con ${pet.nombre}. ';
-                        } else if (!actual.contains(ejemplo)) {
-                          _otroAporteCtrl.text = '$actual, $ejemplo';
-                        }
-                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check, size: 14, color: Color(0xFF16A34A)),
+                          const SizedBox(width: 4),
+                          Text(
+                            proc,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF14532D),
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   }).toList(),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  'Procedimientos atendidos por la fundación; no figuran como pendientes.',
+                  style: TextStyle(fontSize: 10.5, color: Colors.green.shade800, fontStyle: FontStyle.italic),
+                ),
+                const SizedBox(height: 10),
               ],
+
+              // 3. Recomendaciones y observaciones veterinarias
+              if (pet.detalleSalud != null && pet.detalleSalud!.trim().isNotEmpty) ...[
+                const Text(
+                  'Recomendaciones y observaciones veterinarias:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF9A3412),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFED7AA)),
+                  ),
+                  child: Text(
+                    pet.detalleSalud!.trim(),
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: Color(0xFF431407),
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
+
+              // 4. Ejemplos orientativos de ayudas veterinarias (claramente diferenciados)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.lightbulb_outline, size: 16, color: AppColors.rosa),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'Ejemplos orientativos de ayudas veterinarias:',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.texto,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Ideas de apoyo general. No representan necesidades confirmadas de ${pet.nombre} a menos que aparezcan listadas arriba.',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: Colors.grey.shade600,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: ejemplosOrientativos.map((ejemplo) {
+                        return InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () {
+                            final actual = _otroAporteCtrl.text.trim();
+                            final prefijo = 'Apoyo en $ejemplo';
+                            if (actual.isEmpty) {
+                              _otroAporteCtrl.text = '$prefijo para ${pet.nombre}. ';
+                            } else if (!actual.contains(ejemplo)) {
+                              _otroAporteCtrl.text = '$actual, $ejemplo';
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.rosaSuave,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppColors.bordeRosa),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.add, size: 12, color: AppColors.rosa),
+                                const SizedBox(width: 4),
+                                Text(
+                                  ejemplo,
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.rosa,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

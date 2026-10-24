@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Mascota tal como viene de la tabla `mascota`.
 class Pet {
   final String id;
@@ -14,8 +16,9 @@ class Pet {
   final String? foto;
   final String estadoAdopcion;
   final String estadoApadrinamiento;
-  final String estadoSalud;
+  final List<String> estadosSalud;
   final String? detalleSalud;
+  final String? fechaActualizacion;
 
   /// Usuario con la solicitud de adopción aprobada. Vacío si nadie la adoptó.
   final String? idAdoptante;
@@ -38,11 +41,15 @@ class Pet {
     this.foto,
     this.estadoAdopcion = 'disponible',
     this.estadoApadrinamiento = 'disponible',
-    this.estadoSalud = 'Saludable.',
+    this.estadosSalud = const ['No presenta necesidades veterinarias pendientes.'],
     this.detalleSalud,
+    this.fechaActualizacion,
     this.idAdoptante,
     this.personalidad = const {},
   });
+
+  String get estadoSalud =>
+      estadosSalud.isNotEmpty ? estadosSalud.join(' • ') : 'No presenta necesidades veterinarias pendientes.';
 
   factory Pet.fromJson(Map<String, dynamic> j) => Pet(
     id: j['id_mascota'] as String,
@@ -60,10 +67,9 @@ class Pet {
     estadoAdopcion: (j['estado_adopcion'] ?? 'disponible') as String,
     estadoApadrinamiento:
         (j['estado_apadrinamiento'] ?? 'disponible') as String,
-    estadoSalud: (j['estado_salud'] as String?)?.trim().isNotEmpty == true
-        ? (j['estado_salud'] as String).trim()
-        : 'Saludable.',
+    estadosSalud: _parseEstadosSalud(j['estado_salud'], j['vacunas'], j['esterilizado']),
     detalleSalud: j['detalle_salud'] as String?,
+    fechaActualizacion: j['fecha_actualizacion'] as String?,
     idAdoptante: _id(j['id_usuario_adoptante']),
 
     // Si el backend devuelve personalidad, la cargamos.
@@ -82,12 +88,12 @@ class Pet {
     'sexo': sexo,
     'tamano': tamano,
     'descripcion': descripcion,
-    'esterilizado': esterilizado,
-    'vacunas': vacunas,
+    'esterilizado': esterilizado || estadosSalud.contains('Esterilización realizada.'),
+    'vacunas': vacunas || estadosSalud.contains('Vacunación al día.'),
     'fotos': foto,
     'estado_adopcion': estadoAdopcion,
     'estado_apadrinamiento': estadoApadrinamiento,
-    'estado_salud': estadoSalud,
+    'estado_salud': estadosSalud,
     'detalle_salud': detalleSalud,
     'personalidad': personalidad,
   };
@@ -132,27 +138,130 @@ class Pet {
     return '¡Ya es parte de una familia! 💖';
   }
 
-  /// Retorna si la mascota tiene alguna necesidad médica o de salud que atender.
-  bool get tieneNecesidadSalud {
-    final s = estadoSalud.trim().toLowerCase();
-    final esSaludable = s == 'saludable.' || s == 'saludable' || s.isEmpty;
-    if (!esSaludable) return true;
-    return detalleSalud != null && detalleSalud!.trim().isNotEmpty;
+  /// Lista de necesidades veterinarias pendientes registradas para esta mascota
+  List<String> get necesidadesPendientes {
+    return estadosSalud
+        .where((e) => opcionesNecesidadesPendientes.contains(e))
+        .toList();
   }
 
-  String get estadoSaludTexto => estadoSalud.trim().isEmpty ? 'Saludable.' : estadoSalud.trim();
+  /// Lista de vacunas y procedimientos ya realizados
+  List<String> get procedimientosRealizados {
+    final list = estadosSalud
+        .where((e) => opcionesProcedimientosRealizados.contains(e))
+        .toList();
+    if (vacunas && !list.contains('Vacunación al día.')) {
+      list.add('Vacunación al día.');
+    }
+    if (esterilizado && !list.contains('Esterilización realizada.')) {
+      list.add('Esterilización realizada.');
+    }
+    return list;
+  }
+
+  /// Indica si no presenta necesidades médicas o veterinarias pendientes
+  bool get noTieneNecesidadesPendientes {
+    if (estadosSalud.contains(opcionSinNecesidades)) return true;
+    return necesidadesPendientes.isEmpty;
+  }
+
+  /// Retorna si la mascota tiene alguna necesidad médica o de salud que atender
+  bool get tieneNecesidadSalud {
+    return necesidadesPendientes.isNotEmpty ||
+        (detalleSalud != null && detalleSalud!.trim().isNotEmpty);
+  }
+
+  String get estadoSaludTexto {
+    if (estadosSalud.isEmpty) return opcionSinNecesidades;
+    return estadosSalud.join(' • ');
+  }
 }
 
-/// Opciones oficiales para el estado de salud de la mascota
+/// Las 10 opciones oficiales para el estado de salud de la mascota
 const List<String> opcionesEstadoSalud = [
-  'Saludable.',
-  'En tratamiento veterinario.',
+  'Requiere vacunación.',
+  'Vacunación al día.',
+  'Requiere esterilización.',
+  'Esterilización realizada.',
+  'Requiere desparasitación.',
+  'Requiere exámenes médicos.',
+  'Necesita medicamentos.',
+  'Se encuentra en tratamiento veterinario.',
+  'Requiere cuidados especiales.',
+  'No presenta necesidades veterinarias pendientes.',
+];
+
+const List<String> opcionesNecesidadesPendientes = [
   'Requiere vacunación.',
   'Requiere esterilización.',
   'Requiere desparasitación.',
-  'Necesita exámenes médicos.',
-  'Requiere medicamentos o cuidados especiales.',
+  'Requiere exámenes médicos.',
+  'Necesita medicamentos.',
+  'Se encuentra en tratamiento veterinario.',
+  'Requiere cuidados especiales.',
 ];
+
+const List<String> opcionesProcedimientosRealizados = [
+  'Vacunación al día.',
+  'Esterilización realizada.',
+];
+
+const String opcionSinNecesidades = 'No presenta necesidades veterinarias pendientes.';
+
+List<String> _parseEstadosSalud(dynamic raw, dynamic vacunas, dynamic esterilizado) {
+  final result = <String>[];
+  if (raw != null) {
+    if (raw is List) {
+      for (final item in raw) {
+        final s = item?.toString().trim() ?? '';
+        if (s.isNotEmpty) result.add(s);
+      }
+    } else {
+      final s = raw.toString().trim();
+      if (s.startsWith('[') && s.endsWith(']')) {
+        try {
+          final decoded = jsonDecode(s);
+          if (decoded is List) {
+            for (final item in decoded) {
+              final str = item?.toString().trim() ?? '';
+              if (str.isNotEmpty) result.add(str);
+            }
+          }
+        } catch (_) {}
+      } else if (s.isNotEmpty) {
+        if (s.toLowerCase().startsWith('saludable')) {
+          result.add(opcionSinNecesidades);
+        } else if (s.contains('•')) {
+          for (final parte in s.split('•')) {
+            final str = parte.trim();
+            if (str.isNotEmpty) result.add(str);
+          }
+        } else if (s.contains(',')) {
+          for (final parte in s.split(',')) {
+            final str = parte.trim();
+            if (str.isNotEmpty) result.add(str);
+          }
+        } else {
+          result.add(s);
+        }
+      }
+    }
+  }
+
+  // Compatibilidad con registros antiguos que tenían vacunas o esterilizado como booleanos
+  if (vacunas == true && !result.contains('Vacunación al día.') && !result.contains('Requiere vacunación.')) {
+    result.add('Vacunación al día.');
+  }
+  if (esterilizado == true && !result.contains('Esterilización realizada.') && !result.contains('Requiere esterilización.')) {
+    result.add('Esterilización realizada.');
+  }
+
+  if (result.isEmpty) {
+    result.add(opcionSinNecesidades);
+  }
+
+  return result;
+}
 
 String? _id(dynamic value) {
   final texto = value?.toString().trim() ?? '';
