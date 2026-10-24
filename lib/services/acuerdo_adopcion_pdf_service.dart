@@ -200,42 +200,42 @@ class AcuerdoAdopcionPdfService {
     final fotoRecibo = jpgRecibo == null ? null : pw.MemoryImage(jpgRecibo);
 
     pw.Widget anexo(String titulo, pw.MemoryImage? imagen) {
-      return pw.Padding(
-        padding: const pw.EdgeInsets.only(bottom: 12),
+      const anchoMax = 480.0;
+      const altoMax = 640.0;
+      pw.Widget foto;
+      if (imagen == null || imagen.width == null || imagen.height == null) {
+        foto = pw.Text(
+          'No se adjuntó este documento.',
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(color: grisMedio, fontSize: 12),
+        );
+      } else {
+        final relacion = imagen.width! / imagen.height!;
+        var ancho = anchoMax;
+        var alto = ancho / relacion;
+        if (alto > altoMax) {
+          alto = altoMax;
+          ancho = alto * relacion;
+        }
+        foto = pw.Image(imagen, width: ancho, height: alto);
+      }
+
+      return pw.SizedBox(
+        width: anchoMax,
         child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
             pw.Text(
               titulo,
+              textAlign: pw.TextAlign.center,
               style: pw.TextStyle(
                 color: grisOscuro,
-                fontSize: 11,
+                fontSize: 16,
                 fontWeight: pw.FontWeight.bold,
               ),
             ),
-            pw.SizedBox(height: 4),
-            if (imagen == null)
-              pw.Text(
-                'No se adjuntó este documento.',
-                style: pw.TextStyle(color: grisMedio, fontSize: 10),
-              )
-            else
-              pw.Container(
-                width: 478,
-                height: 470,
-                padding: const pw.EdgeInsets.all(8),
-                alignment: pw.Alignment.center,
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: grisBorde, width: 0.8),
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-                ),
-                child: pw.Image(
-                  imagen,
-                  fit: pw.BoxFit.contain,
-                  width: 462,
-                  height: 454,
-                ),
-              ),
+            pw.SizedBox(height: 12),
+            foto,
           ],
         ),
       );
@@ -641,32 +641,15 @@ class AcuerdoAdopcionPdfService {
             style: pw.TextStyle(color: grisMedio, fontSize: 10),
           ),
           pw.SizedBox(height: 8),
+          pw.NewPage(),
           anexo('Cédula de ciudadanía', fotoCedula),
+          pw.NewPage(),
           anexo('Recibo de servicio público', fotoRecibo),
         ],
       ),
     );
 
     return pdf.save();
-  }
-
-  /// Convierte la foto subida a JPG para poder incrustarla en el PDF.
-  static pw.MemoryImage? _prepararFoto(Uint8List? bytes) {
-    if (bytes == null || bytes.isEmpty) return null;
-    try {
-      final decodificada = img.decodeImage(bytes);
-      if (decodificada == null) return null;
-      var foto = decodificada;
-      const maxLado = 1600;
-      if (foto.width > maxLado || foto.height > maxLado) {
-        foto = foto.width >= foto.height
-            ? img.copyResize(foto, width: maxLado)
-            : img.copyResize(foto, height: maxLado);
-      }
-      return pw.MemoryImage(img.encodeJpg(foto, quality: 74));
-    } catch (_) {
-      return null;
-    }
   }
 
   static pw.Widget _filaDato(String etiqueta, String valor) {

@@ -218,7 +218,9 @@ class AdoptionService {
       _archivo('$_url/$id/utility-bill');
 
   static Future<Uint8List> _archivo(String url) async {
-    final res = await http.get(Uri.parse(url), headers: _headers);
+    final res = await http
+        .get(Uri.parse(url), headers: _headers)
+        .timeout(const Duration(seconds: 25));
     if (res.statusCode != 200) {
       throw Exception(_mensaje(res, 'No se pudo abrir el documento'));
     }
