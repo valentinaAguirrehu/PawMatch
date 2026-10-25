@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/models/pet.dart';
@@ -12,10 +13,13 @@ import 'package:paw_match/screens/admin/pets_form_screen.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/adoption/pasos_adopcion_screen.dart';
 import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
+import 'package:http/http.dart' as http;
+import 'package:paw_match/screens/apadrinamiento/pasos_apadrinamiento_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
+import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
@@ -78,6 +82,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     try {
       final fecha = DateTime.tryParse(solicitud.requestedAt.replaceFirst(' ', 'T')) ??
           DateTime.now();
+      Uint8List? fotoMascota;
+      if (_pet.foto != null && _pet.foto!.isNotEmpty) {
+        try {
+          final res = await http.get(Uri.parse(urlFoto(_pet.foto!)));
+          if (res.statusCode == 200) fotoMascota = res.bodyBytes;
+        } catch (_) {}
+      }
       final fotos = await Future.wait([
         _traerFoto(AdoptionService.fetchIdCard(solicitud.id)),
         _traerFoto(AdoptionService.fetchUtilityBill(solicitud.id)),
@@ -117,6 +128,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           aceptoTerminos: true,
           fotoCedula: cedula,
           fotoRecibo: recibo,
+          fotoMascota: fotoMascota,
+          estadoProceso: solicitud.status,
+          estadoCorreo: solicitud.emailStatus,
         ),
       );
       await AcuerdoAdopcionPdfService.descargarYGuardarPdf(
@@ -124,13 +138,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         nombreMascota: _pet.nombre,
       );
       if (!mounted) return;
-      final fotosOk = cedula != null && recibo != null;
+      final fotosOk = cedula != null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             fotosOk
-                ? 'Descargando el acta con la cédula y el recibo...'
-                : 'Acta descargada. No se pudo anexar la cédula o el recibo.',
+                ? 'Descargando el acta con la fotografía de la cédula...'
+                : 'Acta de adopción descargada exitosamente.',
           ),
         ),
       );
@@ -142,6 +156,66 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             'No se pudo descargar el acta: ${e.toString().replaceFirst('Exception: ', '')}',
           ),
         ),
+      );
+    } finally {
+      if (mounted) setState(() => _descargandoActa = false);
+    }
+  }
+
+  Future<void> _descargarActaApadrinamiento(SolicitudApadrinamiento solicitud) async {
+    if (_descargandoActa) return;
+    setState(() => _descargandoActa = true);
+    try {
+      Uint8List? cedula;
+      if (solicitud.archivoCedula != null && solicitud.archivoCedula!.isNotEmpty) {
+        try {
+          cedula = await ApadrinamientoService.obtenerBytesDocumento(solicitud.archivoCedula!);
+        } catch (_) {}
+      }
+      Uint8List? fotoMascota;
+      if (_pet.foto != null && _pet.foto!.isNotEmpty) {
+        try {
+          final res = await http.get(Uri.parse(urlFoto(_pet.foto!)));
+          if (res.statusCode == 200) fotoMascota = res.bodyBytes;
+        } catch (_) {}
+      }
+      final bytes = await AcuerdoApadrinamientoPdfService.generarPdfBytes(
+        DatosActaApadrinamiento(
+          idSolicitud: solicitud.id,
+          nombreUsuario: solicitud.nombreCompleto,
+          documentoUsuario: solicitud.documentoIdentidad,
+          correoUsuario: solicitud.correo,
+          telefonoUsuario: solicitud.telefono,
+          nombreMascota: _pet.nombre,
+          especieMascota: _pet.especie,
+          razaMascota: _pet.raza,
+          edadMascota: _pet.edadTexto,
+          sexoMascota: _pet.sexo,
+          tipoAporte: solicitud.tipoAporte,
+          valorMensual: solicitud.montoAporte,
+          frecuenciaAporte: solicitud.frecuenciaAporte,
+          descripcionAporte: solicitud.detalleAporte,
+          detalleEspecie: solicitud.detalleEspecie,
+          fechaRegistro: solicitud.fechaCreacion,
+          estadoProceso: solicitud.estado,
+          estadoCorreo: solicitud.estadoCorreo,
+          aceptoTerminos: true,
+          fotoCedula: cedula,
+          fotoMascota: fotoMascota,
+        ),
+      );
+      await AcuerdoApadrinamientoPdfService.descargarYGuardarPdf(
+        bytes: bytes,
+        nombreMascota: _pet.nombre,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Acuerdo de apadrinamiento descargado.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo descargar el acuerdo: $e')),
       );
     } finally {
       if (mounted) setState(() => _descargandoActa = false);
@@ -207,6 +281,64 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     )
                   : const Icon(Icons.download_rounded, size: 18),
               label: const Text('Descargar acta'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tarjetaActaApadrinamiento(SolicitudApadrinamiento solicitud) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.rosaSuave,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.bordeRosa),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.picture_as_pdf, color: AppColors.rosa, size: 28),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Acuerdo de apadrinamiento',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                    ),
+                    Text(
+                      'Documento oficial de tu solicitud de apadrinamiento.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.rosa,
+                side: const BorderSide(color: AppColors.rosa, width: 1.4),
+                minimumSize: const Size.fromHeight(44),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: _descargandoActa ? null : () => _descargarActaApadrinamiento(solicitud),
+              icon: _descargandoActa
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
+                    )
+                  : const Icon(Icons.download_rounded, size: 18),
+              label: const Text('Descargar acuerdo'),
             ),
           ),
         ],
@@ -386,8 +518,10 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     );
   }
 
-  void _abrirFormularioApadrinar() {
+  Future<void> _abrirFormularioApadrinar() async {
     if (_estadoAdopcion == 'adoptado') return;
+    final continuar = await PasosApadrinamientoScreen.mostrar(context, pet: _pet);
+    if (!continuar || !mounted) return;
     SolicitudApadrinamientoDialog.mostrar(
       context,
       pet: _pet,
@@ -1725,24 +1859,38 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     );
   }
 
-  void _compartirMascota() {
+  Future<void> _compartirMascota() async {
+    final nombre = _pet.nombre.trim();
+    final raza = _pet.raza?.trim() ?? '';
+    final sexo = _pet.sexo?.trim() ?? '';
     final texto =
-        '¡Conoce a ${_pet.nombre} en Paw Match! Está buscando una familia o padrino en la Fundación Maritza Arévalo 🐾';
-    Clipboard.setData(ClipboardData(text: texto));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.rosa,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text('¡Información de ${_pet.nombre} copiada al portapapeles!')),
-          ],
-        ),
-      ),
-    );
+        'Te comparto la información de la mascota $nombre. ¡Ingresa a nuestra página web Paw Match! 🐾\n\n'
+        '• Nombre: $nombre\n'
+        '• Especie: ${_pet.especie}\n'
+        '${raza.isNotEmpty ? '• Raza: $raza\n' : ''}'
+        '• Edad: ${_pet.edadTexto}\n'
+        '${sexo.isNotEmpty ? '• Sexo: $sexo\n' : ''}'
+        '• Fundación Maritza Arévalo';
+
+    final uriApp =
+        Uri.parse('whatsapp://send?text=${Uri.encodeComponent(texto)}');
+    final uriWeb =
+        Uri.parse('https://wa.me/?text=${Uri.encodeComponent(texto)}');
+
+    try {
+      if (await canLaunchUrl(uriApp)) {
+        await launchUrl(uriApp, mode: LaunchMode.externalApplication);
+        return;
+      }
+      if (await canLaunchUrl(uriWeb)) {
+        await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
+        return;
+      }
+      await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (!mounted) return;
+      await abrirEnlace(context, uriWeb.toString(), nombre: 'WhatsApp');
+    }
   }
 
   Widget _botonesAccion(Pet p) {
@@ -1957,31 +2105,41 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           onPressed: _compartirMascota,
         );
 
-        if (esEstrecho) {
+        final filaBotones = esEstrecho
+            ? Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(flex: 3, child: botonAdoptar),
+                      const SizedBox(width: 8),
+                      Expanded(flex: 3, child: botonApadrinar),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(width: double.infinity, child: botonCompartir),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(flex: 4, child: botonAdoptar),
+                  const SizedBox(width: 10),
+                  Expanded(flex: 4, child: botonApadrinar),
+                  const SizedBox(width: 10),
+                  Expanded(flex: 3, child: botonCompartir),
+                ],
+              );
+
+        if (_miSolicitud != null && !_miSolicitud!.tieneContrato) {
           return Column(
             children: [
-              Row(
-                children: [
-                  Expanded(flex: 3, child: botonAdoptar),
-                  const SizedBox(width: 8),
-                  Expanded(flex: 3, child: botonApadrinar),
-                ],
-              ),
-              const SizedBox(height: 8),
-              SizedBox(width: double.infinity, child: botonCompartir),
+              filaBotones,
+              const SizedBox(height: 12),
+              _tarjetaActaApadrinamiento(_miSolicitud!),
             ],
           );
         }
 
-        return Row(
-          children: [
-            Expanded(flex: 4, child: botonAdoptar),
-            const SizedBox(width: 10),
-            Expanded(flex: 4, child: botonApadrinar),
-            const SizedBox(width: 10),
-            Expanded(flex: 3, child: botonCompartir),
-          ],
-        );
+        return filaBotones;
       },
     );
   }

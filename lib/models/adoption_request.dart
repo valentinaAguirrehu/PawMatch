@@ -32,6 +32,10 @@ class AdoptionRequest {
   final String? contractStatus;
   final String? contractUploadedAt;
   final String? reviewerId;
+  final String emailStatus;
+  final String? emailVerifiedAt;
+  final bool acceptedRequirements;
+  final String? acceptedRequirementsAt;
 
   final String applicantFirstName;
   final String applicantLastName;
@@ -72,6 +76,10 @@ class AdoptionRequest {
     this.contractStatus,
     this.contractUploadedAt,
     this.reviewerId,
+    this.emailStatus = 'pendiente',
+    this.emailVerifiedAt,
+    this.acceptedRequirements = true,
+    this.acceptedRequirementsAt,
     this.applicantFirstName = '',
     this.applicantLastName = '',
     this.applicantEmail = '',
@@ -85,6 +93,10 @@ class AdoptionRequest {
     this.petPhoto = '',
     this.petAdoptionStatus = '',
   });
+
+  bool get isEmailConfirmed => emailStatus.toLowerCase() == 'confirmado';
+  String get emailStatusLabel =>
+      isEmailConfirmed ? 'Correo confirmado' : 'Correo pendiente de confirmación';
 
   bool get isPending => status == 'pendiente';
   bool get isApproved => status == 'aprobada';
@@ -205,6 +217,12 @@ class AdoptionRequest {
       contractStatus: _opcional(json['contrato_adopcion_estado']),
       contractUploadedAt: _opcional(json['contrato_adopcion_subido_en']),
       reviewerId: json['id_administrador_revisor']?.toString(),
+      emailStatus: json['estado_correo']?.toString() ?? 'pendiente',
+      emailVerifiedAt: json['fecha_verificacion_correo']?.toString(),
+      acceptedRequirements: json['acepto_requisitos'] == null ||
+          json['acepto_requisitos'] == true ||
+          json['acepto_requisitos'] == 'true',
+      acceptedRequirementsAt: json['fecha_aceptacion_requisitos']?.toString(),
       applicantFirstName: json['solicitante_nombres']?.toString() ?? '',
       applicantLastName: json['solicitante_apellidos']?.toString() ?? '',
       applicantEmail: json['solicitante_correo']?.toString() ?? '',

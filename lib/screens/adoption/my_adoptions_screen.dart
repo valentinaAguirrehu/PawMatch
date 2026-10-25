@@ -1,10 +1,14 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/adoption_request.dart';
+import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 /// Solicitudes de adopción del usuario, con el mismo detalle que Apadrinamiento.
@@ -27,6 +31,104 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
   Future<void> _recargar() async {
     setState(() => _future = AdoptionService.listMine());
     await _future.catchError((_) => <AdoptionRequest>[]);
+  }
+
+  String? _descargandoPdfId;
+  String? _reenviandoCorreoId;
+
+  Future<void> _reenviarVerificacion(AdoptionRequest s) async {
+    setState(() => _reenviandoCorreoId = s.id);
+    try {
+      final res = await AdoptionService.reenviarVerificacionCorreo(s.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green.shade700,
+          content: Text(res),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('No se pudo reenviar el correo: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reenviandoCorreoId = null);
+    }
+  }
+
+  Future<void> _descargarActaPdf(AdoptionRequest s) async {
+    setState(() => _descargandoPdfId = s.id);
+    try {
+      final fecha = DateTime.tryParse(s.requestedAt.replaceFirst(' ', 'T')) ?? DateTime.now();
+      Uint8List? cedula;
+      Uint8List? recibo;
+      try {
+        final fotos = await Future.wait([
+          AdoptionService.fetchIdCard(s.id).catchError((_) => Uint8List(0)),
+          AdoptionService.fetchUtilityBill(s.id).catchError((_) => Uint8List(0)),
+        ]);
+        if (fotos[0].isNotEmpty) cedula = fotos[0];
+        if (fotos[1].isNotEmpty) recibo = fotos[1];
+      } catch (_) {}
+
+      Uint8List? fotoMascota;
+      if (s.petPhoto.isNotEmpty) {
+        try {
+          final res = await http.get(Uri.parse(urlFoto(s.petPhoto)));
+          if (res.statusCode == 200) fotoMascota = res.bodyBytes;
+        } catch (_) {}
+      }
+
+      final bytes = await AcuerdoAdopcionPdfService.generarPdfBytes(
+        DatosActaAdopcion(
+          idSolicitud: s.id,
+          nombreUsuario: s.applicantFullName,
+          documentoUsuario: s.applicantIdNumber.trim().isEmpty ? null : s.applicantIdNumber.trim(),
+          correoUsuario: s.applicantEmail.trim().isNotEmpty ? s.applicantEmail.trim() : Session.correo,
+          telefonoUsuario: s.applicantPhone.trim().isEmpty ? null : s.applicantPhone.trim(),
+          direccionUsuario: s.applicantAddress.trim().isEmpty ? null : s.applicantAddress.trim(),
+          tipoVivienda: s.housingType,
+          tienePatio: s.hasYard ?? false,
+          tieneNinos: s.hasChildren ?? false,
+          tieneOtrasMascotas: s.hasOtherPets ?? false,
+          otrasMascotas: s.otherPets,
+          tiempoDisponible: s.availableTime,
+          experienciaPrevia: s.previousExperience ?? false,
+          motivacion: s.additionalInfo,
+          nombreMascota: s.petName,
+          especieMascota: s.petSpecies,
+          razaMascota: s.petBreed,
+          edadMascota: s.petAgeLabel,
+          sexoMascota: null,
+          fechaAceptacion: fecha,
+          aceptoTerminos: true,
+          fotoCedula: cedula,
+          fotoRecibo: recibo,
+          fotoMascota: fotoMascota,
+          estadoProceso: s.status,
+          estadoCorreo: s.emailStatus,
+        ),
+      );
+      await AcuerdoAdopcionPdfService.descargarYGuardarPdf(
+        bytes: bytes,
+        nombreMascota: s.petName,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Acta de adopción descargada exitosamente.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al descargar el acta: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _descargandoPdfId = null);
+    }
   }
 
   Future<void> _verContrato(AdoptionRequest solicitud) async {
@@ -197,33 +299,107 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Container(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.sizeOf(context).width - 68,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: color),
-                            ),
-                            child: Text(
-                              s.contractPending ? s.statusLabel : s.status.toUpperCase(),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
+                        // Cabecera: Estado de verificación de correo y Estado del proceso
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
+                          children: [
+                            // Badge de verificación de correo
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: s.isEmailConfirmed
+                                    ? const Color(0xFFE8F5E9)
+                                    : const Color(0xFFFFF8E1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: s.isEmailConfirmed
+                                      ? const Color(0xFF81C784)
+                                      : const Color(0xFFFFD54F),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    s.isEmailConfirmed
+                                        ? Icons.mark_email_read_rounded
+                                        : Icons.mark_email_unread_rounded,
+                                    size: 14,
+                                    color: s.isEmailConfirmed
+                                        ? const Color(0xFF2E7D32)
+                                        : const Color(0xFFF57F17),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    s.emailStatusLabel,
+                                    style: TextStyle(
+                                      color: s.isEmailConfirmed
+                                          ? const Color(0xFF2E7D32)
+                                          : const Color(0xFFF57F17),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  if (!s.isEmailConfirmed) ...[
+                                    const SizedBox(width: 6),
+                                    InkWell(
+                                      onTap: _reenviandoCorreoId == s.id
+                                          ? null
+                                          : () => _reenviarVerificacion(s),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        child: _reenviandoCorreoId == s.id
+                                            ? const SizedBox(
+                                                width: 10,
+                                                height: 10,
+                                                child: CircularProgressIndicator(strokeWidth: 1.5),
+                                              )
+                                            : const Text(
+                                                'Reenviar',
+                                                style: TextStyle(
+                                                  decoration: TextDecoration.underline,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 10.5,
+                                                  color: Color(0xFFE65100),
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
-                          ),
+
+                            // Chip estado del proceso
+                            Container(
+                              constraints: BoxConstraints(
+                                maxWidth: MediaQuery.sizeOf(context).width - 68,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: color),
+                              ),
+                              child: Text(
+                                s.contractPending ? s.statusLabel : s.status.toUpperCase(),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 10),
                         Center(
                           child: Column(
                             children: [
@@ -546,6 +722,29 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                               ],
                             ),
                           ),
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.rosa,
+                            side: const BorderSide(color: AppColors.rosa, width: 1.4),
+                            minimumSize: const Size.fromHeight(42),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: _descargandoPdfId == s.id
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
+                                )
+                              : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                          label: const Text(
+                            'Descargar acta de compromiso (PDF)',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                          onPressed: _descargandoPdfId == s.id ? null : () => _descargarActaPdf(s),
+                        ),
                       ],
                     ),
                   ),

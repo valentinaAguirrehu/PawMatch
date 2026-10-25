@@ -10,6 +10,7 @@ const adoptionRequestsRoutes = require('./routes/adoption_requests');
 const noticiasRoutes = require('./routes/noticias');
 const pool = require('./db');
 const { asegurarRolSuperAdmin } = require('./utils/roles');
+const denunciasRoutes = require('./routes/denuncias');
 
 const app = express();
 app.use(cors());
@@ -22,6 +23,7 @@ app.use('/api/fundacion', fundacionRoutes);
 app.use('/api/solicitudes-apadrinamiento', solicitudesApadrinamientoRoutes);
 app.use('/api/adoption-requests', adoptionRequestsRoutes);
 app.use('/api/noticias', noticiasRoutes);
+app.use('/api/denuncias', denunciasRoutes);
 app.use('/uploads', express.static('uploads'));
 
 app.get('/', (req, res) => res.send('API Paw Match funcionando'));

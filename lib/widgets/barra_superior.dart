@@ -57,39 +57,51 @@ class BarraSuperior extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.bordeRosa),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x0A000000),
-                      blurRadius: 8,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(iconoTitulo, size: 16, color: AppColors.rosa),
-                    const SizedBox(width: 6),
-                    Text(
-                      titulo,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1F2937),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.bordeRosa),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x0A000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(iconoTitulo, size: 16, color: AppColors.rosa),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              titulo,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF1F2937),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(width: 12),

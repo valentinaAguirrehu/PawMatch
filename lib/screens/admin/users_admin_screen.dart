@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/admin_user.dart';
-import 'package:paw_match/models/adoption_request.dart';
-import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
@@ -71,28 +69,11 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
     if (!mounted) return;
     setState(() => _cargandoRoles = true);
     try {
-      final resultados = await Future.wait([
-        AdoptionService.listForAdmin(),
-        ApadrinamientoService.listarParaAdmin(),
-      ]);
+      final roles = await ApiService.listarRolesUsuariosAdmin();
       if (!mounted) return;
-      final adopciones = resultados[0] as List<AdoptionRequest>;
-      final apadrinamientos = resultados[1] as List<SolicitudApadrinamiento>;
       setState(() {
-        _adoptantes = {
-          for (final solicitud in adopciones)
-            if (solicitud.isApproved &&
-                solicitud.hasContract &&
-                solicitud.userId.isNotEmpty)
-              solicitud.userId,
-        };
-        _apadrinantes = {
-          for (final solicitud in apadrinamientos)
-            if (solicitud.esAprobada &&
-                solicitud.tieneContrato &&
-                solicitud.idUsuario.isNotEmpty)
-              solicitud.idUsuario,
-        };
+        _adoptantes = roles.adoptantes;
+        _apadrinantes = roles.apadrinantes;
         _cargandoRoles = false;
       });
     } catch (_) {

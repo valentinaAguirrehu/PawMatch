@@ -3,6 +3,7 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
 import 'package:paw_match/screens/admin/adoption_follow_up_admin.dart';
 import 'package:paw_match/screens/admin/apadrinacion_follow_up_admin.dart';
+import 'package:paw_match/screens/admin/denuncias_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
@@ -13,6 +14,7 @@ import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/denuncias_service.dart';
 import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -21,6 +23,7 @@ import 'package:paw_match/widgets/nav_flotante.dart';
 
 /// Opciones del menú de hamburguesa del administrador (centro de la barra).
 enum _Gestion {
+  denuncias('Denuncias de maltrato', Icons.campaign_rounded),
   usuarios('Usuarios del programa', Icons.people_outline),
   administradores(
     'Administradores de la fundación',
@@ -54,8 +57,10 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   late int _index;
 
-  late GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
-  late _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
+  late final _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
+  late final List<Widget> _paginas;
+  late final ValueNotifier<int> _indice;
 
   bool _enDetalle = false;
 
@@ -67,9 +72,24 @@ class _MenuScreenState extends State<MenuScreen> {
     var indice = (pedido >= 0 && pedido <= maximo) ? pedido : 0;
     if (Session.esAdmin && indice == MenuScreen.indiceMatch) indice = 0;
     _index = indice;
+    _indice = ValueNotifier<int>(indice);
+    _paginas = [
+      HomeTab(
+        onVerMascotas: () => _irA(1),
+        onVerMatch: Session.esAdmin ? null : () => _irA(2),
+      ),
+      const PetScreen(),
+      if (Session.esAdmin)
+        const SizedBox.shrink()
+      else
+        PerfectMatchScreen(onCerrarSesion: _confirmarCerrarSesion),
+      NotificationsTab(onCerrarSesion: _confirmarCerrarSesion),
+      ProfileScreen(onCerrarSesion: _confirmarCerrarSesion),
+    ];
     ApadrinamientoService.iniciarMonitoreo();
     AdoptionService.iniciarMonitoreo();
     PetsService.iniciarMonitoreo();
+    DenunciasService.iniciarMonitoreo();
   }
 
   @override
@@ -77,6 +97,8 @@ class _MenuScreenState extends State<MenuScreen> {
     ApadrinamientoService.detenerMonitoreo();
     AdoptionService.detenerMonitoreo();
     PetsService.detenerMonitoreo();
+    DenunciasService.detenerMonitoreo();
+    _indice.dispose();
     super.dispose();
   }
 
@@ -89,13 +111,13 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
-  /// Cambia de pestaña con un navegador nuevo.
+  /// Cambia de pestaña sin destruir el navegador. Así la vista no queda en blanco.
   void _cambiarA(int i) {
+    _navKey.currentState?.popUntil((route) => route.isFirst);
+    _indice.value = i;
     setState(() {
       _index = i;
       _enDetalle = false;
-      _navKey = GlobalKey<NavigatorState>();
-      _obs = _ObservadorPaginas(_alCambiarPila);
     });
   }
 
@@ -197,6 +219,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   /// Pantalla que se abre desde el menú de hamburguesa del administrador.
   Widget _paginaGestion(_Gestion g) => switch (g) {
+    _Gestion.denuncias => const DenunciasAdminScreen(),
     _Gestion.usuarios => const UsersAdminScreen(),
     _Gestion.administradores => const AdminsAdminScreen(),
     _Gestion.fundacion => const _PantallaAdmin(
@@ -258,21 +281,6 @@ class _MenuScreenState extends State<MenuScreen> {
   Widget build(BuildContext context) {
 
 
-    final paginas = <Widget>[
-      HomeTab(
-        onVerMascotas: () => _irA(1),
-        onVerMatch: Session.esAdmin ? null : () => _irA(2),
-      ),
-      const PetScreen(),
-      if (Session.esAdmin)
-        const SizedBox.shrink()
-      else
-        PerfectMatchScreen(onCerrarSesion: _confirmarCerrarSesion),
-      NotificationsTab(onCerrarSesion: _confirmarCerrarSesion),
-      ProfileScreen(onCerrarSesion: _confirmarCerrarSesion),
-    ];
-    final paginaActual = paginas[_index];
-
     return PopScope(
       canPop: !_enDetalle && _index == 0,
       onPopInvokedWithResult: (didPop, _) {
@@ -310,8 +318,9 @@ class _MenuScreenState extends State<MenuScreen> {
         body: Navigator(
           key: _navKey,
           observers: [_obs],
-          onGenerateRoute: (_) =>
-              MaterialPageRoute(builder: (_) => paginaActual),
+          onGenerateRoute: (_) => MaterialPageRoute(
+            builder: (_) => _PestanasVivas(indice: _indice, paginas: _paginas),
+          ),
         ),
         bottomNavigationBar: NavFlotante(
           indice: _index,
@@ -346,11 +355,13 @@ class _MenuScreenState extends State<MenuScreen> {
                   Session.esAdmin
                       ? AdoptionService.noLeidasAdmin
                       : AdoptionService.noLeidasUsuario,
+                  if (Session.esAdmin) DenunciasService.noLeidasAdmin,
                 ]),
                 builder: (context, _) {
                   final total = Session.esAdmin
                       ? (ApadrinamientoService.noLeidasAdmin.value +
-                          AdoptionService.noLeidasAdmin.value)
+                          AdoptionService.noLeidasAdmin.value +
+                          DenunciasService.noLeidasAdmin.value)
                       : (ApadrinamientoService.noLeidasUsuario.value +
                           AdoptionService.noLeidasUsuario.value);
                   return Badge(
@@ -376,11 +387,13 @@ class _MenuScreenState extends State<MenuScreen> {
                   Session.esAdmin
                       ? AdoptionService.noLeidasAdmin
                       : AdoptionService.noLeidasUsuario,
+                  if (Session.esAdmin) DenunciasService.noLeidasAdmin,
                 ]),
                 builder: (context, _) {
                   final total = Session.esAdmin
                       ? (ApadrinamientoService.noLeidasAdmin.value +
-                          AdoptionService.noLeidasAdmin.value)
+                          AdoptionService.noLeidasAdmin.value +
+                          DenunciasService.noLeidasAdmin.value)
                       : (ApadrinamientoService.noLeidasUsuario.value +
                           AdoptionService.noLeidasUsuario.value);
                   return Badge(
@@ -408,6 +421,44 @@ class _MenuScreenState extends State<MenuScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Mantiene las pestañas montadas. Cambiar de una a otra no deja la pantalla en blanco.
+class _PestanasVivas extends StatefulWidget {
+  final ValueNotifier<int> indice;
+  final List<Widget> paginas;
+
+  const _PestanasVivas({required this.indice, required this.paginas});
+
+  @override
+  State<_PestanasVivas> createState() => _PestanasVivasState();
+}
+
+class _PestanasVivasState extends State<_PestanasVivas> {
+  @override
+  void initState() {
+    super.initState();
+    widget.indice.addListener(_alCambiar);
+  }
+
+  @override
+  void dispose() {
+    widget.indice.removeListener(_alCambiar);
+    super.dispose();
+  }
+
+  void _alCambiar() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IndexedStack(
+      index: widget.indice.value,
+      sizing: StackFit.expand,
+      children: widget.paginas,
     );
   }
 }

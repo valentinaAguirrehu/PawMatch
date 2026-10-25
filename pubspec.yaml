@@ -70,6 +70,7 @@ flutter:
 
   assets:
     - assets/images/logo.png
+    - assets/images/denuncias_hero.jpg
     - assets/images/inicio/
     - assets/images/inicio/fundacion_hero.jpg
     - assets/images/inicio/familia.jpg

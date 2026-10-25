@@ -122,6 +122,37 @@ router.get('/', async (req, res) => {
 });
 
 // ---------------------------------------------------------------
+// GET /api/admin/usuarios/roles
+// Solo los id de quienes ya tienen solicitud aceptada y contrato subido.
+// No trae el formulario completo: eso congelaba la app al filtrar.
+// ---------------------------------------------------------------
+router.get('/roles', async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT DISTINCT id_usuario::text AS id_usuario, 'adoptante' AS tipo
+       FROM solicitudadopcion
+       WHERE estado = 'aprobada'
+         AND COALESCE(btrim(contrato_adopcion_archivo), '') <> ''
+       UNION
+       SELECT DISTINCT id_usuario::text, 'apadrinante'
+       FROM solicitudapadrinamiento
+       WHERE estado = 'aprobada'
+         AND COALESCE(btrim(contrato_apadrinamiento_archivo), '') <> ''`
+    );
+    const adoptantes = [];
+    const apadrinantes = [];
+    for (const fila of r.rows) {
+      if (fila.tipo === 'adoptante') adoptantes.push(fila.id_usuario);
+      else apadrinantes.push(fila.id_usuario);
+    }
+    res.json({ adoptantes, apadrinantes });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Error al consultar los roles' });
+  }
+});
+
+// ---------------------------------------------------------------
 // PATCH /api/admin/usuarios/:id/estado   { "estado_cuenta": "activo" | "inactivo" }
 // Activa o desactiva el ingreso de un usuario. No aplica a administradores
 // (así nadie se puede dejar fuera del sistema por accidente).

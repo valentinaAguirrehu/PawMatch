@@ -141,6 +141,32 @@ class ApiService {
     );
   }
 
+  static Future<({Set<String> adoptantes, Set<String> apadrinantes})>
+  listarRolesUsuariosAdmin() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/usuarios/roles'),
+      headers: {'x-usuario-id': Session.idUsuario ?? ''},
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        (data as Map<String, dynamic>)['error'] ??
+            'No se pudieron cargar los roles',
+      );
+    }
+    final mapa = data as Map<String, dynamic>;
+    Set<String> ids(String clave) {
+      final lista = mapa[clave];
+      if (lista is! List) return {};
+      return {
+        for (final id in lista)
+          if (id != null && id.toString().isNotEmpty) id.toString(),
+      };
+    }
+
+    return (adoptantes: ids('adoptantes'), apadrinantes: ids('apadrinantes'));
+  }
+
   static Future<AdminUser> cambiarEstadoUsuarioAdmin({
     required String id,
     required bool activo,

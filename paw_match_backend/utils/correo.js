@@ -562,13 +562,250 @@ Fundación Maritza Arévalo & Equipo Paw Match
   });
 }
 
+/**
+ * Envía correo con enlace de verificación para solicitudes de apadrinamiento o adopción.
+ */
+async function enviarCorreoVerificacionSolicitud({
+  destinatario,
+  nombreUsuario,
+  nombreMascota,
+  token,
+  tipo = 'apadrinamiento',
+}) {
+  const nombre = escaparHtml(nombreUsuario);
+  const mascota = escaparHtml(nombreMascota);
+  const esApadrinamiento = tipo === 'apadrinamiento';
+  const accionTexto = esApadrinamiento ? 'apadrinamiento' : 'adopción';
+  const asunto = `Confirma tu correo para tu solicitud de ${accionTexto} de ${nombreMascota} - Paw Match`;
+
+  const backendHost = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const rutaVerificar = esApadrinamiento
+    ? '/api/solicitudes-apadrinamiento/verificar-correo'
+    : '/api/adoption-requests/verificar-correo';
+  const urlVerificacion = `${backendHost}${rutaVerificar}?token=${encodeURIComponent(token)}`;
+
+  const textoPlano = `
+Hola ${nombreUsuario},
+
+Gracias por tu solicitud de ${accionTexto} para ${nombreMascota} en la Fundación Maritza Arévalo.
+
+Para que tu solicitud sea revisada por el administrador y puedas recibir notificaciones oficiales sobre su estado, debes confirmar tu correo electrónico haciendo clic en el siguiente enlace:
+
+${urlVerificacion}
+
+Mientras no confirmes tu correo, tu solicitud se mostrará en Paw Match con el estado "Correo pendiente de confirmación".
+Una vez confirmado, el estado cambiará inmediatamente a "Correo confirmado".
+
+Si no realizaste esta solicitud, puedes ignorar este mensaje.
+
+Fundación Maritza Arévalo
+Paw Match
+`;
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 14px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #ec4899; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">🐾 Paw Match</h1>
+        <p style="color: #6b7280; font-size: 13px; margin: 4px 0 0 0;">Fundación Maritza Arévalo • San Juan de Pasto</p>
+      </div>
+      <div style="background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <h2 style="color: #9d174d; margin-top: 0; font-size: 18px; font-weight: 700;">
+          ✉️ Confirmación de correo electrónico requerida
+        </h2>
+        <p style="font-size: 14px; color: #374151; line-height: 1.5; margin-bottom: 12px;">
+          Hola <strong>${nombre}</strong>,
+        </p>
+        <p style="font-size: 14px; color: #374151; line-height: 1.5; margin-bottom: 12px;">
+          Hemos recibido tu solicitud de <strong>${accionTexto}</strong> para <strong>${mascota}</strong>.
+          Para garantizar la seguridad de tus datos y que puedas recibir las notificaciones oficiales con respecto a tu solicitud, por favor confirma tu correo electrónico:
+        </p>
+        <div style="text-align: center; margin: 26px 0;">
+          <a href="${urlVerificacion}" target="_blank"
+             style="background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 12px; display: inline-block; font-size: 15px; box-shadow: 0 4px 10px rgba(236,72,153,0.3);">
+            ✅ Confirmar mi correo electrónico
+          </a>
+        </div>
+        <p style="font-size: 12.5px; color: #6b7280; line-height: 1.4; margin-top: 16px;">
+          <strong>Estado actual:</strong> <em>Correo pendiente de confirmación</em>.<br/>
+          Al hacer clic en el botón superior, tu estado se actualizará automáticamente a <strong>«Correo confirmado»</strong> en la plataforma.
+        </p>
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #fbcfe8;">
+          <p style="font-size: 11px; color: #9ca3af; margin: 0; word-break: break-all;">
+            Si el botón no funciona, copia y pega este enlace en tu navegador:<br/>
+            <a href="${urlVerificacion}" style="color: #db2777;">${urlVerificacion}</a>
+          </p>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 11.5px; color: #9ca3af; margin-top: 20px;">
+        Este es un correo automático de verificación emitido por Paw Match para la Fundación Maritza Arévalo.
+      </p>
+    </div>
+  `;
+
+  return enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Verificación de correo (${accionTexto} ${nombreMascota})`,
+  });
+}
+
+/**
+ * Notifica al administrador que se ha recibido una nueva denuncia de maltrato/abandono animal.
+ */
+async function enviarCorreoNuevaDenunciaAdmin({
+  destinatarios,
+  denuncia,
+  urlPanel,
+}) {
+  const radicado = escaparHtml(denuncia.radicado);
+  const tipoReporte = escaparHtml(denuncia.tipo_reporte || 'Sin especificar');
+  const tipoAnimal = escaparHtml(denuncia.tipo_animal || 'Sin especificar');
+  const ubicacion = escaparHtml(`${denuncia.ubicacion_animal || ''}${denuncia.ciudad_caso ? ` (${denuncia.ciudad_caso})` : ''}`);
+  const descripcion = escaparHtml(denuncia.descripcion_caso || '');
+  const fecha = denuncia.fecha_creacion
+    ? new Date(denuncia.fecha_creacion).toLocaleString('es-CO', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : new Date().toLocaleString('es-CO');
+
+  const esPeligro = String(denuncia.peligro_inmediato || '').toLowerCase() === 'si';
+  const peligroTexto = esPeligro
+    ? '🚨 SÍ - REQUIERE ATENCIÓN PRIORITARIA'
+    : String(denuncia.peligro_inmediato || '').toLowerCase() === 'no_seguro'
+    ? '⚠️ No estoy seguro'
+    : 'No';
+
+  const asunto = `Nueva denuncia recibida - Sistema de protección animal`;
+
+  const textoPlano = `
+AVISO DE NUEVA DENUNCIA - PAW MATCH / FUNDACIÓN MARITZA ARÉVALO
+
+Se ha recibido una nueva denuncia en el sistema de protección animal:
+
+- Radicado: ${radicado}
+- Fecha y hora: ${fecha}
+- Tipo de situación: ${tipoReporte}
+- Animal reportado: ${tipoAnimal}
+- Ubicación: ${ubicacion}
+- ¿Peligro inmediato?: ${peligroTexto}
+- Descripción breve:
+${descripcion}
+
+Para consultar el caso completo, los datos del reportante y las evidencias adjuntas, accede al panel administrativo:
+${urlPanel}
+
+(Por seguridad y protección de datos personales, los documentos y evidencias solo pueden consultarse iniciando sesión en el panel administrativo).
+`;
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #ffd1d9; border-radius: 16px; background-color: #fffafb;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; background-color: #fce4ec; padding: 10px 18px; border-radius: 30px; margin-bottom: 12px;">
+          <span style="color: #ed4f9d; font-weight: 800; font-size: 13px; letter-spacing: 1px; text-transform: uppercase;">
+            🐾 Sistema de Protección y Bienestar Animal
+          </span>
+        </div>
+        <h2 style="color: #2e2a2c; margin: 0 0 6px 0; font-size: 24px; font-weight: 800;">
+          Nueva Denuncia Recibida
+        </h2>
+        <p style="color: #666; font-size: 14px; margin: 0;">Fundación Maritza Arévalo • Paw Match</p>
+      </div>
+
+      <div style="background-color: #ffffff; padding: 24px; border-radius: 14px; border: 1px solid #f2e2e6; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
+        <div style="border-bottom: 2px dashed #fce4ec; padding-bottom: 14px; margin-bottom: 18px;">
+          <div style="font-size: 11px; text-transform: uppercase; color: #888; font-weight: 700;">Número de Radicado</div>
+          <div style="font-size: 18px; font-weight: 800; color: #ed4f9d; letter-spacing: 0.5px;">${radicado}</div>
+          <div style="font-size: 11px; text-transform: uppercase; color: #888; font-weight: 700; margin-top: 8px;">Recepción</div>
+          <div style="font-size: 13px; font-weight: 600; color: #555;">${fecha}</div>
+        </div>
+
+        ${esPeligro ? `
+        <div style="background-color: #ffebee; border-left: 5px solid #d32f2f; padding: 12px 16px; border-radius: 8px; margin-bottom: 18px;">
+          <strong style="color: #c62828; font-size: 14px;">🚨 INDICADOR DE PELIGRO INMEDIATO:</strong>
+          <p style="margin: 4px 0 0 0; color: #b71c1c; font-size: 13px; font-weight: 500;">
+            El reportante ha indicado que el animal se encuentra en riesgo o peligro inminente.
+          </p>
+        </div>
+        ` : ''}
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px;">
+          <tr>
+            <td style="padding: 7px 0; font-size: 13.5px; color: #777; width: 140px; vertical-align: top;"><strong>Tipo de caso:</strong></td>
+            <td style="padding: 7px 0; font-size: 14px; color: #2e2a2c; font-weight: 600; text-transform: capitalize;">${tipoReporte}</td>
+          </tr>
+          <tr>
+            <td style="padding: 7px 0; font-size: 13.5px; color: #777; vertical-align: top;"><strong>Animal afectado:</strong></td>
+            <td style="padding: 7px 0; font-size: 14px; color: #2e2a2c; font-weight: 600; text-transform: capitalize;">${tipoAnimal}</td>
+          </tr>
+          <tr>
+            <td style="padding: 7px 0; font-size: 13.5px; color: #777; vertical-align: top;"><strong>Ubicación:</strong></td>
+            <td style="padding: 7px 0; font-size: 14px; color: #2e2a2c;">${ubicacion}</td>
+          </tr>
+          <tr>
+            <td style="padding: 7px 0; font-size: 13.5px; color: #777; vertical-align: top;"><strong>Peligro inmediato:</strong></td>
+            <td style="padding: 7px 0; font-size: 14px; font-weight: 700; color: ${esPeligro ? '#d32f2f' : '#2e2a2c'};">${peligroTexto}</td>
+          </tr>
+        </table>
+
+        <div style="background-color: #faf7f8; padding: 14px 16px; border-radius: 10px; border: 1px solid #f0e6eb; margin-bottom: 22px;">
+          <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #888; margin-bottom: 6px;">Descripción de los hechos:</div>
+          <div style="font-size: 13.5px; color: #333; line-height: 1.55; white-space: pre-wrap;">${descripcion}</div>
+        </div>
+
+        <div style="text-align: center; margin: 26px 0 10px 0;">
+          <a href="${urlPanel}" target="_blank"
+             style="background: #ed4f9d; color: #ffffff; padding: 14px 30px; text-decoration: none; font-weight: 700; border-radius: 25px; display: inline-block; font-size: 15px;">
+            🔍 Ver Denuncia Completa en el Panel
+          </a>
+        </div>
+
+        <p style="text-align: center; font-size: 12px; color: #999; margin-top: 14px;">
+          🔒 Por privacidad y cumplimiento de tratamiento de datos, las fotografías, videos y datos del reportante se consultan únicamente dentro del panel administrativo.
+        </p>
+      </div>
+
+      <p style="text-align: center; font-size: 11.5px; color: #aaa; margin-top: 22px;">
+        Notificación automática generada por Paw Match para el equipo directivo de la Fundación Maritza Arévalo.
+      </p>
+    </div>
+  `;
+
+  const lista = Array.isArray(destinatarios) ? destinatarios : [destinatarios];
+  const resultados = [];
+  for (const correo of lista) {
+    if (correo && correo.includes('@')) {
+      const res = await enviarEmailGenerico({
+        destinatario: correo,
+        asunto,
+        textoPlano,
+        html,
+        tipoNotificacion: `Nueva denuncia (${radicado})`,
+      });
+      resultados.push({ correo, ...res });
+    }
+  }
+
+  const exito = resultados.some(r => r.enviado);
+  return {
+    enviado: exito,
+    resultados,
+    error: exito ? null : (resultados[0]?.error || 'No se pudo enviar a ningún destinatario'),
+  };
+}
+
 module.exports = {
   enviarCorreoAprobacionApadrinamiento,
   enviarCorreoRechazoApadrinamiento,
   enviarCorreoAprobacionAdopcion,
   enviarCorreoRechazoAdopcion,
   enviarCorreoContratoAdopcion,
+  enviarCorreoVerificacionSolicitud,
+  enviarCorreoNuevaDenunciaAdmin,
   enviarEmailGenerico,
   obtenerTransporter,
 };
+
 

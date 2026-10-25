@@ -247,6 +247,50 @@ class _Lista extends StatelessWidget {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: s.isEmailConfirmed
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFFFF8E1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: s.isEmailConfirmed
+                                  ? const Color(0xFF81C784)
+                                  : const Color(0xFFFFD54F),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                s.isEmailConfirmed
+                                    ? Icons.mark_email_read_rounded
+                                    : Icons.mark_email_unread_rounded,
+                                size: 13,
+                                color: s.isEmailConfirmed
+                                    ? const Color(0xFF2E7D32)
+                                    : const Color(0xFFF57F17),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                s.emailStatusLabel,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: s.isEmailConfirmed
+                                      ? const Color(0xFF2E7D32)
+                                      : const Color(0xFFF57F17),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     if (s.isApproved) ...[
                       const SizedBox(height: 8),
                       Container(
