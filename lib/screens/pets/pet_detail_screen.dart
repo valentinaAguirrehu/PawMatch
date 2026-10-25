@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/models/pet.dart';
@@ -137,13 +138,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         nombreMascota: _pet.nombre,
       );
       if (!mounted) return;
-      final fotosOk = cedula != null && recibo != null;
+      final fotosOk = cedula != null;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             fotosOk
-                ? 'Descargando el acta con la cédula y el recibo...'
-                : 'Acta descargada. No se pudo anexar la cédula o el recibo.',
+                ? 'Descargando el acta con la fotografía de la cédula...'
+                : 'Acta de adopción descargada exitosamente.',
           ),
         ),
       );
@@ -1845,24 +1846,38 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     );
   }
 
-  void _compartirMascota() {
+  Future<void> _compartirMascota() async {
+    final nombre = _pet.nombre.trim();
+    final raza = _pet.raza?.trim() ?? '';
+    final sexo = _pet.sexo?.trim() ?? '';
     final texto =
-        '¡Conoce a ${_pet.nombre} en Paw Match! Está buscando una familia o padrino en la Fundación Maritza Arévalo 🐾';
-    Clipboard.setData(ClipboardData(text: texto));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppColors.rosa,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle_outline, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text('¡Información de ${_pet.nombre} copiada al portapapeles!')),
-          ],
-        ),
-      ),
-    );
+        'Te comparto la información de la mascota $nombre. ¡Ingresa a nuestra página web Paw Match! 🐾\n\n'
+        '• Nombre: $nombre\n'
+        '• Especie: ${_pet.especie}\n'
+        '${raza.isNotEmpty ? '• Raza: $raza\n' : ''}'
+        '• Edad: ${_pet.edadTexto}\n'
+        '${sexo.isNotEmpty ? '• Sexo: $sexo\n' : ''}'
+        '• Fundación Maritza Arévalo';
+
+    final uriApp =
+        Uri.parse('whatsapp://send?text=${Uri.encodeComponent(texto)}');
+    final uriWeb =
+        Uri.parse('https://wa.me/?text=${Uri.encodeComponent(texto)}');
+
+    try {
+      if (await canLaunchUrl(uriApp)) {
+        await launchUrl(uriApp, mode: LaunchMode.externalApplication);
+        return;
+      }
+      if (await canLaunchUrl(uriWeb)) {
+        await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
+        return;
+      }
+      await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (!mounted) return;
+      await abrirEnlace(context, uriWeb.toString(), nombre: 'WhatsApp');
+    }
   }
 
   Widget _botonesAccion(Pet p) {

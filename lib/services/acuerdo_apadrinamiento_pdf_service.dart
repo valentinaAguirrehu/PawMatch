@@ -125,11 +125,34 @@ class AcuerdoApadrinamientoPdfService {
       debugPrint('No se pudo cargar logo de Paw Match: $e');
     }
 
-    // Preparar imágenes seguras
-    final jpgCedula = await prepararFotoParaPdf(datos.fotoCedula);
+    // Preparar imagen de la mascota
     final jpgMascota = await prepararFotoParaPdf(datos.fotoMascota);
-    final fotoCedula = jpgCedula == null ? null : pw.MemoryImage(jpgCedula);
     final fotoMascota = jpgMascota == null ? null : pw.MemoryImage(jpgMascota);
+
+    // Preparar documento de identidad (imagen o primera página si es PDF)
+    Uint8List? jpgCedula;
+    if (datos.fotoCedula != null && datos.fotoCedula!.isNotEmpty) {
+      final bytesCedula = datos.fotoCedula!;
+      final esPdf = bytesCedula.length >= 4 &&
+          bytesCedula[0] == 0x25 &&
+          bytesCedula[1] == 0x50 &&
+          bytesCedula[2] == 0x44 &&
+          bytesCedula[3] == 0x46;
+      if (esPdf) {
+        try {
+          await for (final page
+              in Printing.raster(bytesCedula, pages: [0], dpi: 120)) {
+            jpgCedula = await page.toPng();
+            break;
+          }
+        } catch (e) {
+          debugPrint('Error al rasterizar cédula PDF para acuerdo: $e');
+        }
+      } else {
+        jpgCedula = await prepararFotoParaPdf(bytesCedula);
+      }
+    }
+    final fotoCedula = jpgCedula == null ? null : pw.MemoryImage(jpgCedula);
 
     final verdePrincipal = PdfColor.fromHex('#23533E');
     final verdeSecundario = PdfColor.fromHex('#2E7D32');
@@ -163,70 +186,6 @@ class AcuerdoApadrinamientoPdfService {
             datos.razaMascota!.trim().isNotEmpty)
         ? datos.razaMascota!
         : 'Mestiza';
-
-    final estadoCorreoTexto =
-        datos.estadoCorreo.toLowerCase() == 'confirmado'
-            ? 'Correo confirmado ✓'
-            : 'Correo pendiente de confirmación ⏳';
-
-    final estadoProcesoTexto = switch (datos.estadoProceso.toLowerCase()) {
-      'aprobada' => 'Aprobada',
-      'rechazada' => 'Rechazada',
-      'cancelada' => 'Cancelada',
-      _ => 'Pendiente de revisión',
-    };
-
-    pw.Widget anexo(String titulo, pw.MemoryImage? imagen) {
-      const anchoMax = 480.0;
-      const altoMax = 640.0;
-      pw.Widget foto;
-      if (imagen == null || imagen.width == null || imagen.height == null) {
-        foto = pw.Text(
-          'No se adjuntó este documento.',
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(color: grisMedio, fontSize: 12),
-        );
-      } else {
-        final relacion = imagen.width! / imagen.height!;
-        var ancho = anchoMax;
-        var alto = ancho / relacion;
-        if (alto > altoMax) {
-          alto = altoMax;
-          ancho = alto * relacion;
-        }
-        foto = pw.Container(
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: grisBorde, width: 1),
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-          ),
-          child: pw.ClipRRect(
-            horizontalRadius: 8,
-            verticalRadius: 8,
-            child: pw.Image(imagen, width: ancho, height: alto),
-          ),
-        );
-      }
-
-      return pw.SizedBox(
-        width: anchoMax,
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
-          children: [
-            pw.Text(
-              titulo,
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(
-                color: grisOscuro,
-                fontSize: 16,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-            pw.SizedBox(height: 12),
-            foto,
-          ],
-        ),
-      );
-    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -448,7 +407,6 @@ class AcuerdoApadrinamientoPdfService {
                 else if (Session.documentoIdentidad.trim().isNotEmpty)
                   _filaDato('Documento de identidad:', Session.documentoIdentidad.trim()),
                 _filaDato('Correo electrónico:', datos.correoUsuario),
-                _filaDato('Confirmación del correo:', estadoCorreoTexto),
                 if (datos.telefonoUsuario != null &&
                     datos.telefonoUsuario!.trim().isNotEmpty)
                   _filaDato('Teléfono de contacto:', datos.telefonoUsuario!.trim()),
@@ -493,7 +451,6 @@ class AcuerdoApadrinamientoPdfService {
                 pw.SizedBox(height: 4),
 
                 _filaDato('Fecha de registro:', fechaFormateada),
-                _filaDato('Estado del proceso:', estadoProcesoTexto),
               ],
             ),
           ),
@@ -671,23 +628,158 @@ class AcuerdoApadrinamientoPdfService {
                   'Fecha: $fechaFormateada',
                   style: pw.TextStyle(fontSize: 9, color: grisOscuro),
                 ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'Estado del proceso: ${estadoProcesoTexto.toUpperCase()}',
-                  style: pw.TextStyle(
-                    fontSize: 9,
-                    fontWeight: pw.FontWeight.bold,
-                    color: verdeSecundario,
-                  ),
-                ),
               ],
             ),
           ),
 
-          // ───────── SECCIÓN 5: ANEXO FOTOGRAFÍA DE CÉDULA ─────────
-          if (fotoCedula != null) ...[
-            pw.NewPage(),
-            anexo('Documento de Identidad del Padrino/Madrina', fotoCedula),
+          // ───────── DOCUMENTO DE IDENTIDAD Y FOTOGRAFÍA (SEGUNDA HOJA) ─────────
+          if (fotoCedula != null && fotoMascota != null) ...[
+            pw.SizedBox(height: 12),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    margin: const pw.EdgeInsets.only(right: 6),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromHex('#F9FAFB'),
+                      borderRadius:
+                          const pw.BorderRadius.all(pw.Radius.circular(8)),
+                      border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          'Documento de Identidad Adjunto',
+                          style: pw.TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: verdePrincipal,
+                          ),
+                        ),
+                        pw.SizedBox(height: 6),
+                        pw.ClipRRect(
+                          horizontalRadius: 6,
+                          verticalRadius: 6,
+                          child: pw.Image(
+                            fotoCedula,
+                            height: 125,
+                            fit: pw.BoxFit.contain,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    margin: const pw.EdgeInsets.only(left: 6),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromHex('#F9FAFB'),
+                      borderRadius:
+                          const pw.BorderRadius.all(pw.Radius.circular(8)),
+                      border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          'Fotografía de ${datos.nombreMascota}',
+                          style: pw.TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: verdePrincipal,
+                          ),
+                        ),
+                        pw.SizedBox(height: 6),
+                        pw.ClipRRect(
+                          horizontalRadius: 6,
+                          verticalRadius: 6,
+                          child: pw.Image(
+                            fotoMascota,
+                            height: 125,
+                            fit: pw.BoxFit.contain,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else if (fotoCedula != null) ...[
+            pw.SizedBox(height: 12),
+            pw.Center(
+              child: pw.Container(
+                width: 260,
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#F9FAFB'),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'Documento de Identidad Adjunto',
+                      style: pw.TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: verdePrincipal,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.ClipRRect(
+                      horizontalRadius: 6,
+                      verticalRadius: 6,
+                      child: pw.Image(
+                        fotoCedula,
+                        height: 130,
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ] else if (fotoMascota != null) ...[
+            pw.SizedBox(height: 12),
+            pw.Center(
+              child: pw.Container(
+                width: 260,
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#F9FAFB'),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'Fotografía de ${datos.nombreMascota}',
+                      style: pw.TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: verdePrincipal,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.ClipRRect(
+                      horizontalRadius: 6,
+                      verticalRadius: 6,
+                      child: pw.Image(
+                        fotoMascota,
+                        height: 130,
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ],
       ),

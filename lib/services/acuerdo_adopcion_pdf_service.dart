@@ -130,10 +130,9 @@ class AcuerdoAdopcionPdfService {
       'num': '5',
       'titulo': 'Veracidad de la información y confidencialidad',
       'cuerpo':
-          'El adoptante garantiza que los datos personales y los documentos adjuntos '
-          '(cédula y recibo de servicio público) son verídicos y corresponden a su '
-          'identidad y domicilio. La Fundación tratará esta información con '
-          'confidencialidad, conforme a la normativa vigente.',
+          'El adoptante garantiza que los datos personales y el documento de identidad '
+          'adjunto corresponden a su identidad. La Fundación tratará '
+          'esta información con confidencialidad, conforme a la normativa vigente.',
     },
   ];
 
@@ -190,86 +189,34 @@ class AcuerdoAdopcionPdfService {
         ? datos.direccionUsuario!.trim()
         : 'No registrada';
 
-    final otrasTexto = datos.tieneOtrasMascotas
-        ? (datos.otrasMascotas.trim().isEmpty
-            ? 'Sí'
-            : 'Sí. ${datos.otrasMascotas.trim()}')
-        : 'No';
-
-    final motivacion = datos.motivacion.trim().isEmpty
-        ? 'No especificada'
-        : datos.motivacion.trim();
-
-    final jpgCedula = await prepararFotoParaPdf(datos.fotoCedula);
-    final jpgRecibo = await prepararFotoParaPdf(datos.fotoRecibo);
+    // Preparar imagen de la mascota
     final jpgMascota = await prepararFotoParaPdf(datos.fotoMascota);
-    final fotoCedula = jpgCedula == null ? null : pw.MemoryImage(jpgCedula);
-    final fotoRecibo = jpgRecibo == null ? null : pw.MemoryImage(jpgRecibo);
     final fotoMascota = jpgMascota == null ? null : pw.MemoryImage(jpgMascota);
 
-    final estadoCorreoTexto =
-        datos.estadoCorreo.toLowerCase() == 'confirmado'
-            ? 'Correo confirmado ✓'
-            : 'Correo pendiente de confirmación ⏳';
-
-    final estadoProcesoTexto = switch (datos.estadoProceso.toLowerCase()) {
-      'aprobada' => 'Aprobada',
-      'rechazada' => 'Rechazada',
-      'cancelada' => 'Cancelada',
-      _ => 'Pendiente de revisión',
-    };
-
-    pw.Widget anexo(String titulo, pw.MemoryImage? imagen) {
-      const anchoMax = 480.0;
-      const altoMax = 640.0;
-      pw.Widget foto;
-      if (imagen == null || imagen.width == null || imagen.height == null) {
-        foto = pw.Text(
-          'No se adjuntó este documento.',
-          textAlign: pw.TextAlign.center,
-          style: pw.TextStyle(color: grisMedio, fontSize: 12),
-        );
-      } else {
-        final relacion = imagen.width! / imagen.height!;
-        var ancho = anchoMax;
-        var alto = ancho / relacion;
-        if (alto > altoMax) {
-          alto = altoMax;
-          ancho = alto * relacion;
+    // Preparar documento de identidad (imagen o primera página si es PDF)
+    Uint8List? jpgCedula;
+    if (datos.fotoCedula != null && datos.fotoCedula!.isNotEmpty) {
+      final bytesCedula = datos.fotoCedula!;
+      final esPdf = bytesCedula.length >= 4 &&
+          bytesCedula[0] == 0x25 &&
+          bytesCedula[1] == 0x50 &&
+          bytesCedula[2] == 0x44 &&
+          bytesCedula[3] == 0x46;
+      if (esPdf) {
+        try {
+          await for (final page
+              in Printing.raster(bytesCedula, pages: [0], dpi: 120)) {
+            jpgCedula = await page.toPng();
+            break;
+          }
+        } catch (e) {
+          debugPrint('Error al rasterizar cédula PDF para acuerdo de adopción: $e');
         }
-        foto = pw.Container(
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: grisBorde, width: 1),
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-          ),
-          child: pw.ClipRRect(
-            horizontalRadius: 8,
-            verticalRadius: 8,
-            child: pw.Image(imagen, width: ancho, height: alto),
-          ),
-        );
+      } else {
+        jpgCedula = await prepararFotoParaPdf(bytesCedula);
       }
-
-      return pw.SizedBox(
-        width: anchoMax,
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.center,
-          children: [
-            pw.Text(
-              titulo,
-              textAlign: pw.TextAlign.center,
-              style: pw.TextStyle(
-                color: grisOscuro,
-                fontSize: 16,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-            pw.SizedBox(height: 12),
-            foto,
-          ],
-        ),
-      );
     }
+    final fotoCedula = jpgCedula == null ? null : pw.MemoryImage(jpgCedula);
 
     pdf.addPage(
       pw.MultiPage(
@@ -477,42 +424,13 @@ class AcuerdoAdopcionPdfService {
                 _filaDato('Nombre del adoptante:', datos.nombreUsuario),
                 _filaDato('Número de identificación:', documento),
                 _filaDato('Correo del adoptante:', datos.correoUsuario),
-                _filaDato('Confirmación del correo:', estadoCorreoTexto),
                 if (datos.telefonoUsuario != null &&
                     datos.telefonoUsuario!.trim().isNotEmpty)
                   _filaDato('Teléfono de contacto:', datos.telefonoUsuario!.trim()),
                 _filaDato('Dirección:', direccionTexto),
-                _filaDato('Tipo de vivienda:', datos.tipoVivienda),
-                _filaDato('Patio o zona verde:', datos.tienePatio ? 'Sí' : 'No'),
-                _filaDato('Niños en el hogar:', datos.tieneNinos ? 'Sí' : 'No'),
-                _filaDato('Otras mascotas:', otrasTexto),
-                _filaDato('Tiempo disponible:', datos.tiempoDisponible),
-                _filaDato(
-                  'Adopción previa con la Fundación:',
-                  datos.experienciaPrevia ? 'Sí' : 'No',
-                ),
                 _filaDato('Fecha de solicitud:', fechaFormateada),
-                _filaDato('Estado de la solicitud:', estadoProcesoTexto),
-                _filaDato(
-                  'Aceptación de términos:',
-                  'SÍ. El adoptante aceptó de forma expresa los términos y condiciones de adopción responsable.',
-                ),
               ],
             ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Text(
-            'Motivación declarada por el adoptante:',
-            style: pw.TextStyle(
-              fontSize: 10,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColor.fromHex('#374151'),
-            ),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            motivacion,
-            style: pw.TextStyle(fontSize: 10, color: grisOscuro),
           ),
           pw.SizedBox(height: 10),
           pw.Text(
@@ -687,37 +605,159 @@ class AcuerdoAdopcionPdfService {
                   'Fecha: $fechaFormateada',
                   style: pw.TextStyle(fontSize: 9.5, color: grisOscuro),
                 ),
-                pw.SizedBox(height: 2),
-                pw.Text(
-                  'Estado: ACEPTADO Y REGISTRADO',
-                  style: pw.TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: verdeSecundario,
+              ],
+            ),
+          ),
+
+          // ───────── DOCUMENTO DE IDENTIDAD Y FOTOGRAFÍA (SEGUNDA HOJA) ─────────
+          if (fotoCedula != null && fotoMascota != null) ...[
+            pw.SizedBox(height: 12),
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    margin: const pw.EdgeInsets.only(right: 6),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromHex('#F9FAFB'),
+                      borderRadius:
+                          const pw.BorderRadius.all(pw.Radius.circular(8)),
+                      border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          'Documento de Identidad Adjunto',
+                          style: pw.TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: verdePrincipal,
+                          ),
+                        ),
+                        pw.SizedBox(height: 6),
+                        pw.ClipRRect(
+                          horizontalRadius: 6,
+                          verticalRadius: 6,
+                          child: pw.Image(
+                            fotoCedula,
+                            height: 125,
+                            fit: pw.BoxFit.contain,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                pw.Expanded(
+                  child: pw.Container(
+                    padding: const pw.EdgeInsets.all(8),
+                    margin: const pw.EdgeInsets.only(left: 6),
+                    decoration: pw.BoxDecoration(
+                      color: PdfColor.fromHex('#F9FAFB'),
+                      borderRadius:
+                          const pw.BorderRadius.all(pw.Radius.circular(8)),
+                      border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        pw.Text(
+                          'Fotografía de ${datos.nombreMascota}',
+                          style: pw.TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: verdePrincipal,
+                          ),
+                        ),
+                        pw.SizedBox(height: 6),
+                        pw.ClipRRect(
+                          horizontalRadius: 6,
+                          verticalRadius: 6,
+                          child: pw.Image(
+                            fotoMascota,
+                            height: 125,
+                            fit: pw.BoxFit.contain,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-          pw.SizedBox(height: 12),
-          pw.Text(
-            '5. Documentos adjuntos',
-            style: pw.TextStyle(
-              color: grisOscuro,
-              fontSize: 12.5,
-              fontWeight: pw.FontWeight.bold,
+          ] else if (fotoCedula != null) ...[
+            pw.SizedBox(height: 12),
+            pw.Center(
+              child: pw.Container(
+                width: 260,
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#F9FAFB'),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'Documento de Identidad Adjunto',
+                      style: pw.TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: verdePrincipal,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.ClipRRect(
+                      horizontalRadius: 6,
+                      verticalRadius: 6,
+                      child: pw.Image(
+                        fotoCedula,
+                        height: 130,
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-          pw.SizedBox(height: 2),
-          pw.Text(
-            'Cédula de ciudadanía y recibo de servicio público que el adoptante anexó con la solicitud:',
-            style: pw.TextStyle(color: grisMedio, fontSize: 10),
-          ),
-          pw.SizedBox(height: 8),
-          pw.NewPage(),
-          anexo('Cédula de ciudadanía', fotoCedula),
-          pw.NewPage(),
-          anexo('Recibo de servicio público', fotoRecibo),
+          ] else if (fotoMascota != null) ...[
+            pw.SizedBox(height: 12),
+            pw.Center(
+              child: pw.Container(
+                width: 260,
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#F9FAFB'),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  border: pw.Border.all(color: verdeClaroBorde, width: 1),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Text(
+                      'Fotografía de ${datos.nombreMascota}',
+                      style: pw.TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: verdePrincipal,
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.ClipRRect(
+                      horizontalRadius: 6,
+                      verticalRadius: 6,
+                      child: pw.Image(
+                        fotoMascota,
+                        height: 130,
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -29,10 +29,40 @@ class PasosApadrinamientoScreen extends StatefulWidget {
 }
 
 class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
-  bool _aceptoProceso = false;
-  bool _aceptoRequisitos = false;
+  final ScrollController _scrollController = ScrollController();
+  bool _aceptoCondiciones = false;
+  bool _haLlegadoAlFinal = false;
 
-  bool get _puedeContinuar => _aceptoProceso && _aceptoRequisitos;
+  bool get _puedeContinuar => _aceptoCondiciones;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrollController.hasClients) {
+        if (_scrollController.position.maxScrollExtent <= 20) {
+          setState(() => _haLlegadoAlFinal = true);
+        }
+      }
+    });
+  }
+
+  void _onScroll() {
+    if (!_haLlegadoAlFinal && _scrollController.hasClients) {
+      final pos = _scrollController.position;
+      if (pos.pixels >= (pos.maxScrollExtent - 40)) {
+        setState(() => _haLlegadoAlFinal = true);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   static const List<String> _beneficios = [
     'Realizar el aporte que elijas, de acuerdo con tus posibilidades y las modalidades disponibles.',
@@ -128,7 +158,8 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
             // Contenido desplazable
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 children: [
                   // Sección 1: ¿En qué consiste el apadrinamiento?
                   Container(
@@ -295,53 +326,124 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
                       ),
                     ),
                   ),
-                ],
-              ),
-            ),
 
-            // Sección 4: Confirmación de lectura y aceptación (2 casillas obligatorias)
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -3),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Casilla 1
-                  InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () => setState(() => _aceptoProceso = !_aceptoProceso),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Checkbox(
-                            value: _aceptoProceso,
-                            activeColor: AppColors.rosa,
-                            side: const BorderSide(color: AppColors.rosa, width: 1.6),
-                            onChanged: (val) =>
-                                setState(() => _aceptoProceso = val ?? false),
+                  const SizedBox(height: 18),
+
+                  // Sección 4: Confirmación de lectura y aceptación
+                  // Aparece cuando el usuario ha bajado hasta el final del texto
+                  if (!_haLlegadoAlFinal)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: AppColors.bordeRosa.withValues(alpha: 0.6)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                          const Expanded(
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.arrow_downward_rounded,
+                            size: 18,
+                            color: AppColors.rosa,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              'Baja hasta el final del texto para habilitar la confirmación',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.texto.withValues(alpha: 0.85),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border:
+                            Border.all(color: AppColors.bordeRosa, width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 10,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => setState(
+                                () => _aceptoCondiciones = !_aceptoCondiciones),
                             child: Padding(
-                              padding: EdgeInsets.only(top: 10),
-                              child: Text(
-                                'He leído y comprendido en qué consiste el apadrinamiento y cómo funciona el proceso.',
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Checkbox(
+                                    value: _aceptoCondiciones,
+                                    activeColor: AppColors.rosa,
+                                    side: const BorderSide(
+                                        color: AppColors.rosa, width: 1.6),
+                                    onChanged: (val) => setState(() =>
+                                        _aceptoCondiciones = val ?? false),
+                                  ),
+                                  const Expanded(
+                                    child: Text(
+                                      'He leído, comprendo el proceso y acepto los requisitos y condiciones del apadrinamiento.',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        height: 1.35,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.texto,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.rosa,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor:
+                                    AppColors.rosa.withValues(alpha: 0.35),
+                                disabledForegroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              onPressed: _puedeContinuar
+                                  ? () => Navigator.pop(context, true)
+                                  : null,
+                              child: const Text(
+                                'Continuar al formulario',
                                 style: TextStyle(
-                                  fontSize: 13,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.texto,
+                                  fontSize: 15.5,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                             ),
@@ -349,73 +451,7 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
                         ],
                       ),
                     ),
-                  ),
-
-                  // Casilla 2
-                  InkWell(
-                    borderRadius: BorderRadius.circular(10),
-                    onTap: () =>
-                        setState(() => _aceptoRequisitos = !_aceptoRequisitos),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Checkbox(
-                            value: _aceptoRequisitos,
-                            activeColor: AppColors.rosa,
-                            side: const BorderSide(color: AppColors.rosa, width: 1.6),
-                            onChanged: (val) =>
-                                setState(() => _aceptoRequisitos = val ?? false),
-                          ),
-                          const Expanded(
-                            child: Padding(
-                              padding: EdgeInsets.only(top: 10),
-                              child: Text(
-                                'He leído y acepto los requisitos y las condiciones del apadrinamiento.',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.texto,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  // Botón continuar
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.rosa,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            AppColors.rosa.withValues(alpha: 0.35),
-                        disabledForegroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onPressed: _puedeContinuar
-                          ? () => Navigator.pop(context, true)
-                          : null,
-                      child: const Text(
-                        'Continuar al formulario',
-                        style: TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),

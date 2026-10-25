@@ -61,7 +61,7 @@ fs.mkdirSync(privateUploadsDir, { recursive: true });
 const contratosDir = path.join(__dirname, '..', 'private_uploads', 'contratos_adopcion');
 fs.mkdirSync(contratosDir, { recursive: true });
 
-const extensiones = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const extensiones = new Set(['.jpg', '.jpeg', '.png', '.webp', '.pdf']);
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const upload = multer({
@@ -76,10 +76,10 @@ const upload = multer({
   }),
   limits: { fileSize: 10 * 1024 * 1024, files: 2 },
   fileFilter: (_req, file, cb) => {
-    const mimeOk = /^image\/(jpeg|jpg|png|webp)$/.test(file.mimetype);
+    const mimeOk = /^image\/(jpeg|jpg|png|webp)$/.test(file.mimetype) || file.mimetype === 'application/pdf';
     const ext = path.extname(file.originalname).toLowerCase();
     if (!mimeOk && !extensiones.has(ext)) {
-      return cb(new Error('Solo se permiten imágenes JPG, PNG o WEBP'));
+      return cb(new Error('Solo se permiten documentos o imágenes en formato JPG, PNG, WEBP o PDF'));
     }
     cb(null, true);
   },

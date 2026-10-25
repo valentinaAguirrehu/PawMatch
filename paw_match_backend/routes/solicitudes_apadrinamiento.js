@@ -44,6 +44,14 @@ const upload = multer({
     },
   }),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB máximo
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.webp', '.pdf'].includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Formato no permitido. Solo se aceptan archivos JPG, PNG, WEBP o PDF'));
+    }
+  },
 });
 
 const uploadContrato = multer({
