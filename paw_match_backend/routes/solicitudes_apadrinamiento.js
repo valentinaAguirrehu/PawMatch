@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const { esAdministrador } = require('../utils/roles');
 const {
   enviarCorreoAprobacionApadrinamiento,
   enviarCorreoRechazoApadrinamiento,
@@ -104,7 +105,7 @@ async function requireAdmin(req, res, next) {
   if (!usuario) {
     return res.status(401).json({ error: 'Debes iniciar sesión con una cuenta activa' });
   }
-  if (usuario.rol !== 'administrador') {
+  if (!esAdministrador(usuario.rol)) {
     return res.status(403).json({ error: 'Solo un administrador puede realizar esta acción' });
   }
   req.usuarioActual = usuario;
@@ -461,7 +462,7 @@ router.get('/notificaciones/resumen', async (req, res) => {
 
   try {
     let totalAdmin = 0;
-    if (usuario.rol === 'administrador') {
+    if (esAdministrador(usuario.rol)) {
       const adminCount = await pool.query(
         "SELECT COUNT(*)::int AS total FROM solicitudapadrinamiento WHERE leido_admin = false AND estado = 'pendiente'"
       );
@@ -528,7 +529,7 @@ router.get('/', async (req, res) => {
     return res.status(401).json({ error: 'Debes iniciar sesión' });
   }
 
-  const esAdmin = usuario.rol === 'administrador';
+  const esAdmin = esAdministrador(usuario.rol);
   const soloMias = req.query.mis_solicitudes === 'true' || !esAdmin;
 
   try {
@@ -639,7 +640,7 @@ router.get('/:id/documento', async (req, res) => {
 
     // Regla de seguridad: Solo admin o el dueño de la solicitud
     const esDuenio = sol.id_usuario === usuario.id_usuario;
-    const esAdmin = usuario.rol === 'administrador';
+    const esAdmin = esAdministrador(usuario.rol);
 
     if (!esAdmin && !esDuenio) {
       return res.status(403).json({ error: 'No tienes autorización para ver este documento confidencial' });
@@ -741,7 +742,7 @@ router.get('/:id/documento', async (req, res) => {
 
       const sol = solicitudRes.rows[0];
       const esDuenio = sol.id_usuario === usuario.id_usuario;
-      const esAdmin = usuario.rol === 'administrador';
+      const esAdmin = esAdministrador(usuario.rol);
 
       if (!esAdmin && !esDuenio) {
         return res.status(403).json({ error: 'No tienes autorización para ver este contrato' });

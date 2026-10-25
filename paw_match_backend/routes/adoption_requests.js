@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const { esAdministrador } = require('../utils/roles');
 const {
   enviarCorreoAprobacionAdopcion,
   enviarCorreoRechazoAdopcion,
@@ -220,7 +221,7 @@ async function requireAdmin(req, res, next) {
   if (!usuario) {
     return res.status(401).json({ error: 'Debes iniciar sesión con una cuenta activa' });
   }
-  if (usuario.rol !== 'administrador') {
+  if (!esAdministrador(usuario.rol)) {
     return res.status(403).json({ error: 'Solo un administrador puede realizar esta acción' });
   }
   req.usuarioActual = usuario;
@@ -429,7 +430,7 @@ router.get('/', async (req, res) => {
     return res.status(401).json({ error: 'Debes iniciar sesión' });
   }
 
-  const esAdmin = usuario.rol === 'administrador';
+  const esAdmin = esAdministrador(usuario.rol);
   const soloMias = req.query.mine === 'true' || req.query.mis_solicitudes === 'true' || !esAdmin;
   const estados = { pendiente: 'pendiente', aprobada: 'aprobada', rechazada: 'rechazada', cancelada: 'cancelada' };
   const estado = estados[(req.query.status || req.query.estado || '').toString().toLowerCase()];
@@ -479,7 +480,7 @@ router.get('/notificaciones/resumen', async (req, res) => {
 
   try {
     let totalAdmin = 0;
-    if (usuario.rol === 'administrador') {
+    if (esAdministrador(usuario.rol)) {
       const adminCount = await pool.query(
         "SELECT COUNT(*)::int AS total FROM solicitudadopcion WHERE leido_admin = false AND estado = 'pendiente'"
       );
@@ -759,7 +760,7 @@ async function servirAdjunto(req, res, columna) {
 
     const sol = solicitudRes.rows[0];
     const esDuenio = sol.id_usuario === usuario.id_usuario;
-    const esAdmin = usuario.rol === 'administrador';
+    const esAdmin = esAdministrador(usuario.rol);
     if (!esAdmin && !esDuenio) {
       return res.status(403).json({ error: 'No tienes autorización para ver este documento' });
     }
@@ -1050,7 +1051,7 @@ router.get('/:id/contrato', async (req, res) => {
 
     const sol = solicitudRes.rows[0];
     const esDuenio = sol.id_usuario === usuario.id_usuario;
-    const esAdmin = usuario.rol === 'administrador';
+    const esAdmin = esAdministrador(usuario.rol);
     if (!esAdmin && !esDuenio) {
       return res.status(403).json({ error: 'No tienes autorización para ver este contrato' });
     }

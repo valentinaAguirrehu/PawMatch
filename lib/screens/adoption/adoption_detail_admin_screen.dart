@@ -13,10 +13,14 @@ class AdoptionDetailAdminScreen extends StatefulWidget {
   final AdoptionRequest request;
   final ValueChanged<String> onCambioEstado;
 
+  /// Si es verdadero, se muestra como página (sin la barra de la hoja).
+  final bool enPagina;
+
   const AdoptionDetailAdminScreen({
     super.key,
     required this.request,
     required this.onCambioEstado,
+    this.enPagina = false,
   });
 
   @override
@@ -571,42 +575,48 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     final t = Theme.of(context).textTheme;
 
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.92,
-      ),
-      decoration: const BoxDecoration(
+      constraints: widget.enPagina
+          ? null
+          : BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.92,
+            ),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: widget.enPagina
+            ? null
+            : const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         children: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            width: 44,
-            height: 5,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(10),
+          if (!widget.enPagina) ...[
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Detalle de la solicitud',
-                    style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Detalle de la solicitud',
+                      style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const Divider(),
+            const Divider(),
+          ],
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),

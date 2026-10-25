@@ -13,7 +13,10 @@ class Session {
   static String rol = 'usuario';
 
   static bool get estaLogueado => idUsuario != null && idUsuario!.isNotEmpty;
-  static bool get isAdmin => rol == 'administrador';
+  static String get _rolNormalizado => rol.trim().toLowerCase();
+  static bool get esSuperAdmin => _rolNormalizado == 'superadmin';
+  static bool get isAdmin =>
+      _rolNormalizado == 'administrador' || esSuperAdmin;
   static bool get esAdmin => isAdmin;
 
   static const String _kKeyUsuario = 'paw_session_user';

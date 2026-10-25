@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
+import 'package:paw_match/screens/admin/adoption_follow_up_admin.dart';
+import 'package:paw_match/screens/admin/apadrinacion_follow_up_admin.dart';
 import 'package:paw_match/screens/admin/denuncias_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
-import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
 import 'package:paw_match/screens/home/notifications_tab.dart';
@@ -20,13 +21,20 @@ import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/nav_flotante.dart';
 
-/// Opciones del menú desplegable del administrador (último ícono de la barra).
+/// Opciones del menú de hamburguesa del administrador (centro de la barra).
 enum _Gestion {
   denuncias('Denuncias de maltrato', Icons.campaign_rounded),
-  seguimiento('Seguimiento de adopción', Icons.timeline),
-  usuarios('Usuarios', Icons.people_outline),
-  administradores('Administradores', Icons.admin_panel_settings_outlined),
-  fundacion('Fundación', Icons.info_outline);
+  usuarios('Usuarios del programa', Icons.people_outline),
+  administradores(
+    'Administradores de la fundación',
+    Icons.admin_panel_settings_outlined,
+  ),
+  fundacion('Información de la fundación', Icons.edit_note_outlined),
+  adopciones('Seguimiento de adopciones', Icons.pets_outlined),
+  apadrinamientos(
+    'Seguimiento de apadrinaciones',
+    Icons.volunteer_activism_outlined,
+  );
 
   final String etiqueta;
   final IconData icono;
@@ -49,8 +57,10 @@ class MenuScreen extends StatefulWidget {
 class _MenuScreenState extends State<MenuScreen> {
   late int _index;
 
-  late GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
-  late _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
+  final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
+  late final _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
+  late final List<Widget> _paginas;
+  late final ValueNotifier<int> _indice;
 
   bool _enDetalle = false;
 
@@ -59,7 +69,23 @@ class _MenuScreenState extends State<MenuScreen> {
     super.initState();
     final pedido = widget.indiceInicial;
     const maximo = 4;
-    _index = (pedido >= 0 && pedido <= maximo) ? pedido : 0;
+    var indice = (pedido >= 0 && pedido <= maximo) ? pedido : 0;
+    if (Session.esAdmin && indice == MenuScreen.indiceMatch) indice = 0;
+    _index = indice;
+    _indice = ValueNotifier<int>(indice);
+    _paginas = [
+      HomeTab(
+        onVerMascotas: () => _irA(1),
+        onVerMatch: Session.esAdmin ? null : () => _irA(2),
+      ),
+      const PetScreen(),
+      if (Session.esAdmin)
+        const SizedBox.shrink()
+      else
+        PerfectMatchScreen(onCerrarSesion: _confirmarCerrarSesion),
+      NotificationsTab(onCerrarSesion: _confirmarCerrarSesion),
+      ProfileScreen(onCerrarSesion: _confirmarCerrarSesion),
+    ];
     ApadrinamientoService.iniciarMonitoreo();
     AdoptionService.iniciarMonitoreo();
     PetsService.iniciarMonitoreo();
@@ -72,6 +98,7 @@ class _MenuScreenState extends State<MenuScreen> {
     AdoptionService.detenerMonitoreo();
     PetsService.detenerMonitoreo();
     DenunciasService.detenerMonitoreo();
+    _indice.dispose();
     super.dispose();
   }
 
@@ -84,17 +111,21 @@ class _MenuScreenState extends State<MenuScreen> {
     });
   }
 
-  /// Cambia de pestaña con un navegador nuevo.
+  /// Cambia de pestaña sin destruir el navegador. Así la vista no queda en blanco.
   void _cambiarA(int i) {
+    _navKey.currentState?.popUntil((route) => route.isFirst);
+    _indice.value = i;
     setState(() {
       _index = i;
       _enDetalle = false;
-      _navKey = GlobalKey<NavigatorState>();
-      _obs = _ObservadorPaginas(_alCambiarPila);
     });
   }
 
   void _alTocarPestana(int i) {
+    if (Session.esAdmin && i == MenuScreen.indiceMatch) {
+      _mostrarMenuGestion();
+      return;
+    }
     if (i == _index) {
       // tocar la pestaña actual vuelve a su pantalla principal
       _navKey.currentState?.popUntil((r) => r.isFirst);
@@ -103,35 +134,76 @@ class _MenuScreenState extends State<MenuScreen> {
     _cambiarA(i);
   }
 
-  void _irA(int i) => _alTocarPestana(i);
+  void _irA(int i) {
+    if (Session.esAdmin && i == MenuScreen.indiceMatch) return;
+    _alTocarPestana(i);
+  }
 
   Future<void> _mostrarMenuGestion() async {
-    final tam = MediaQuery.of(context).size;
-    final inferior = MediaQuery.of(context).padding.bottom;
+    final mq = MediaQuery.of(context);
+    final izquierdaBarra = mq.padding.left > 16 ? mq.padding.left : 16.0;
+    final derechaBarra = mq.padding.right > 16 ? mq.padding.right : 16.0;
+    final inferiorBarra = mq.padding.bottom > 14 ? mq.padding.bottom : 14.0;
 
-    const altoBarra = 96.0;
-    final altoMenu = _Gestion.values.length * 48.0 + 16;
+    final anchoInterior = mq.size.width - izquierdaBarra - derechaBarra;
+    final tope = anchoInterior > 350 ? 350.0 : anchoInterior;
+    const estiloOpcion = TextStyle(fontWeight: FontWeight.w600, fontSize: 14);
+    var textoMasLargo = 0.0;
+    for (final opcion in _Gestion.values) {
+      final medida = TextPainter(
+        text: TextSpan(text: opcion.etiqueta, style: estiloOpcion),
+        maxLines: 1,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      if (medida.width > textoMasLargo) textoMasLargo = medida.width;
+    }
+    // 24 de relleno del ítem + icono + separación + un margen corto a la derecha.
+    final anchoContenido = 24 + 20 + 12 + textoMasLargo + 8;
+    final anchoMenu = anchoContenido > tope ? tope : anchoContenido;
+    final centro = izquierdaBarra + anchoInterior / 2;
+    final izquierda = centro - anchoMenu / 2;
+    final derecha = mq.size.width - centro - anchoMenu / 2;
+
+    const altoItem = 48.0;
+    final altoMenu = _Gestion.values.length * altoItem + 16;
+    const altoBarra = 4.0 + 64.0;
+    final arriba = (mq.size.height - inferiorBarra - altoBarra - altoMenu - 10)
+        .clamp(8.0, mq.size.height);
 
     final elegida = await showMenu<_Gestion>(
       context: context,
       position: RelativeRect.fromLTRB(
-        (tam.width - 270) / 2,
-        tam.height - inferior - altoBarra - altoMenu,
-        (tam.width - 270) / 2,
-        0,
+        izquierda,
+        arriba,
+        derecha,
+        inferiorBarra + altoBarra,
       ),
+      constraints: BoxConstraints(minWidth: anchoMenu, maxWidth: anchoMenu),
       color: Colors.white,
       elevation: 8,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       items: [
         for (final g in _Gestion.values)
           PopupMenuItem<_Gestion>(
             value: g,
+            height: altoItem,
             child: Row(
               children: [
                 Icon(g.icono, size: 20, color: AppColors.rosa),
                 const SizedBox(width: 12),
-                Expanded(child: Text(g.etiqueta)),
+                Expanded(
+                  child: Text(
+                    g.etiqueta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.texto,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -139,23 +211,23 @@ class _MenuScreenState extends State<MenuScreen> {
     );
 
     if (elegida != null && mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => _paginaGestion(elegida)),
+      _navKey.currentState?.push(
+        MaterialPageRoute<void>(builder: (_) => _paginaGestion(elegida)),
       );
     }
   }
 
-  /// Pantalla que se muestra en "Gestionar" según la opción elegida.
+  /// Pantalla que se abre desde el menú de hamburguesa del administrador.
   Widget _paginaGestion(_Gestion g) => switch (g) {
     _Gestion.denuncias => const DenunciasAdminScreen(),
-    _Gestion.seguimiento => const SeccionAdminScreen(
-      titulo: 'Seguimiento de adopción',
-      icono: Icons.timeline,
-      detalle: 'Aquí harás el seguimiento de las mascotas ya adoptadas.',
-    ),
     _Gestion.usuarios => const UsersAdminScreen(),
     _Gestion.administradores => const AdminsAdminScreen(),
-    _Gestion.fundacion => const FundacionAdminScreen(),
+    _Gestion.fundacion => const _PantallaAdmin(
+      titulo: 'Información de la fundación',
+      child: FundacionAdminScreen(),
+    ),
+    _Gestion.adopciones => const AdoptionFollowUpAdminScreen(),
+    _Gestion.apadrinamientos => const ApadrinacionFollowUpAdminScreen(),
   };
 
   void _confirmarCerrarSesion() {
@@ -209,18 +281,6 @@ class _MenuScreenState extends State<MenuScreen> {
   Widget build(BuildContext context) {
 
 
-    final paginas = <Widget>[
-      HomeTab(
-        onVerMascotas: () => _irA(1),
-        onVerMatch: () => _irA(2),
-      ),
-      const PetScreen(),
-      PerfectMatchScreen(onCerrarSesion: _confirmarCerrarSesion),
-      NotificationsTab(onCerrarSesion: _confirmarCerrarSesion),
-      ProfileScreen(onCerrarSesion: _confirmarCerrarSesion),
-    ];
-    final paginaActual = paginas[_index];
-
     return PopScope(
       canPop: !_enDetalle && _index == 0,
       onPopInvokedWithResult: (didPop, _) {
@@ -258,8 +318,9 @@ class _MenuScreenState extends State<MenuScreen> {
         body: Navigator(
           key: _navKey,
           observers: [_obs],
-          onGenerateRoute: (_) =>
-              MaterialPageRoute(builder: (_) => paginaActual),
+          onGenerateRoute: (_) => MaterialPageRoute(
+            builder: (_) => _PestanasVivas(indice: _indice, paginas: _paginas),
+          ),
         ),
         bottomNavigationBar: NavFlotante(
           indice: _index,
@@ -275,10 +336,14 @@ class _MenuScreenState extends State<MenuScreen> {
               iconoActivo: Icon(Icons.pets_rounded),
               etiqueta: 'Mascotas',
             ),
-            const NavItem(
-              icono: Icon(Icons.favorite_rounded),
-              iconoActivo: Icon(Icons.favorite_rounded),
-              etiqueta: 'Match perfecto',
+            NavItem(
+              icono: Icon(
+                Session.esAdmin ? Icons.menu_rounded : Icons.favorite_rounded,
+              ),
+              iconoActivo: Icon(
+                Session.esAdmin ? Icons.menu_rounded : Icons.favorite_rounded,
+              ),
+              etiqueta: Session.esAdmin ? 'Administración' : 'Match perfecto',
               esDestacado: true,
             ),
             NavItem(
@@ -356,6 +421,60 @@ class _MenuScreenState extends State<MenuScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Mantiene las pestañas montadas. Cambiar de una a otra no deja la pantalla en blanco.
+class _PestanasVivas extends StatefulWidget {
+  final ValueNotifier<int> indice;
+  final List<Widget> paginas;
+
+  const _PestanasVivas({required this.indice, required this.paginas});
+
+  @override
+  State<_PestanasVivas> createState() => _PestanasVivasState();
+}
+
+class _PestanasVivasState extends State<_PestanasVivas> {
+  @override
+  void initState() {
+    super.initState();
+    widget.indice.addListener(_alCambiar);
+  }
+
+  @override
+  void dispose() {
+    widget.indice.removeListener(_alCambiar);
+    super.dispose();
+  }
+
+  void _alCambiar() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IndexedStack(
+      index: widget.indice.value,
+      sizing: StackFit.expand,
+      children: widget.paginas,
+    );
+  }
+}
+
+/// Barra de regreso para las pantallas de administración que no traen la suya.
+class _PantallaAdmin extends StatelessWidget {
+  final String titulo;
+  final Widget child;
+
+  const _PantallaAdmin({required this.titulo, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(titulo)),
+      body: child,
     );
   }
 }

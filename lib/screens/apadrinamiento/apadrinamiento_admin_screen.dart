@@ -501,13 +501,38 @@ class _ListaSolicitudes extends StatelessWidget {
   }
 }
 
+/// Detalle de una solicitud de apadrinamiento, usable como página o como hoja.
+class DetalleSolicitudApadrinamiento extends StatelessWidget {
+  final SolicitudApadrinamiento solicitud;
+  final ValueChanged<String> onCambioEstado;
+  final bool enPagina;
+
+  const DetalleSolicitudApadrinamiento({
+    super.key,
+    required this.solicitud,
+    required this.onCambioEstado,
+    this.enPagina = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _DetalleSolicitudSheet(
+      solicitud: solicitud,
+      onCambioEstado: onCambioEstado,
+      enPagina: enPagina,
+    );
+  }
+}
+
 class _DetalleSolicitudSheet extends StatefulWidget {
   final SolicitudApadrinamiento solicitud;
   final ValueChanged<String> onCambioEstado;
+  final bool enPagina;
 
   const _DetalleSolicitudSheet({
     required this.solicitud,
     required this.onCambioEstado,
+    this.enPagina = false,
   });
 
   @override
@@ -1164,42 +1189,48 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
     final t = Theme.of(context).textTheme;
 
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.92,
-      ),
-      decoration: const BoxDecoration(
+      constraints: widget.enPagina
+          ? null
+          : BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.92,
+            ),
+      decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: widget.enPagina
+            ? null
+            : const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         children: [
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            width: 44,
-            height: 5,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(10),
+          if (!widget.enPagina) ...[
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Detalle de la Solicitud',
-                    style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Detalle de la Solicitud',
+                      style: t.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const Divider(),
+            const Divider(),
+          ],
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),

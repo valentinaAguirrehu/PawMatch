@@ -141,9 +141,36 @@ class ApiService {
     );
   }
 
+  static Future<({Set<String> adoptantes, Set<String> apadrinantes})>
+  listarRolesUsuariosAdmin() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/admin/usuarios/roles'),
+      headers: {'x-usuario-id': Session.idUsuario ?? ''},
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(
+        (data as Map<String, dynamic>)['error'] ??
+            'No se pudieron cargar los roles',
+      );
+    }
+    final mapa = data as Map<String, dynamic>;
+    Set<String> ids(String clave) {
+      final lista = mapa[clave];
+      if (lista is! List) return {};
+      return {
+        for (final id in lista)
+          if (id != null && id.toString().isNotEmpty) id.toString(),
+      };
+    }
+
+    return (adoptantes: ids('adoptantes'), apadrinantes: ids('apadrinantes'));
+  }
+
   static Future<AdminUser> cambiarEstadoUsuarioAdmin({
     required String id,
     required bool activo,
+    String? motivo,
   }) async {
     final response = await http.patch(
       Uri.parse('$baseUrl/admin/usuarios/$id/estado'),
@@ -151,7 +178,10 @@ class ApiService {
         'Content-Type': 'application/json',
         'x-usuario-id': Session.idUsuario ?? '',
       },
-      body: jsonEncode({'estado_cuenta': activo ? 'activo' : 'inactivo'}),
+      body: jsonEncode({
+        'estado_cuenta': activo ? 'activo' : 'inactivo',
+        if (!activo && motivo != null) 'comentarios': motivo,
+      }),
     );
     final data = jsonDecode(response.body);
     if (response.statusCode == 200) {
@@ -191,6 +221,51 @@ class ApiService {
     throw Exception(
       (data as Map<String, dynamic>)['error'] ??
           'No se pudo crear el administrador',
+    );
+  }
+
+  static Future<AdminUser> actualizarAdministrador({
+    required String id,
+    required String nombres,
+    required String apellidos,
+    required String correo,
+    required String telefono,
+    String? contrasena,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/usuarios/administradores/$id'),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-usuario-id': Session.idUsuario ?? '',
+      },
+      body: jsonEncode({
+        'nombres': nombres,
+        'apellidos': apellidos,
+        'correo': correo,
+        'telefono': telefono,
+        if (contrasena != null && contrasena.isNotEmpty) 'contrasena': contrasena,
+      }),
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      return AdminUser.fromJson(data as Map<String, dynamic>);
+    }
+    throw Exception(
+      (data as Map<String, dynamic>)['error'] ??
+          'No se pudo actualizar el administrador',
+    );
+  }
+
+  static Future<void> eliminarAdministrador(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/admin/usuarios/administradores/$id'),
+      headers: {'x-usuario-id': Session.idUsuario ?? ''},
+    );
+    if (response.statusCode == 200) return;
+    final data = jsonDecode(response.body);
+    throw Exception(
+      (data as Map<String, dynamic>)['error'] ??
+          'No se pudo eliminar el administrador',
     );
   }
 
