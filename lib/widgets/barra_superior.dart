@@ -8,11 +8,15 @@ class BarraSuperior extends StatelessWidget {
   final String titulo;
   final VoidCallback onCerrarSesion;
 
+  /// Si se indica, el círculo de la izquierda vuelve atrás en lugar de mostrar la huella.
+  final VoidCallback? onVolver;
+
   const BarraSuperior({
     super.key,
     required this.iconoTitulo,
     required this.titulo,
     required this.onCerrarSesion,
+    this.onVolver,
   });
 
   static const _sombra = [
@@ -29,16 +33,26 @@ class BarraSuperior extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 6),
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.rosa.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-              boxShadow: _sombra,
-            ),
-            child: const Center(
-              child: Icon(Icons.pets, color: AppColors.rosa, size: 22),
+          Tooltip(
+            message: onVolver == null ? 'Paw Match' : 'Volver',
+            child: GestureDetector(
+              onTap: onVolver,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.rosa.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                  boxShadow: _sombra,
+                ),
+                child: Center(
+                  child: Icon(
+                    onVolver == null ? Icons.pets : Icons.arrow_back_rounded,
+                    color: AppColors.rosa,
+                    size: 22,
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 12),

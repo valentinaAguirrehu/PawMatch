@@ -1258,6 +1258,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(6),
@@ -1268,12 +1269,14 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                                   child: const Icon(Icons.health_and_safety_outlined, size: 20, color: AppColors.rosa),
                                 ),
                                 const SizedBox(width: 10),
-                                const Text(
-                                  'Estado de Salud y Cuidados',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: Color(0xFF1E272E),
+                                const Expanded(
+                                  child: Text(
+                                    'Estado de Salud y Cuidados',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1E272E),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1294,15 +1297,18 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFEA580C)),
                                         SizedBox(width: 6),
-                                        Text(
-                                          'Necesidades veterinarias pendientes:',
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF9A3412),
+                                        Expanded(
+                                          child: Text(
+                                            'Necesidades veterinarias pendientes:',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF9A3412),
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -1350,15 +1356,18 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Icon(Icons.check_circle_outline_rounded, size: 16, color: Color(0xFF16A34A)),
                                         SizedBox(width: 6),
-                                        Text(
-                                          'Vacunas y procedimientos realizados:',
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF166534),
+                                        Expanded(
+                                          child: Text(
+                                            'Vacunas y procedimientos realizados:',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFF166534),
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -1407,37 +1416,41 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
+                                    const Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Icon(Icons.info_outline, size: 16, color: AppColors.rosa),
-                                        const SizedBox(width: 6),
-                                        const Text(
-                                          'Estado general de salud:',
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.texto,
+                                        Icon(Icons.info_outline, size: 16, color: AppColors.rosa),
+                                        SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            'Estado general de salud:',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.texto,
+                                            ),
                                           ),
                                         ),
-                                        const SizedBox(width: 6),
-                                        if (p.noTieneNecesidadesPendientes)
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFDCFCE7),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            child: const Text(
-                                              'Sin necesidades pendientes',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFF166534),
-                                              ),
-                                            ),
-                                          ),
                                       ],
                                     ),
+                                    if (p.noTieneNecesidadesPendientes) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFDCFCE7),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: const Text(
+                                          'Sin necesidades pendientes',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF166534),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                     if (p.estadosSalud.contains('Requiere cuidados especiales.')) ...[
                                       const SizedBox(height: 6),
                                       Container(

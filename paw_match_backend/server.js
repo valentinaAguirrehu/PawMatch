@@ -8,6 +8,8 @@ const fundacionRoutes = require('./routes/fundacion');
 const solicitudesApadrinamientoRoutes = require('./routes/solicitudes_apadrinamiento');
 const adoptionRequestsRoutes = require('./routes/adoption_requests');
 const noticiasRoutes = require('./routes/noticias');
+const pool = require('./db');
+const { asegurarRolSuperAdmin } = require('./utils/roles');
 
 const app = express();
 app.use(cors());
@@ -25,6 +27,9 @@ app.use('/uploads', express.static('uploads'));
 app.get('/', (req, res) => res.send('API Paw Match funcionando'));
 
 const PORT = process.env.PORT || 3000;
+asegurarRolSuperAdmin(pool).catch((error) => {
+  console.error('No se pudo preparar el rol superadmin:', error.message);
+});
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
