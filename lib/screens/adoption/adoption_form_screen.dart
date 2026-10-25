@@ -1,8 +1,11 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
@@ -54,8 +57,8 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   bool _revisando = true;
   bool _enviando = false;
   bool _mostrarError = false;
-  bool _correoPerfilConfirmado = false;
   bool _actualizandoCorreo = false;
+  bool _correoPerfilConfirmado = false;
   bool _aceptoTerminos = false;
   String? _error;
 
@@ -180,7 +183,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   }
 
   Future<void> _elegirFoto({required bool cedula}) async {
-    final origen = await showModalBottomSheet<ImageSource>(
+    final opcion = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (ctx) => SafeArea(
@@ -188,48 +191,147 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.rosa),
-              title: const Text('Tomar foto'),
-              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              leading: const Icon(Icons.file_present_rounded, color: AppColors.rosa),
+              title: const Text('Subir archivo o documento (PDF, JPG, PNG)'),
+              subtitle: const Text('Permite seleccionar documentos PDF o imágenes de tu dispositivo'),
+              onTap: () => Navigator.pop(ctx, 'archivo'),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined, color: AppColors.rosa),
-              title: const Text('Elegir de la galería'),
-              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              title: const Text('Elegir foto de la galería'),
+              onTap: () => Navigator.pop(ctx, 'galeria'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.rosa),
+              title: const Text('Tomar foto con la cámara'),
+              onTap: () => Navigator.pop(ctx, 'camara'),
             ),
           ],
         ),
       ),
     );
-    if (origen == null || !mounted) return;
+    if (opcion == null || !mounted) return;
 
     try {
-      final archivo = await ImagePicker().pickImage(
-        source: origen,
-        imageQuality: 85,
-      );
-      if (archivo == null) return;
-      final bytes = await archivo.readAsBytes();
-      final nombre = archivo.name.trim().isEmpty
-          ? (cedula ? 'cedula.jpg' : 'recibo.jpg')
-          : archivo.name;
+      Uint8List? bytes;
+      String? nombre;
+
+      if (opcion == 'archivo') {
+        final files = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+        );
+        if (files.isNotEmpty) {
+          final file = files.first;
+          bytes = await file.xFile.readAsBytes();
+          nombre = file.name;
+        }
+      } else {
+        final source = opcion == 'camara' ? ImageSource.camera : ImageSource.gallery;
+        final picked = await ImagePicker().pickImage(
+          source: source,
+          imageQuality: 85,
+        );
+        if (picked != null) {
+          bytes = await picked.readAsBytes();
+          nombre = picked.name;
+        }
+      }
+
+      if (bytes == null || !mounted) return;
+
+      final nombreFinal = (nombre != null && nombre.trim().isNotEmpty)
+          ? nombre
+          : (cedula ? 'cedula.jpg' : 'recibo.jpg');
+
       if (!mounted) return;
       setState(() {
         _error = null;
         if (cedula) {
           _cedulaBytes = bytes;
-          _cedulaNombre = nombre;
+          _cedulaNombre = nombreFinal;
         } else {
           _reciboBytes = bytes;
-          _reciboNombre = nombre;
+          _reciboNombre = nombreFinal;
         }
       });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo seleccionar la imagen: $e')),
+        SnackBar(content: Text('No se pudo seleccionar el archivo: $e')),
       );
     }
+  }
+
+  bool _esBytesPdf(String? nombre, Uint8List? bytes) {
+    if (nombre != null && nombre.toLowerCase().endsWith('.pdf')) return true;
+    if (bytes != null && bytes.length >= 4) {
+      return bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46; // %PDF
+    }
+    return false;
+  }
+
+  void _verArchivo(Uint8List? bytes, String? nombre) {
+    if (bytes == null) return;
+    final nombreDoc = nombre ?? 'documento.pdf';
+
+    if (_esBytesPdf(nombre, bytes)) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: Colors.grey.shade100,
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.texto,
+              elevation: 1,
+              title: Text(nombreDoc, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            body: PdfPreview(
+              build: (_) => bytes,
+              useActions: false,
+              allowPrinting: false,
+              allowSharing: false,
+              canChangeOrientation: false,
+              canChangePageFormat: false,
+              canDebug: false,
+              dynamicLayout: false,
+              pdfFileName: nombreDoc,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: Text(nombreDoc),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.memory(bytes, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Valida el correo confirmado y envía la solicitud de adopción.
@@ -268,8 +370,8 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     if (!_correoPerfilConfirmado) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          backgroundColor: Colors.orange,
-          content: Text('Por favor confirma tu correo electrónico en la sección inferior.'),
+          backgroundColor: Colors.redAccent,
+          content: Text('Por favor pulsa el botón "Confirmar" en tu correo antes de enviar la solicitud.'),
         ),
       );
       return;
@@ -332,6 +434,16 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           ? 'Usuario Registrado'
           : '${Session.nombre} ${Session.apellidos}'.trim();
 
+      // Traer foto de la mascota para el PDF si existe
+      Uint8List? petFotoBytes;
+      try {
+        if (widget.pet.foto != null && widget.pet.foto!.trim().isNotEmpty) {
+          final url = urlFoto(widget.pet.foto!);
+          final resImg = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+          if (resImg.statusCode == 200) petFotoBytes = resImg.bodyBytes;
+        }
+      } catch (_) {}
+
       Uint8List? pdfBytes;
       String? avisoPdf;
       try {
@@ -362,6 +474,9 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
             aceptoTerminos: true,
             fotoCedula: _cedulaBytes,
             fotoRecibo: _reciboBytes,
+            fotoMascota: petFotoBytes,
+            estadoProceso: 'pendiente',
+            estadoCorreo: 'pendiente',
           ),
         );
         await AcuerdoAdopcionPdfService.descargarYGuardarPdf(
@@ -878,21 +993,25 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     _FotoCampo(
       titulo: 'Cédula',
       descripcion:
-          'No olvides adjuntar la foto de tu documento de identidad para validar la solicitud.',
+          'Adjunta tu documento de identidad (cédula en formato PDF, JPG o PNG) para validar la solicitud.',
       bytes: _cedulaBytes,
+      nombreArchivo: _cedulaNombre,
+      onVer: _cedulaBytes != null ? () => _verArchivo(_cedulaBytes, _cedulaNombre) : null,
       onElegir: () => _elegirFoto(cedula: true),
     ),
     const SizedBox(height: 14),
     _FotoCampo(
       titulo: 'Recibo',
       descripcion:
-          'Por favor adjunta la foto de un recibo de servicio público para verificar tu dirección.',
+          'Adjunta un recibo de servicio público (PDF, JPG o PNG) para verificar tu dirección.',
       bytes: _reciboBytes,
+      nombreArchivo: _reciboNombre,
+      onVer: _reciboBytes != null ? () => _verArchivo(_reciboBytes, _reciboNombre) : null,
       onElegir: () => _elegirFoto(cedula: false),
     ),
   ];
 
-  /// Tarjeta del último paso: confirma el correo o abre el mismo diálogo de cambio.
+  /// Tarjeta del último paso: confirma el correo o abre el diálogo de cambio.
   Widget _tarjetaConfirmacionCorreoPerfil(TextTheme t) {
     final correoPerfil = _correoCtrl.text.trim().isNotEmpty
         ? _correoCtrl.text.trim()
@@ -904,12 +1023,12 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _correoPerfilConfirmado ? Colors.green.shade400 : AppColors.rosa,
-          width: 1.8,
+          color: _correoPerfilConfirmado ? Colors.green.shade400 : AppColors.bordeRosa,
+          width: _correoPerfilConfirmado ? 1.8 : 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (_correoPerfilConfirmado ? Colors.green : AppColors.rosa).withValues(alpha: 0.1),
+            color: (_correoPerfilConfirmado ? Colors.green : Colors.black).withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -942,7 +1061,9 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                       style: t.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     Text(
-                      'Confirmación requerida para notificación',
+                      _correoPerfilConfirmado
+                          ? 'Correo verificado para tu solicitud'
+                          : 'Confirmación requerida para notificación',
                       style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
                     ),
                   ],
@@ -950,10 +1071,12 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Este es el correo electrónico de tu perfil. Por favor confirmar ya que recibirás una notificación con tu solicitud:',
-            style: TextStyle(fontSize: 13, height: 1.38, color: Colors.black87),
+          const SizedBox(height: 10),
+          Text(
+            _correoPerfilConfirmado
+                ? '¡Tu correo ha sido confirmado con éxito! Allí te notificaremos el avance de tu solicitud.'
+                : 'Al enviar la solicitud, el sistema te enviará automáticamente un correo electrónico con un enlace para confirmar tu dirección.',
+            style: const TextStyle(fontSize: 12, height: 1.35, color: Color(0xFF4B5563)),
           ),
           const SizedBox(height: 12),
           Container(
@@ -961,11 +1084,17 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
             decoration: BoxDecoration(
               color: AppColors.rosaSuave.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.bordeRosa),
+              border: Border.all(
+                color: _correoPerfilConfirmado ? Colors.green.shade300 : AppColors.bordeRosa,
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.email, color: AppColors.rosa, size: 20),
+                Icon(
+                  Icons.email,
+                  color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
+                  size: 20,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -978,29 +1107,32 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (_correoPerfilConfirmado)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle, size: 14, color: Colors.green.shade800),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Confirmado',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade800,
-                          ),
-                        ),
-                      ],
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _correoPerfilConfirmado ? Colors.green.shade100 : Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _correoPerfilConfirmado ? Icons.check_circle : Icons.hourglass_top_rounded,
+                        size: 13,
+                        color: _correoPerfilConfirmado ? Colors.green.shade800 : Colors.amber.shade900,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _correoPerfilConfirmado ? 'Confirmado' : 'Verificación al enviar',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _correoPerfilConfirmado ? Colors.green.shade800 : Colors.amber.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -1008,31 +1140,28 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           Row(
             children: [
               Expanded(
-                child: FilledButton(
+                child: FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.rosa,
-                    disabledBackgroundColor: AppColors.rosa.withValues(alpha: 0.45),
+                    backgroundColor: _correoPerfilConfirmado ? Colors.green.shade600 : AppColors.rosa,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                   ),
-                  onPressed: _correoPerfilConfirmado
-                      ? null
-                      : () {
-                          setState(() => _correoPerfilConfirmado = true);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              backgroundColor: Colors.green,
-                              duration: const Duration(seconds: 2),
-                              content: Text(
-                                'Correo $correoPerfil confirmado para recibir la notificación.',
-                              ),
-                            ),
-                          );
-                        },
-                  child: const Text(
-                    'Confirmar',
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                  icon: Icon(_correoPerfilConfirmado ? Icons.check_circle : Icons.check, size: 17),
+                  label: Text(
+                    _correoPerfilConfirmado ? 'Confirmado' : 'Confirmar',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
+                  onPressed: () {
+                    setState(() => _correoPerfilConfirmado = true);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 2),
+                        content: Text('Correo $correoPerfil confirmado.'),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 10),
@@ -1042,11 +1171,11 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                     foregroundColor: Colors.grey.shade800,
                     side: BorderSide(color: Colors.grey.shade400),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                   ),
                   icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
                   label: const Text(
-                    'No es / Cambiar',
+                    'No es / Cambiar correo',
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
                   onPressed: _dialogoEditarCorreoPerfil,
@@ -1574,44 +1703,196 @@ class _FotoCampo extends StatelessWidget {
   final String titulo;
   final String? descripcion;
   final Uint8List? bytes;
+  final String? nombreArchivo;
+  final VoidCallback? onVer;
   final VoidCallback onElegir;
 
   const _FotoCampo({
     required this.titulo,
     this.descripcion,
     required this.bytes,
+    this.nombreArchivo,
+    this.onVer,
     required this.onElegir,
   });
 
+  bool _esPdf(String? nombre, Uint8List? bytes) {
+    if (nombre != null && nombre.toLowerCase().endsWith('.pdf')) return true;
+    if (bytes != null && bytes.length >= 4) {
+      return bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46; // %PDF
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool esDocumentoPdf = _esPdf(nombreArchivo, bytes);
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.bordeRosa),
+        border: Border.all(
+          color: bytes == null ? AppColors.bordeRosa : Colors.green.shade400,
+          width: bytes == null ? 1 : 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
           if (descripcion != null) ...[
             const SizedBox(height: 4),
             Text(
               descripcion!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.black54,
                 height: 1.35,
               ),
             ),
           ],
-          const SizedBox(height: 10),
-          if (bytes != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(bytes!, height: 160, fit: BoxFit.cover),
-            )
-          else
+          const SizedBox(height: 12),
+          if (bytes != null) ...[
+            if (esDocumentoPdf)
+              InkWell(
+                onTap: null,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  height: 155,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.red.shade200, width: 1.2),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.picture_as_pdf_rounded, color: Colors.red.shade700, size: 48),
+                      const SizedBox(height: 6),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          nombreArchivo ?? 'documento.pdf',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: Colors.red.shade900,
+                          ),
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade100,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle, size: 14, color: Colors.green.shade800),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Documento PDF listo',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              InkWell(
+                onTap: null,
+                borderRadius: BorderRadius.circular(12),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    bytes!,
+                    height: 160,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 130,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.rosaSuave,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.description_outlined, color: AppColors.rosa, size: 40),
+                          const SizedBox(height: 6),
+                          Text(
+                            nombreArchivo ?? 'documento adjunto',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    nombreArchivo ?? (esDocumentoPdf ? 'documento.pdf' : 'imagen.jpg'),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.rosa,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: onVer,
+                    icon: const Icon(Icons.visibility_outlined, size: 18),
+                    label: const Text('Ver documento'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.rosa,
+                      side: const BorderSide(color: AppColors.rosa),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: onElegir,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Cambiar'),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
             Container(
               height: 110,
               alignment: Alignment.center,
@@ -1619,14 +1900,25 @@ class _FotoCampo extends StatelessWidget {
                 color: AppColors.rosaSuave,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.add_a_photo_outlined, color: AppColors.rosa, size: 32),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.attach_file_rounded, color: AppColors.rosa, size: 34),
+                  SizedBox(height: 4),
+                  Text(
+                    'Ningún archivo seleccionado',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ],
+              ),
             ),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: onElegir,
-            icon: const Icon(Icons.image_outlined),
-            label: Text(bytes == null ? 'Adjuntar imagen' : 'Cambiar imagen'),
-          ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: onElegir,
+              icon: const Icon(Icons.file_upload_outlined),
+              label: const Text('Adjuntar documento (PDF, JPG, PNG)'),
+            ),
+          ],
         ],
       ),
     );

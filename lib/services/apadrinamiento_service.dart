@@ -286,4 +286,15 @@ class ApadrinamientoService {
       noLeidasUsuario.value = 0;
     } catch (_) {}
   }
+
+  /// Reenvía el correo de verificación para una solicitud de apadrinamiento.
+  static Future<String> reenviarVerificacionCorreo(String idSolicitud) async {
+    final uri = Uri.parse('$_url/$idSolicitud/reenviar-verificacion');
+    final res = await http.post(uri, headers: _headers);
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode != 200) {
+      throw Exception(data['error']?.toString() ?? 'No se pudo reenviar el correo');
+    }
+    return data['mensaje']?.toString() ?? 'Correo de verificación reenviado exitosamente';
+  }
 }

@@ -1,7 +1,10 @@
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
@@ -83,7 +86,7 @@ class _SolicitudApadrinamientoDialogState
   String _tipoAporte = tipoMonetario;
 
   // Campos para Aporte monetario
-  final _montoCtrl = TextEditingController(text: '30000');
+  final _montoCtrl = TextEditingController();
   String _frecuenciaMonetario = 'mensual'; // 'semanal', 'quincenal', 'mensual', 'aporte_unico'
 
   // Campos para Aporte en especie
@@ -102,8 +105,8 @@ class _SolicitudApadrinamientoDialogState
 
   bool _aceptoAcuerdo = false;
   bool _enviando = false;
-  bool _correoPerfilConfirmado = true;
   bool _actualizandoCorreo = false;
+  bool _correoPerfilConfirmado = false;
 
   @override
   void initState() {
@@ -136,26 +139,145 @@ class _SolicitudApadrinamientoDialogState
     super.dispose();
   }
 
+  bool _esPdf(String? nombre, Uint8List? bytes) {
+    if (nombre != null && nombre.toLowerCase().endsWith('.pdf')) return true;
+    if (bytes != null && bytes.length >= 4) {
+      return bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44 && bytes[3] == 0x46; // %PDF
+    }
+    return false;
+  }
+
   Future<void> _seleccionarDocumento() async {
+    final opcion = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.file_present_rounded, color: AppColors.rosa),
+              title: const Text('Subir archivo o documento (PDF, JPG, PNG)'),
+              subtitle: const Text('Permite seleccionar documentos PDF o imágenes de tu dispositivo'),
+              onTap: () => Navigator.pop(ctx, 'archivo'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: AppColors.rosa),
+              title: const Text('Elegir foto de la galería'),
+              onTap: () => Navigator.pop(ctx, 'galeria'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.rosa),
+              title: const Text('Tomar foto con la cámara'),
+              onTap: () => Navigator.pop(ctx, 'camara'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (opcion == null || !mounted) return;
+
     try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-      );
-      if (picked != null) {
-        final bytes = await picked.readAsBytes();
-        setState(() {
-          _docBytes = bytes;
-          _docNombre = picked.name;
-        });
+      Uint8List? bytes;
+      String? nombre;
+
+      if (opcion == 'archivo') {
+        final files = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+        );
+        if (files.isNotEmpty) {
+          final file = files.first;
+          bytes = await file.xFile.readAsBytes();
+          nombre = file.name;
+        }
+      } else {
+        final source = opcion == 'camara' ? ImageSource.camera : ImageSource.gallery;
+        final picked = await ImagePicker().pickImage(
+          source: source,
+          imageQuality: 85,
+        );
+        if (picked != null) {
+          bytes = await picked.readAsBytes();
+          nombre = picked.name;
+        }
       }
+
+      if (bytes == null || !mounted) return;
+
+      setState(() {
+        _docBytes = bytes;
+        _docNombre = nombre ?? 'documento_identidad.jpg';
+      });
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo seleccionar la imagen: $e')),
+        SnackBar(content: Text('No se pudo seleccionar el documento: $e')),
       );
     }
+  }
+
+  void _verDocumento() {
+    if (_docBytes == null) return;
+    final nombre = _docNombre ?? 'documento_identidad.pdf';
+
+    if (_esPdf(_docNombre, _docBytes)) {
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog.fullscreen(
+          child: Scaffold(
+            backgroundColor: Colors.grey.shade100,
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.texto,
+              elevation: 1,
+              title: Text(nombre, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            body: PdfPreview(
+              build: (_) => _docBytes!,
+              useActions: false,
+              allowPrinting: false,
+              allowSharing: false,
+              canChangeOrientation: false,
+              canChangePageFormat: false,
+              canDebug: false,
+              dynamicLayout: false,
+              pdfFileName: nombre,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: Text(nombre),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.memory(_docBytes!, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Muestra el texto breve, claro y completo del acuerdo en un diálogo modal responsive.
@@ -287,6 +409,18 @@ class _SolicitudApadrinamientoDialogState
 
   void _continuar() {
     if (_paso == 0) {
+      final motivacion = _motivacionCtrl.text.trim();
+      if (motivacion.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text(
+              'Debes responder por qué quieres apadrinar a ${widget.pet.nombre}',
+            ),
+          ),
+        );
+        return;
+      }
       if (!_formKey.currentState!.validate()) return;
       setState(() => _paso = 1);
     } else if (_paso == 1) {
@@ -311,6 +445,20 @@ class _SolicitudApadrinamientoDialogState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(widget.pet.mensajeFamiliaPara(Session.idUsuario)),
+        ),
+      );
+      return;
+    }
+
+    final motivacion = _motivacionCtrl.text.trim();
+    if (motivacion.isEmpty) {
+      setState(() => _paso = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Debes responder por qué quieres apadrinar a ${widget.pet.nombre}',
+          ),
         ),
       );
       return;
@@ -341,6 +489,18 @@ class _SolicitudApadrinamientoDialogState
       return;
     }
 
+    if (!_correoPerfilConfirmado) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text(
+            'Por favor pulsa el botón "Confirmar" en tu correo antes de enviar la solicitud.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final correoFinal = _correoCtrl.text.trim();
     if (correoFinal.isEmpty || !correoFinal.contains('@') || !correoFinal.contains('.')) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -348,18 +508,6 @@ class _SolicitudApadrinamientoDialogState
           backgroundColor: Colors.redAccent,
           content: Text(
             'Por favor, verifica que tu correo electrónico sea válido.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    if (!_correoPerfilConfirmado) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.orange,
-          content: Text(
-            'Por favor confirma tu correo electrónico en la sección inferior.',
           ),
         ),
       );
@@ -457,11 +605,11 @@ class _SolicitudApadrinamientoDialogState
                         if (!mounted) return;
                         setState(() {
                           _correoCtrl.text = nuevo;
-                          _correoPerfilConfirmado = true;
+                          _correoPerfilConfirmado = false;
                           _actualizandoCorreo = false;
                         });
                         if (ctx.mounted) Navigator.pop(ctx);
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               backgroundColor: Colors.green,
@@ -473,7 +621,7 @@ class _SolicitudApadrinamientoDialogState
                         if (ctx.mounted) setModalState(() => _actualizandoCorreo = false);
                         if (mounted) setState(() => _actualizandoCorreo = false);
                         final msg = e.toString().replaceFirst('Exception: ', '');
-                        if (mounted) {
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(backgroundColor: Colors.redAccent, content: Text(msg)),
                           );
@@ -552,7 +700,17 @@ class _SolicitudApadrinamientoDialogState
         } catch (_) {}
       }
 
-      // 2. Generar el PDF oficial del Acuerdo breve con datos reales
+      // Obtener imagen de la mascota si está disponible
+      Uint8List? petFotoBytes;
+      try {
+        if (widget.pet.foto != null && widget.pet.foto!.trim().isNotEmpty) {
+          final url = urlFoto(widget.pet.foto!);
+          final resImg = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
+          if (resImg.statusCode == 200) petFotoBytes = resImg.bodyBytes;
+        }
+      } catch (_) {}
+
+      // 2. Generar el PDF oficial del Acuerdo breve con datos reales y fotos integradas
       final datosAcuerdo = DatosAcuerdoApadrinamiento(
         idSolicitud: idRadicado,
         nombreUsuario: nombreCompletoUsuario,
@@ -571,6 +729,10 @@ class _SolicitudApadrinamientoDialogState
         frecuenciaAporte: frecuenciaFinal,
         motivacion: motivacion,
         fechaAceptacion: fechaAhora,
+        fotoCedula: _docBytes,
+        fotoMascota: petFotoBytes,
+        estadoProceso: 'pendiente',
+        estadoCorreo: 'pendiente',
       );
 
       final pdfBytes = await AcuerdoApadrinamientoPdfService.generarPdfBytes(datosAcuerdo);
@@ -586,7 +748,7 @@ class _SolicitudApadrinamientoDialogState
 
       widget.onEnviadaExitosamente?.call();
 
-      // 4. Diálogo de confirmación con opción de volver a descargar
+      // 4. Diálogo de confirmación con indicación del correo de verificación
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -597,7 +759,7 @@ class _SolicitudApadrinamientoDialogState
             size: 56,
           ),
           title: const Text(
-            '¡Solicitud Enviada y Acuerdo Descargado!',
+            '¡Solicitud y Correo de Verificación Enviados!',
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
@@ -626,11 +788,11 @@ class _SolicitudApadrinamientoDialogState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Acuerdo en PDF generado',
+                            'Acuerdo en PDF descargado',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
                           ),
                           Text(
-                            'Se descargó el comprobante con tu constancia de aceptación electrónica.',
+                            'Incluye tus datos, los de ${widget.pet.nombre}, tu aporte y la fotografía de tu documento.',
                             style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
                           ),
                         ],
@@ -639,22 +801,37 @@ class _SolicitudApadrinamientoDialogState
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.blue.shade200),
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.mail_outline, color: Colors.blue.shade700, size: 20),
+                    Icon(Icons.mark_email_unread_outlined, color: Colors.amber.shade900, size: 22),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        'Notificación: Te llegará un correo a $correoConfirmado cuando la fundación apruebe o rechace tu solicitud.',
-                        style: TextStyle(fontSize: 11.5, color: Colors.blue.shade900),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Verifica tu correo electrónico',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Enviamos un enlace de verificación a $correoConfirmado. Haz clic en el enlace para actualizar tu estado a «Correo confirmado».',
+                            style: TextStyle(fontSize: 11.5, height: 1.35, color: Colors.grey.shade900),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -935,16 +1112,16 @@ class _SolicitudApadrinamientoDialogState
 
         const SizedBox(height: 14),
 
-        // Confirmación o modificación del correo para recibir respuesta
+        // Pregunta obligatoria de motivación claramente destacada
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.rosa.withValues(alpha: 0.35)),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.bordeRosa, width: 1.2),
             boxShadow: [
               BoxShadow(
-                color: AppColors.rosa.withValues(alpha: 0.08),
+                color: AppColors.rosa.withValues(alpha: 0.06),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -955,111 +1132,71 @@ class _SolicitudApadrinamientoDialogState
             children: [
               Row(
                 children: [
-                  const Icon(Icons.mark_email_read_outlined, size: 20, color: AppColors.rosa),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Correo para recibir la respuesta *',
-                    style: t.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.rosa,
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: AppColors.rosaSuave,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.favorite_rounded, color: AppColors.rosa, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '¿Por qué quieres apadrinar a ${widget.pet.nombre}? *',
+                      style: t.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.texto,
+                      ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                'Confirma o modifica el correo electrónico donde la Fundación te informará si tu solicitud fue aprobada o rechazada:',
-                style: t.bodySmall?.copyWith(color: Colors.grey.shade700, height: 1.3),
+                'Cuéntanos por qué quieres apadrinar a ${widget.pet.nombre}. ¿Qué te motivó a elegirlo(a)? ¿Por qué deseas apoyarlo(a)?',
+                style: t.bodySmall?.copyWith(
+                  color: Colors.grey.shade700,
+                  height: 1.35,
+                ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               TextFormField(
-                controller: _correoCtrl,
-                keyboardType: TextInputType.emailAddress,
+                controller: _motivacionCtrl,
+                maxLines: 4,
+                maxLength: 500,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
-                  hintText: 'ejemplo@correo.com',
-                  prefixIcon: const Icon(Icons.email_outlined, color: AppColors.rosa),
+                  hintText: 'Escribe aquí tu motivación para apadrinar a ${widget.pet.nombre}...',
                   filled: true,
                   fillColor: Colors.grey.shade50,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  contentPadding: const EdgeInsets.all(14),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide(color: Colors.grey.shade300),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                     borderSide: const BorderSide(color: AppColors.rosa, width: 2),
                   ),
                 ),
                 validator: (v) {
-                  final correo = (v ?? '').trim();
-                  if (correo.isEmpty) {
-                    return 'Ingresa tu correo para recibir la notificación.';
+                  final txt = (v ?? '').trim();
+                  if (txt.isEmpty) {
+                    return 'Debes responder por qué quieres apadrinar a ${widget.pet.nombre}.';
                   }
-                  if (!correo.contains('@') || !correo.contains('.')) {
-                    return 'Ingresa un correo electrónico válido.';
+                  if (txt.length > 500) {
+                    return 'Solo se aceptan un máximo de 500 caracteres.';
                   }
                   return null;
                 },
               ),
             ],
           ),
-        ),
-
-        const SizedBox(height: 18),
-
-        // Pregunta obligatoria de motivación
-        Text(
-          '¿Por qué quieres apadrinar a esta mascota? *',
-          style: t.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: AppColors.texto,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Cuéntanos por qué quieres apadrinar a esta mascota. ¿Qué te gustó de ella? ¿Qué te motivó a elegirla? ¿Por qué deseas ayudarla?',
-          style: t.bodySmall?.copyWith(
-            color: Colors.grey.shade600,
-            height: 1.35,
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextFormField(
-          controller: _motivacionCtrl,
-          maxLines: 4,
-          maxLength: 500,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(
-            hintText: 'Escribe aquí tu motivación...',
-            filled: true,
-            fillColor: Colors.grey.shade50,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.rosa, width: 2),
-            ),
-          ),
-          validator: (v) {
-            final txt = (v ?? '').trim();
-            if (txt.isEmpty) {
-              return 'Este campo es obligatorio para evaluar tu solicitud.';
-            }
-            if (txt.length > 500) {
-              return 'Solo se aceptan un máximo de 500 caracteres.';
-            }
-            return null;
-          },
         ),
 
         const SizedBox(height: 16),
@@ -1383,7 +1520,7 @@ class _SolicitudApadrinamientoDialogState
                     prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 0),
                     suffixText: 'COP',
                     suffixStyle: const TextStyle(fontWeight: FontWeight.w600, color: Colors.grey),
-                    hintText: '50000',
+                    hintText: '0',
                     filled: true,
                     fillColor: Colors.grey.shade50,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -2072,14 +2209,100 @@ class _SolicitudApadrinamientoDialogState
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (_docBytes != null) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(
-                    _docBytes!,
-                    height: 180,
-                    fit: BoxFit.cover,
+                if (_esPdf(_docNombre, _docBytes))
+                  InkWell(
+                    onTap: null,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      height: 160,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.red.shade200, width: 1.2),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.picture_as_pdf_rounded, color: Colors.red.shade700, size: 48),
+                          const SizedBox(height: 6),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              _docNombre ?? 'documento_identidad.pdf',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.red.shade900,
+                              ),
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade100,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.check_circle, size: 14, color: Colors.green.shade800),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Documento PDF listo',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  InkWell(
+                    onTap: null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.memory(
+                        _docBytes!,
+                        height: 180,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 140,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: AppColors.rosaSuave,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.description_outlined, color: AppColors.rosa, size: 48),
+                              const SizedBox(height: 6),
+                              Text(
+                                _docNombre ?? 'documento_identidad',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -2092,10 +2315,35 @@ class _SolicitudApadrinamientoDialogState
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('Cambiar'),
-                      onPressed: _seleccionarDocumento,
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.rosa,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.visibility_outlined, size: 18),
+                        label: const Text('Ver documento'),
+                        onPressed: _verDocumento,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.rosa,
+                          side: const BorderSide(color: AppColors.rosa),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Cambiar'),
+                        onPressed: _seleccionarDocumento,
+                      ),
                     ),
                   ],
                 ),
@@ -2125,8 +2373,8 @@ class _SolicitudApadrinamientoDialogState
                     backgroundColor: AppColors.rosa,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('Subir fotografía de cédula'),
+                  icon: const Icon(Icons.attach_file_rounded),
+                  label: const Text('Subir documento (PDF, JPG, PNG)'),
                   onPressed: _seleccionarDocumento,
                 ),
               ],
@@ -2201,6 +2449,8 @@ class _SolicitudApadrinamientoDialogState
             _resumenFila('Tipo de aporte:', _tipoAporte),
             const Divider(height: 14),
             _resumenFila('Modalidad y Detalle:', aporteResumen),
+            const Divider(height: 14),
+            _resumenFila('¿Por qué apadrinar?:', _motivacionCtrl.text.trim().isEmpty ? 'No especificada' : _motivacionCtrl.text.trim()),
             const Divider(height: 14),
             _resumenFila('Documento:', _docNombre ?? 'Adjuntado'),
           ],
@@ -2284,7 +2534,7 @@ class _SolicitudApadrinamientoDialogState
     ];
   }
 
-  /// Tarjeta que muestra el correo actual del perfil con opción de confirmarlo o editarlo en la BD
+  /// Tarjeta que muestra el correo actual del perfil con botón de confirmar
   Widget _tarjetaConfirmacionCorreoPerfil(TextTheme t) {
     final correoPerfil = _correoCtrl.text.trim().isNotEmpty
         ? _correoCtrl.text.trim()
@@ -2296,12 +2546,12 @@ class _SolicitudApadrinamientoDialogState
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _correoPerfilConfirmado ? Colors.green.shade400 : AppColors.rosa,
-          width: 1.8,
+          color: _correoPerfilConfirmado ? Colors.green.shade400 : AppColors.bordeRosa,
+          width: _correoPerfilConfirmado ? 1.8 : 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: (_correoPerfilConfirmado ? Colors.green : AppColors.rosa).withValues(alpha: 0.1),
+            color: (_correoPerfilConfirmado ? Colors.green : Colors.black).withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
@@ -2334,7 +2584,9 @@ class _SolicitudApadrinamientoDialogState
                       style: t.titleSmall?.copyWith(fontWeight: FontWeight.bold, fontSize: 15),
                     ),
                     Text(
-                      'Confirmación requerida para notificación',
+                      _correoPerfilConfirmado
+                          ? 'Correo verificado para tu solicitud'
+                          : 'Confirmación requerida para notificación',
                       style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
                     ),
                   ],
@@ -2342,10 +2594,12 @@ class _SolicitudApadrinamientoDialogState
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Este es el correo electrónico de tu perfil. Por favor confirmar ya que recibirás una notificación con tu solicitud:',
-            style: TextStyle(fontSize: 13, height: 1.38, color: Colors.black87),
+          const SizedBox(height: 10),
+          Text(
+            _correoPerfilConfirmado
+                ? '¡Tu correo ha sido confirmado con éxito! Allí te notificaremos el avance de tu solicitud.'
+                : 'Al enviar la solicitud, el sistema te enviará automáticamente un correo electrónico con un enlace para confirmar tu dirección.',
+            style: const TextStyle(fontSize: 12, height: 1.35, color: Color(0xFF4B5563)),
           ),
           const SizedBox(height: 12),
           Container(
@@ -2353,11 +2607,17 @@ class _SolicitudApadrinamientoDialogState
             decoration: BoxDecoration(
               color: AppColors.rosaSuave.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.bordeRosa),
+              border: Border.all(
+                color: _correoPerfilConfirmado ? Colors.green.shade300 : AppColors.bordeRosa,
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.email, color: AppColors.rosa, size: 20),
+                Icon(
+                  Icons.email,
+                  color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
+                  size: 20,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -2366,25 +2626,32 @@ class _SolicitudApadrinamientoDialogState
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (_correoPerfilConfirmado)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle, size: 14, color: Colors.green.shade800),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Confirmado',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.green.shade800),
-                        ),
-                      ],
-                    ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: _correoPerfilConfirmado ? Colors.green.shade100 : Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(12),
                   ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _correoPerfilConfirmado ? Icons.check_circle : Icons.hourglass_top_rounded,
+                        size: 13,
+                        color: _correoPerfilConfirmado ? Colors.green.shade800 : Colors.amber.shade900,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _correoPerfilConfirmado ? 'Confirmado' : 'Verificación al enviar',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _correoPerfilConfirmado ? Colors.green.shade800 : Colors.amber.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -2392,29 +2659,16 @@ class _SolicitudApadrinamientoDialogState
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey.shade800,
-                    side: BorderSide(color: Colors.grey.shade400),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
-                  label: const Text('No es / Cambiar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                  onPressed: _dialogoEditarCorreoPerfil,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
                     backgroundColor: _correoPerfilConfirmado ? Colors.green.shade600 : AppColors.rosa,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
                   ),
-                  icon: const Icon(Icons.check, size: 17),
+                  icon: Icon(_correoPerfilConfirmado ? Icons.check_circle : Icons.check, size: 17),
                   label: Text(
-                    _correoPerfilConfirmado ? '✓ Correo Confirmado' : 'Sí, confirmar correo',
+                    _correoPerfilConfirmado ? 'Confirmado' : 'Confirmar',
                     style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
                   onPressed: () {
@@ -2423,10 +2677,24 @@ class _SolicitudApadrinamientoDialogState
                       SnackBar(
                         backgroundColor: Colors.green,
                         duration: const Duration(seconds: 2),
-                        content: Text('Correo $correoPerfil confirmado para recibir la notificación.'),
+                        content: Text('Correo $correoPerfil confirmado.'),
                       ),
                     );
                   },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey.shade800,
+                    side: BorderSide(color: Colors.grey.shade400),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                  ),
+                  icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
+                  label: const Text('No es / Cambiar correo', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  onPressed: _dialogoEditarCorreoPerfil,
                 ),
               ),
             ],

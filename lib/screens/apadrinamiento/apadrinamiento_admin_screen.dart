@@ -302,6 +302,50 @@ class _ListaSolicitudes extends StatelessWidget {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: s.esCorreoConfirmado
+                                ? const Color(0xFFE8F5E9)
+                                : const Color(0xFFFFF8E1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: s.esCorreoConfirmado
+                                  ? const Color(0xFF81C784)
+                                  : const Color(0xFFFFD54F),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                s.esCorreoConfirmado
+                                    ? Icons.mark_email_read_rounded
+                                    : Icons.mark_email_unread_rounded,
+                                size: 13,
+                                color: s.esCorreoConfirmado
+                                    ? const Color(0xFF2E7D32)
+                                    : const Color(0xFFF57F17),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                s.correoEstadoTexto,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: s.esCorreoConfirmado
+                                      ? const Color(0xFF2E7D32)
+                                      : const Color(0xFFF57F17),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                     if (s.esAprobada) ...[
                       const SizedBox(height: 6),
                       Container(
@@ -541,6 +585,13 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
 
   void _verDocumentoCompleto() {
     if (_docBytes == null) return;
+    if (_esBytesPdf(_docBytes!)) {
+      Printing.layoutPdf(
+        onLayout: (_) => _docBytes!,
+        name: 'Documento_Identidad_${widget.solicitud.solicitanteNombreCompleto}.pdf',
+      );
+      return;
+    }
     showDialog(
       context: context,
       builder: (ctx) => Dialog.fullscreen(
@@ -1249,6 +1300,7 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                     children: [
                       _FilaInfo('Nombre completo', s.solicitanteNombreCompleto),
                       _FilaInfo('Correo electrónico', s.solicitanteCorreo),
+                      _FilaInfo('Confirmación de correo', s.correoEstadoTexto),
                       _FilaInfo(
                         'Teléfono de contacto',
                         s.solicitanteTelefono.isEmpty
@@ -1324,15 +1376,57 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                           style: const TextStyle(color: Colors.redAccent),
                         )
                       else if (_docBytes != null) ...[
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.memory(
-                            _docBytes!,
-                            height: 180,
-                            width: double.infinity,
-                            fit: BoxFit.cover,
+                        if (_esBytesPdf(_docBytes!))
+                          Container(
+                            height: 150,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.shade200, width: 1.2),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.picture_as_pdf_rounded, color: Colors.red.shade700, size: 52),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Documento de Identidad (PDF)',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13.5,
+                                    color: Colors.red.shade900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(
+                              _docBytes!,
+                              height: 180,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (ctx, _, __) => Container(
+                                height: 140,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: AppColors.rosaSuave,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.description_outlined, color: AppColors.rosa, size: 40),
+                                    SizedBox(height: 6),
+                                    Text('Documento adjunto', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
                         const SizedBox(height: 10),
                         Center(
                           child: OutlinedButton.icon(
@@ -1340,9 +1434,11 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
                               foregroundColor: AppColors.rosa,
                               side: const BorderSide(color: AppColors.rosa),
                             ),
-                            icon: const Icon(Icons.fullscreen),
-                            label: const Text(
-                              'Ver documento en pantalla completa',
+                            icon: Icon(_esBytesPdf(_docBytes!) ? Icons.picture_as_pdf : Icons.fullscreen),
+                            label: Text(
+                              _esBytesPdf(_docBytes!)
+                                  ? 'Abrir / Ver PDF'
+                                  : 'Ver documento en pantalla completa',
                             ),
                             onPressed: _verDocumentoCompleto,
                           ),

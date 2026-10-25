@@ -110,6 +110,13 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
   }
 
   void _verCompleta(Uint8List bytes, String titulo) {
+    if (_esPdf(bytes)) {
+      Printing.layoutPdf(
+        onLayout: (_) => bytes,
+        name: '$titulo.pdf',
+      );
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog.fullscreen(
@@ -664,6 +671,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                     children: [
                       _Dato('Nombre completo', s.applicantFullName),
                       _Dato('Correo electrónico', _vacio(s.applicantEmail)),
+                      _Dato('Confirmación de correo', s.emailStatusLabel),
                       _Dato('Teléfono de contacto', _vacio(s.applicantPhone)),
                       _Dato('Dirección', _vacio(s.applicantAddress)),
                       if (s.applicantIdNumber.trim().isNotEmpty)
@@ -994,17 +1002,61 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
       return Text(error, style: const TextStyle(color: Colors.redAccent));
     }
     if (bytes == null) return const Text('No hay archivo adjunto.');
+    final bool esDocumentoPdf = _esPdf(bytes);
+
     return Column(
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.memory(
-            bytes,
-            height: 180,
-            width: double.infinity,
-            fit: BoxFit.cover,
+        if (esDocumentoPdf)
+          Container(
+            height: 150,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.red.shade200, width: 1.2),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.picture_as_pdf_rounded, color: Colors.red.shade700, size: 52),
+                const SizedBox(height: 8),
+                Text(
+                  '$titulo (Documento PDF)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13.5,
+                    color: Colors.red.shade900,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.memory(
+              bytes,
+              height: 180,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (ctx, _, __) => Container(
+                height: 140,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.rosaSuave,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.description_outlined, color: AppColors.rosa, size: 40),
+                    const SizedBox(height: 6),
+                    Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
@@ -1012,8 +1064,8 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
             side: const BorderSide(color: AppColors.rosa),
           ),
           onPressed: () => _verCompleta(bytes, titulo),
-          icon: const Icon(Icons.fullscreen),
-          label: const Text('Ver documento en pantalla completa'),
+          icon: Icon(esDocumentoPdf ? Icons.picture_as_pdf : Icons.fullscreen),
+          label: Text(esDocumentoPdf ? 'Abrir / Ver PDF' : 'Ver documento en pantalla completa'),
         ),
       ],
     );

@@ -562,12 +562,102 @@ Fundación Maritza Arévalo & Equipo Paw Match
   });
 }
 
+/**
+ * Envía correo con enlace de verificación para solicitudes de apadrinamiento o adopción.
+ */
+async function enviarCorreoVerificacionSolicitud({
+  destinatario,
+  nombreUsuario,
+  nombreMascota,
+  token,
+  tipo = 'apadrinamiento',
+}) {
+  const nombre = escaparHtml(nombreUsuario);
+  const mascota = escaparHtml(nombreMascota);
+  const esApadrinamiento = tipo === 'apadrinamiento';
+  const accionTexto = esApadrinamiento ? 'apadrinamiento' : 'adopción';
+  const asunto = `Confirma tu correo para tu solicitud de ${accionTexto} de ${nombreMascota} - Paw Match`;
+
+  const backendHost = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const rutaVerificar = esApadrinamiento
+    ? '/api/solicitudes-apadrinamiento/verificar-correo'
+    : '/api/adoption-requests/verificar-correo';
+  const urlVerificacion = `${backendHost}${rutaVerificar}?token=${encodeURIComponent(token)}`;
+
+  const textoPlano = `
+Hola ${nombreUsuario},
+
+Gracias por tu solicitud de ${accionTexto} para ${nombreMascota} en la Fundación Maritza Arévalo.
+
+Para que tu solicitud sea revisada por el administrador y puedas recibir notificaciones oficiales sobre su estado, debes confirmar tu correo electrónico haciendo clic en el siguiente enlace:
+
+${urlVerificacion}
+
+Mientras no confirmes tu correo, tu solicitud se mostrará en Paw Match con el estado "Correo pendiente de confirmación".
+Una vez confirmado, el estado cambiará inmediatamente a "Correo confirmado".
+
+Si no realizaste esta solicitud, puedes ignorar este mensaje.
+
+Fundación Maritza Arévalo
+Paw Match
+`;
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 14px; background-color: #ffffff;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h1 style="color: #ec4899; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">🐾 Paw Match</h1>
+        <p style="color: #6b7280; font-size: 13px; margin: 4px 0 0 0;">Fundación Maritza Arévalo • San Juan de Pasto</p>
+      </div>
+      <div style="background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <h2 style="color: #9d174d; margin-top: 0; font-size: 18px; font-weight: 700;">
+          ✉️ Confirmación de correo electrónico requerida
+        </h2>
+        <p style="font-size: 14px; color: #374151; line-height: 1.5; margin-bottom: 12px;">
+          Hola <strong>${nombre}</strong>,
+        </p>
+        <p style="font-size: 14px; color: #374151; line-height: 1.5; margin-bottom: 12px;">
+          Hemos recibido tu solicitud de <strong>${accionTexto}</strong> para <strong>${mascota}</strong>.
+          Para garantizar la seguridad de tus datos y que puedas recibir las notificaciones oficiales con respecto a tu solicitud, por favor confirma tu correo electrónico:
+        </p>
+        <div style="text-align: center; margin: 26px 0;">
+          <a href="${urlVerificacion}" target="_blank"
+             style="background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; font-weight: bold; border-radius: 12px; display: inline-block; font-size: 15px; box-shadow: 0 4px 10px rgba(236,72,153,0.3);">
+            ✅ Confirmar mi correo electrónico
+          </a>
+        </div>
+        <p style="font-size: 12.5px; color: #6b7280; line-height: 1.4; margin-top: 16px;">
+          <strong>Estado actual:</strong> <em>Correo pendiente de confirmación</em>.<br/>
+          Al hacer clic en el botón superior, tu estado se actualizará automáticamente a <strong>«Correo confirmado»</strong> en la plataforma.
+        </p>
+        <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #fbcfe8;">
+          <p style="font-size: 11px; color: #9ca3af; margin: 0; word-break: break-all;">
+            Si el botón no funciona, copia y pega este enlace en tu navegador:<br/>
+            <a href="${urlVerificacion}" style="color: #db2777;">${urlVerificacion}</a>
+          </p>
+        </div>
+      </div>
+      <p style="text-align: center; font-size: 11.5px; color: #9ca3af; margin-top: 20px;">
+        Este es un correo automático de verificación emitido por Paw Match para la Fundación Maritza Arévalo.
+      </p>
+    </div>
+  `;
+
+  return enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Verificación de correo (${accionTexto} ${nombreMascota})`,
+  });
+}
+
 module.exports = {
   enviarCorreoAprobacionApadrinamiento,
   enviarCorreoRechazoApadrinamiento,
   enviarCorreoAprobacionAdopcion,
   enviarCorreoRechazoAdopcion,
   enviarCorreoContratoAdopcion,
+  enviarCorreoVerificacionSolicitud,
   enviarEmailGenerico,
   obtenerTransporter,
 };

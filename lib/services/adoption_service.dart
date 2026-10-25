@@ -242,4 +242,17 @@ class AdoptionService {
     } catch (_) {}
     return fallback;
   }
+
+  /// Reenvía el correo de verificación para una solicitud de adopción.
+  static Future<String> reenviarVerificacionCorreo(String id) async {
+    final res = await http.post(
+      Uri.parse('$_url/$id/reenviar-verificacion'),
+      headers: _headers,
+    );
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    if (res.statusCode != 200) {
+      throw Exception(data['error']?.toString() ?? 'No se pudo reenviar el correo');
+    }
+    return data['mensaje']?.toString() ?? 'Correo de verificación reenviado exitosamente';
+  }
 }

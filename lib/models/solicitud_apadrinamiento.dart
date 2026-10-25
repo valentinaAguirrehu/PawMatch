@@ -19,6 +19,10 @@ class SolicitudApadrinamiento {
   final bool leidoAdmin;
   final bool leidoUsuario;
   final int vecesRechazada;
+  final String estadoCorreo;
+  final String? fechaVerificacionCorreo;
+  final bool aceptoRequisitos;
+  final String? fechaAceptacionRequisitos;
 
   // Datos agregados del solicitante
   final String solicitanteNombres;
@@ -56,6 +60,10 @@ class SolicitudApadrinamiento {
     this.leidoAdmin = false,
     this.leidoUsuario = true,
     this.vecesRechazada = 1,
+    this.estadoCorreo = 'pendiente',
+    this.fechaVerificacionCorreo,
+    this.aceptoRequisitos = true,
+    this.fechaAceptacionRequisitos,
     this.solicitanteNombres = '',
     this.solicitanteApellidos = '',
     this.solicitanteCorreo = '',
@@ -69,6 +77,10 @@ class SolicitudApadrinamiento {
     this.mascotaFotos = '',
   });
 
+  bool get esCorreoConfirmado => estadoCorreo.toLowerCase() == 'confirmado';
+  String get correoEstadoTexto =>
+      esCorreoConfirmado ? 'Correo confirmado' : 'Correo pendiente de confirmación';
+
   String get mascotaEdadTexto {
     if (mascotaEdad == null) return 'Edad no registrada';
     return mascotaEdad == 1 ? '1 año' : '$mascotaEdad años';
@@ -78,6 +90,15 @@ class SolicitudApadrinamiento {
     final c = '$solicitanteNombres $solicitanteApellidos'.trim();
     return c.isEmpty ? 'Solicitante' : c;
   }
+
+  String get nombreCompleto => solicitanteNombreCompleto;
+  String get documentoIdentidad => solicitanteCedula;
+  String get correo => solicitanteCorreo;
+  String get telefono => solicitanteTelefono;
+  String? get archivoCedula => documentoIdentidadArchivo;
+  String get detalleAporte => motivacion;
+  DateTime get fechaCreacion =>
+      DateTime.tryParse(fechaSolicitud.replaceFirst(' ', 'T')) ?? DateTime.now();
 
   bool get esPendiente => estado == 'pendiente';
   bool get esAprobada => estado == 'aprobada';
@@ -110,6 +131,12 @@ class SolicitudApadrinamiento {
       vecesRechazada: json['veces_rechazada'] != null
           ? (int.tryParse(json['veces_rechazada'].toString()) ?? 1)
           : 1,
+      estadoCorreo: json['estado_correo']?.toString() ?? 'pendiente',
+      fechaVerificacionCorreo: json['fecha_verificacion_correo']?.toString(),
+      aceptoRequisitos: json['acepto_requisitos'] == null ||
+          json['acepto_requisitos'] == true ||
+          json['acepto_requisitos'] == 'true',
+      fechaAceptacionRequisitos: json['fecha_aceptacion_requisitos']?.toString(),
       solicitanteNombres: json['solicitante_nombres']?.toString() ?? '',
       solicitanteApellidos: json['solicitante_apellidos']?.toString() ?? '',
       solicitanteCorreo: json['solicitante_correo']?.toString() ?? '',

@@ -1,10 +1,13 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
+import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart';
@@ -34,6 +37,92 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
       _future = _cargar();
     });
     await _future.catchError((_) => <SolicitudApadrinamiento>[]);
+  }
+
+  String? _descargandoPdfId;
+  String? _reenviandoCorreoId;
+
+  Future<void> _reenviarVerificacion(SolicitudApadrinamiento s) async {
+    setState(() => _reenviandoCorreoId = s.id);
+    try {
+      final res = await ApadrinamientoService.reenviarVerificacionCorreo(s.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green.shade700,
+          content: Text(res),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('No se pudo reenviar el correo: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reenviandoCorreoId = null);
+    }
+  }
+
+  Future<void> _descargarAcuerdoPdf(SolicitudApadrinamiento s) async {
+    setState(() => _descargandoPdfId = s.id);
+    try {
+      Uint8List? cedula;
+      if (s.archivoCedula != null && s.archivoCedula!.isNotEmpty) {
+        try {
+          cedula = await ApadrinamientoService.obtenerBytesDocumento(s.archivoCedula!);
+        } catch (_) {}
+      }
+      Uint8List? fotoMascota;
+      if (s.mascotaFotos.isNotEmpty) {
+        try {
+          final res = await http.get(Uri.parse(urlFoto(s.mascotaFotos)));
+          if (res.statusCode == 200) fotoMascota = res.bodyBytes;
+        } catch (_) {}
+      }
+      final bytes = await AcuerdoApadrinamientoPdfService.generarPdfBytes(
+        DatosActaApadrinamiento(
+          idSolicitud: s.id,
+          nombreUsuario: s.nombreCompleto,
+          documentoUsuario: s.documentoIdentidad,
+          correoUsuario: s.correo,
+          telefonoUsuario: s.telefono,
+          nombreMascota: s.mascotaNombre,
+          especieMascota: s.mascotaEspecie,
+          razaMascota: s.mascotaRaza,
+          edadMascota: s.mascotaEdadTexto,
+          sexoMascota: null,
+          tipoAporte: s.tipoAporte,
+          valorMensual: s.montoAporte,
+          frecuenciaAporte: s.frecuenciaAporte,
+          descripcionAporte: s.detalleAporte,
+          detalleEspecie: s.detalleEspecie,
+          fechaRegistro: s.fechaCreacion,
+          estadoProceso: s.estado,
+          estadoCorreo: s.estadoCorreo,
+          aceptoTerminos: true,
+          fotoCedula: cedula,
+          fotoMascota: fotoMascota,
+        ),
+      );
+      await AcuerdoApadrinamientoPdfService.descargarYGuardarPdf(
+        bytes: bytes,
+        nombreMascota: s.mascotaNombre,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Acuerdo de apadrinamiento descargado.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al descargar acuerdo: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _descargandoPdfId = null);
+    }
   }
 
   void _contactarWhatsApp(SolicitudApadrinamiento s) {
@@ -240,30 +329,103 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Estado arriba a la derecha
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: color),
-                            ),
-                            child: Text(
-                              estadoTexto,
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11,
+                        // Cabecera: Estado de verificación de correo y Estado del proceso
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          alignment: WrapAlignment.spaceBetween,
+                          children: [
+                            // Badge de verificación de correo
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: s.esCorreoConfirmado
+                                    ? const Color(0xFFE8F5E9)
+                                    : const Color(0xFFFFF8E1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: s.esCorreoConfirmado
+                                      ? const Color(0xFF81C784)
+                                      : const Color(0xFFFFD54F),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    s.esCorreoConfirmado
+                                        ? Icons.mark_email_read_rounded
+                                        : Icons.mark_email_unread_rounded,
+                                    size: 14,
+                                    color: s.esCorreoConfirmado
+                                        ? const Color(0xFF2E7D32)
+                                        : const Color(0xFFF57F17),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    s.correoEstadoTexto,
+                                    style: TextStyle(
+                                      color: s.esCorreoConfirmado
+                                          ? const Color(0xFF2E7D32)
+                                          : const Color(0xFFF57F17),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  if (!s.esCorreoConfirmado) ...[
+                                    const SizedBox(width: 6),
+                                    InkWell(
+                                      onTap: _reenviandoCorreoId == s.id
+                                          ? null
+                                          : () => _reenviarVerificacion(s),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                        child: _reenviandoCorreoId == s.id
+                                            ? const SizedBox(
+                                                width: 10,
+                                                height: 10,
+                                                child: CircularProgressIndicator(strokeWidth: 1.5),
+                                              )
+                                            : const Text(
+                                                'Reenviar',
+                                                style: TextStyle(
+                                                  decoration: TextDecoration.underline,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 10.5,
+                                                  color: Color(0xFFE65100),
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
-                          ),
+
+                            // Chip estado del proceso
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: color),
+                              ),
+                              child: Text(
+                                estadoTexto,
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 10),
 
                         // Fotografía centrada, nombre debajo centrado, y edad debajo
                         Center(
@@ -715,6 +877,29 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                             fontStyle: FontStyle.italic,
                             fontSize: 13,
                           ),
+                        ),
+                        const SizedBox(height: 14),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.rosa,
+                            side: const BorderSide(color: AppColors.rosa, width: 1.4),
+                            minimumSize: const Size.fromHeight(42),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: _descargandoPdfId == s.id
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
+                                )
+                              : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                          label: const Text(
+                            'Descargar acuerdo de apadrinamiento (PDF)',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                          onPressed: _descargandoPdfId == s.id ? null : () => _descargarAcuerdoPdf(s),
                         ),
                       ],
                     ),

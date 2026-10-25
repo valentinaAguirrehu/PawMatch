@@ -8,6 +8,7 @@ const {
   enviarCorreoAprobacionAdopcion,
   enviarCorreoRechazoAdopcion,
   enviarCorreoContratoAdopcion,
+  enviarCorreoVerificacionSolicitud,
 } = require('../utils/correo');
 
 const router = express.Router();
@@ -24,7 +25,12 @@ const esquemaListo = (async () => {
       ADD COLUMN IF NOT EXISTS correo_contacto TEXT,
       ADD COLUMN IF NOT EXISTS contrato_adopcion_archivo TEXT,
       ADD COLUMN IF NOT EXISTS contrato_adopcion_estado TEXT,
-      ADD COLUMN IF NOT EXISTS contrato_adopcion_subido_en TIMESTAMP
+      ADD COLUMN IF NOT EXISTS contrato_adopcion_subido_en TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS estado_correo TEXT DEFAULT 'pendiente',
+      ADD COLUMN IF NOT EXISTS token_verificacion_correo TEXT,
+      ADD COLUMN IF NOT EXISTS fecha_verificacion_correo TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS acepto_requisitos BOOLEAN DEFAULT true,
+      ADD COLUMN IF NOT EXISTS fecha_aceptacion_requisitos TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   `);
   await pool.query(`
     UPDATE solicitudadopcion
@@ -55,7 +61,7 @@ fs.mkdirSync(privateUploadsDir, { recursive: true });
 const contratosDir = path.join(__dirname, '..', 'private_uploads', 'contratos_adopcion');
 fs.mkdirSync(contratosDir, { recursive: true });
 
-const extensiones = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const extensiones = new Set(['.jpg', '.jpeg', '.png', '.webp', '.pdf']);
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const upload = multer({
@@ -70,10 +76,10 @@ const upload = multer({
   }),
   limits: { fileSize: 10 * 1024 * 1024, files: 2 },
   fileFilter: (_req, file, cb) => {
-    const mimeOk = /^image\/(jpeg|jpg|png|webp)$/.test(file.mimetype);
+    const mimeOk = /^image\/(jpeg|jpg|png|webp)$/.test(file.mimetype) || file.mimetype === 'application/pdf';
     const ext = path.extname(file.originalname).toLowerCase();
     if (!mimeOk && !extensiones.has(ext)) {
-      return cb(new Error('Solo se permiten imágenes JPG, PNG o WEBP'));
+      return cb(new Error('Solo se permiten documentos o imágenes en formato JPG, PNG, WEBP o PDF'));
     }
     cb(null, true);
   },
@@ -246,6 +252,10 @@ const selectSolicitud = `
     s.contrato_adopcion_archivo,
     COALESCE(s.contrato_adopcion_estado, '') AS contrato_adopcion_estado,
     to_char(s.contrato_adopcion_subido_en, 'YYYY-MM-DD HH24:MI:SS') AS contrato_adopcion_subido_en,
+    COALESCE(s.estado_correo, 'pendiente') AS estado_correo,
+    to_char(s.fecha_verificacion_correo, 'YYYY-MM-DD HH24:MI:SS') AS fecha_verificacion_correo,
+    COALESCE(s.acepto_requisitos, true) AS acepto_requisitos,
+    to_char(s.fecha_aceptacion_requisitos, 'YYYY-MM-DD HH24:MI:SS') AS fecha_aceptacion_requisitos,
     s.id_administrador_revisor,
     COALESCE(u.nombres, '') AS solicitante_nombres,
     COALESCE(u.apellidos, '') AS solicitante_apellidos,
@@ -358,13 +368,15 @@ router.post('/', subirArchivos, async (req, res) => {
       });
     }
 
+    const tokenVerificacion = randomUUID();
     const insercion = await pool.query(
       `INSERT INTO solicitudadopcion (
         id_usuario, id_mascota, tipo_vivienda, tiene_patio, tiene_ninos,
         tiene_mascotas, otras_mascotas, tiempo_disponible, experiencia_previa,
         informacion_adicional, foto_cedula, foto_servicios_publicos, estado,
-        leido_admin, leido_usuario, correo_contacto
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente', false, true, $13)
+        leido_admin, leido_usuario, correo_contacto, estado_correo,
+        token_verificacion_correo, acepto_requisitos
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pendiente', false, true, $13, 'pendiente', $14, true)
       RETURNING id_solicitud_adopcion`,
       [
         usuario.id_usuario,
@@ -380,10 +392,21 @@ router.post('/', subirArchivos, async (req, res) => {
         cedula.filename,
         recibo.filename,
         correoFinal,
+        tokenVerificacion,
       ]
     );
 
     guardada = true;
+
+    // Enviar correo de verificación en segundo plano
+    enviarCorreoVerificacionSolicitud({
+      destinatario: correoFinal,
+      nombreUsuario: `${usuario.nombres || ''} ${usuario.apellidos || ''}`.trim() || 'Adoptante',
+      nombreMascota: mascota.nombre,
+      token: tokenVerificacion,
+      tipo: 'adopcion',
+    }).catch((err) => console.warn('[CORREO] No se pudo enviar verificación de adopción:', err.message));
+
     return res.status(201).json({
       mensaje: 'Solicitud de adopción enviada exitosamente',
       id_solicitud_adopcion: insercion.rows[0].id_solicitud_adopcion,
@@ -507,6 +530,210 @@ router.put('/notificaciones/marcar-usuario', async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     return errorDb(res, err, 'Error al marcar notificaciones');
+  }
+});
+
+function _htmlRespuestaVerificacion({ exito, titulo, mensaje }) {
+  const colorBorde = exito ? '#10b981' : '#ef4444';
+  const colorFondo = exito ? '#f0fdf4' : '#fef2f2';
+  const colorTitulo = exito ? '#065f46' : '#991b1b';
+  const colorTexto = exito ? '#047857' : '#b91c1c';
+  const icono = exito ? '✅' : '⚠️';
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${titulo} - Paw Match</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background: #fdf2f8;
+      margin: 0;
+      padding: 30px 15px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 80vh;
+    }
+    .card {
+      max-width: 520px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 24px;
+      padding: 36px 28px;
+      box-shadow: 0 10px 25px rgba(236, 72, 153, 0.12);
+      border: 1px solid #fbcfe8;
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      color: ${colorTitulo};
+      font-size: 22px;
+      margin: 0 0 14px 0;
+      font-weight: 800;
+    }
+    p {
+      color: #374151;
+      font-size: 15px;
+      line-height: 1.5;
+      margin: 0 0 24px 0;
+    }
+    .box {
+      background: ${colorFondo};
+      border: 1px solid ${colorBorde};
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 24px;
+      color: ${colorTexto};
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+      color: #ffffff;
+      padding: 14px 30px;
+      border-radius: 16px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+      box-shadow: 0 4px 12px rgba(236, 72, 153, 0.35);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">${icono}</div>
+    <h1>${titulo}</h1>
+    <div class="box">${mensaje}</div>
+    <a href="/" class="btn">🐾 Ir a Paw Match</a>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * GET /api/adoption-requests/verificar-correo
+ * Verifica el correo cuando el usuario hace clic en el enlace del email.
+ */
+router.get('/verificar-correo', async (req, res) => {
+  const token = (req.query.token || '').toString().trim();
+  if (!token) {
+    return res.status(400).send(_htmlRespuestaVerificacion({
+      exito: false,
+      titulo: 'Enlace inválido',
+      mensaje: 'El enlace de verificación no contiene un token válido.',
+    }));
+  }
+
+  try {
+    const busqueda = await pool.query(
+      `SELECT s.id_solicitud_adopcion, s.correo_contacto, s.id_usuario, m.nombre AS mascota_nombre, s.estado_correo
+       FROM solicitudadopcion s
+       JOIN mascota m ON m.id_mascota = s.id_mascota
+       WHERE s.token_verificacion_correo = $1`,
+      [token]
+    );
+
+    if (busqueda.rows.length === 0) {
+      return res.status(404).send(_htmlRespuestaVerificacion({
+        exito: false,
+        titulo: 'Enlace no encontrado o expirado',
+        mensaje: 'Este enlace de verificación ya no está disponible o ya fue utilizado.',
+      }));
+    }
+
+    const sol = busqueda.rows[0];
+
+    // Actualizar a confirmado
+    await pool.query(
+      `UPDATE solicitudadopcion
+       SET estado_correo = 'confirmado', fecha_verificacion_correo = NOW()
+       WHERE id_solicitud_adopcion = $1`,
+      [sol.id_solicitud_adopcion]
+    );
+
+    // Actualizar usuario
+    await pool.query(
+      `UPDATE usuario SET correo_verificado = true WHERE id_usuario = $1`,
+      [sol.id_usuario]
+    ).catch(() => {});
+
+    return res.send(_htmlRespuestaVerificacion({
+      exito: true,
+      titulo: '¡Correo confirmado exitosamente! 🎉',
+      mensaje: `Tu correo <strong>${sol.correo_contacto}</strong> ha sido verificado con éxito para tu solicitud de adopción de <strong>${sol.mascota_nombre}</strong>. El estado en Paw Match se ha actualizado a <strong>«Correo confirmado»</strong>.`,
+    }));
+  } catch (err) {
+    console.error('Error al verificar correo:', err);
+    return res.status(500).send(_htmlRespuestaVerificacion({
+      exito: false,
+      titulo: 'Error de servidor',
+      mensaje: 'Ocurrió un error inesperado al procesar la verificación.',
+    }));
+  }
+});
+
+/**
+ * POST /api/adoption-requests/:id/reenviar-verificacion
+ * Reenvía el correo de verificación para una solicitud de adopción.
+ */
+router.post('/:id/reenviar-verificacion', async (req, res) => {
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) return res.status(401).json({ error: 'Debes iniciar sesión' });
+
+  try {
+    const r = await pool.query(
+      `SELECT s.id_solicitud_adopcion, s.correo_contacto, s.id_usuario, s.estado_correo, s.token_verificacion_correo,
+              m.nombre AS mascota_nombre, u.nombres, u.apellidos
+       FROM solicitudadopcion s
+       JOIN mascota m ON m.id_mascota = s.id_mascota
+       JOIN usuario u ON u.id_usuario = s.id_usuario
+       WHERE s.id_solicitud_adopcion = $1`,
+      [req.params.id]
+    );
+
+    if (r.rows.length === 0) {
+      return res.status(404).json({ error: 'Solicitud no encontrada' });
+    }
+
+    const sol = r.rows[0];
+    if (usuario.rol !== 'administrador' && sol.id_usuario !== usuario.id_usuario) {
+      return res.status(403).json({ error: 'No tienes permiso para esta solicitud' });
+    }
+
+    let token = sol.token_verificacion_correo;
+    if (!token) {
+      token = randomUUID();
+      await pool.query(
+        'UPDATE solicitudadopcion SET token_verificacion_correo = $1 WHERE id_solicitud_adopcion = $2',
+        [token, sol.id_solicitud_adopcion]
+      );
+    }
+
+    const destinatario = sol.correo_contacto || usuario.correo;
+    const nombreCompleto = `${sol.nombres || ''} ${sol.apellidos || ''}`.trim() || 'Adoptante';
+
+    await enviarCorreoVerificacionSolicitud({
+      destinatario,
+      nombreUsuario: nombreCompleto,
+      nombreMascota: sol.mascota_nombre,
+      token,
+      tipo: 'adopcion',
+    });
+
+    return res.json({
+      mensaje: `Correo de verificación reenviado a ${destinatario}`,
+    });
+  } catch (err) {
+    console.error('Error reenviando correo de verificación:', err);
+    return res.status(500).json({ error: 'No se pudo reenviar el correo de verificación' });
   }
 });
 
