@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
+import 'package:paw_match/screens/admin/denuncias_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/seccion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
@@ -12,6 +13,7 @@ import 'package:paw_match/screens/users/profile_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/denuncias_service.dart';
 import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -20,6 +22,7 @@ import 'package:paw_match/widgets/nav_flotante.dart';
 
 /// Opciones del menú desplegable del administrador (último ícono de la barra).
 enum _Gestion {
+  denuncias('Denuncias de maltrato', Icons.campaign_rounded),
   seguimiento('Seguimiento de adopción', Icons.timeline),
   usuarios('Usuarios', Icons.people_outline),
   administradores('Administradores', Icons.admin_panel_settings_outlined),
@@ -60,6 +63,7 @@ class _MenuScreenState extends State<MenuScreen> {
     ApadrinamientoService.iniciarMonitoreo();
     AdoptionService.iniciarMonitoreo();
     PetsService.iniciarMonitoreo();
+    DenunciasService.iniciarMonitoreo();
   }
 
   @override
@@ -67,6 +71,7 @@ class _MenuScreenState extends State<MenuScreen> {
     ApadrinamientoService.detenerMonitoreo();
     AdoptionService.detenerMonitoreo();
     PetsService.detenerMonitoreo();
+    DenunciasService.detenerMonitoreo();
     super.dispose();
   }
 
@@ -142,6 +147,7 @@ class _MenuScreenState extends State<MenuScreen> {
 
   /// Pantalla que se muestra en "Gestionar" según la opción elegida.
   Widget _paginaGestion(_Gestion g) => switch (g) {
+    _Gestion.denuncias => const DenunciasAdminScreen(),
     _Gestion.seguimiento => const SeccionAdminScreen(
       titulo: 'Seguimiento de adopción',
       icono: Icons.timeline,
@@ -284,11 +290,13 @@ class _MenuScreenState extends State<MenuScreen> {
                   Session.esAdmin
                       ? AdoptionService.noLeidasAdmin
                       : AdoptionService.noLeidasUsuario,
+                  if (Session.esAdmin) DenunciasService.noLeidasAdmin,
                 ]),
                 builder: (context, _) {
                   final total = Session.esAdmin
                       ? (ApadrinamientoService.noLeidasAdmin.value +
-                          AdoptionService.noLeidasAdmin.value)
+                          AdoptionService.noLeidasAdmin.value +
+                          DenunciasService.noLeidasAdmin.value)
                       : (ApadrinamientoService.noLeidasUsuario.value +
                           AdoptionService.noLeidasUsuario.value);
                   return Badge(
@@ -314,11 +322,13 @@ class _MenuScreenState extends State<MenuScreen> {
                   Session.esAdmin
                       ? AdoptionService.noLeidasAdmin
                       : AdoptionService.noLeidasUsuario,
+                  if (Session.esAdmin) DenunciasService.noLeidasAdmin,
                 ]),
                 builder: (context, _) {
                   final total = Session.esAdmin
                       ? (ApadrinamientoService.noLeidasAdmin.value +
-                          AdoptionService.noLeidasAdmin.value)
+                          AdoptionService.noLeidasAdmin.value +
+                          DenunciasService.noLeidasAdmin.value)
                       : (ApadrinamientoService.noLeidasUsuario.value +
                           AdoptionService.noLeidasUsuario.value);
                   return Badge(

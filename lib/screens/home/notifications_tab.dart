@@ -7,6 +7,8 @@ import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dar
 import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/denuncias_service.dart';
+import 'package:paw_match/screens/admin/denuncias_admin_screen.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 
@@ -46,6 +48,13 @@ class NotificationsTab extends StatelessWidget {
     }
   }
 
+  void _abrirDenuncias(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const DenunciasAdminScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool esAdmin = Session.esAdmin;
@@ -69,6 +78,7 @@ class NotificationsTab extends StatelessWidget {
             esAdmin
                 ? AdoptionService.noLeidasAdmin
                 : AdoptionService.noLeidasUsuario,
+            if (esAdmin) DenunciasService.noLeidasAdmin,
           ]),
           builder: (context, _) {
             final noLeidasAdop = esAdmin
@@ -77,7 +87,8 @@ class NotificationsTab extends StatelessWidget {
             final noLeidasApad = esAdmin
                 ? ApadrinamientoService.noLeidasAdmin.value
                 : ApadrinamientoService.noLeidasUsuario.value;
-            final total = noLeidasAdop + noLeidasApad;
+            final noLeidasDenun = esAdmin ? DenunciasService.noLeidasAdmin.value : 0;
+            final total = noLeidasAdop + noLeidasApad + noLeidasDenun;
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 100),
@@ -122,6 +133,18 @@ class NotificationsTab extends StatelessWidget {
                   colorIcono: AppColors.rosa,
                   onTap: () => _abrirApadrinamientos(context),
                 ),
+
+                if (esAdmin) ...[
+                  const SizedBox(height: 14),
+                  _TarjetaNotificacion(
+                    titulo: 'Denuncias y Reportes de Animales',
+                    subtitulo: 'Revisa y gestiona casos de maltrato, abandono o animales en riesgo recibidos.',
+                    icono: Icons.campaign_rounded,
+                    contador: noLeidasDenun,
+                    colorIcono: AppColors.rosa,
+                    onTap: () => _abrirDenuncias(context),
+                  ),
+                ],
 
                 const SizedBox(height: 26),
 

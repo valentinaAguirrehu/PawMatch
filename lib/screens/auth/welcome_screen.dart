@@ -18,6 +18,7 @@ import 'package:paw_match/widgets/redes_sociales.dart';
 import 'package:paw_match/widgets/stat_logro.dart';
 import 'package:paw_match/widgets/tarjeta_ayuda.dart';
 import 'package:paw_match/widgets/titulo_landing.dart';
+import 'package:paw_match/screens/denuncias/denuncia_reporte_screen.dart';
 
 /// Medidas calculadas según el ancho de la pantalla (celular, tablet o computador).
 class _Medidas {
@@ -204,6 +205,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           _mision(m),
                           separacion,
                           _perritos(m),
+                          separacion,
+                          _denuncias(m),
                           separacion,
                           KeyedSubtree(key: _kAyuda, child: _ayuda(m)),
                           const SizedBox(height: 12),
@@ -582,6 +585,116 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           cuerpo,
         ],
       ),
+    );
+  }
+
+  // ───────────── Sección Denuncias y Protección Animal ─────────────
+  Widget _denuncias(_Medidas m) {
+    final t = Theme.of(context).textTheme;
+    final textos = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: AppColors.rosaSuave,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.bordeRosa),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.shield_outlined, size: 15, color: AppColors.rosa),
+              SizedBox(width: 6),
+              Text(
+                'PROTECCIÓN ANIMAL',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.rosa,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Ayúdanos a ',
+              style: TextStyle(
+                fontSize: m.escritorio ? 28 : 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.texto,
+                height: 1.2,
+              ),
+            ),
+            Text(
+              'proteger a los animales',
+              style: TextStyle(
+                fontSize: m.escritorio ? 28 : 22,
+                fontWeight: FontWeight.w800,
+                color: AppColors.rosa,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'Si conoces una situación en la que un animal esté sufriendo maltrato, haya sido abandonado o se encuentre en condiciones que pongan en riesgo su bienestar, cuéntanos lo que sucede. Tu voz puede marcar la diferencia y salvar una vida.',
+          style: t.bodyLarge?.copyWith(height: 1.55),
+        ),
+        const SizedBox(height: 24),
+        BotonLanding(
+          texto: 'Reportar un caso',
+          expandido: !m.escritorio,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const DenunciaReporteScreen()),
+            );
+          },
+        ),
+      ],
+    );
+
+    final imagen = ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        color: AppColors.rosaSuave,
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Image.asset(
+            'assets/images/denuncias_hero.jpg',
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
+
+    return BloqueLanding(
+      color: Colors.white,
+      padding: EdgeInsets.all(m.interior),
+      child: m.escritorio
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(flex: 6, child: textos),
+                const SizedBox(width: 32),
+                Expanded(flex: 5, child: imagen),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                textos,
+                const SizedBox(height: 24),
+                imagen,
+              ],
+            ),
     );
   }
 

@@ -80,8 +80,48 @@ class _HomeTabState extends State<HomeTab> {
             onVerMascotas: widget.onVerMascotas,
           ),
 
-          // Espacio para que la barra inferior flotante no tape el contenido.
-          const SizedBox(height: 120),
+          const SizedBox(height: 14),
+
+          // 6. Pie de página institucional
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.pets,
+                      size: 14,
+                      color: AppColors.rosa.withValues(alpha: 0.65),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Paw Match',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.texto.withValues(alpha: 0.7),
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Todos los derechos reservados © Fundación Maritza Arévalo 2026',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.texto.withValues(alpha: 0.55),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
         ],
       ),
     );
