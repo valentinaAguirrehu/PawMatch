@@ -19,10 +19,14 @@ class Denuncia {
   final String? caracteristicasAnimal;
   final String? estadoSalud;
   final String? heridasVisibles;
-  final String? dificultadMovilidad;
+  final String? condicionesAlimentacion;
   final String? condicionesLugar;
+  final String? comportamientoAnimal;
+  final String? dificultadMovilidad;
   final String? observacionesAdicionales;
   final bool aceptoPolitica;
+  final String? versionPolitica;
+  final String? fechaAutorizacion;
   final String estado;
   final bool leidoAdmin;
   final String? observacionesInternas;
@@ -54,10 +58,14 @@ class Denuncia {
     this.caracteristicasAnimal,
     this.estadoSalud,
     this.heridasVisibles,
-    this.dificultadMovilidad,
+    this.condicionesAlimentacion,
     this.condicionesLugar,
+    this.comportamientoAnimal,
+    this.dificultadMovilidad,
     this.observacionesAdicionales,
     this.aceptoPolitica = true,
+    this.versionPolitica,
+    this.fechaAutorizacion,
     this.estado = 'recibido',
     this.leidoAdmin = false,
     this.observacionesInternas,
@@ -112,10 +120,14 @@ class Denuncia {
       caracteristicasAnimal: json['caracteristicas_animal']?.toString(),
       estadoSalud: json['estado_salud']?.toString(),
       heridasVisibles: json['heridas_visibles']?.toString(),
-      dificultadMovilidad: json['dificultad_movilidad']?.toString(),
+      condicionesAlimentacion: json['condiciones_alimentacion']?.toString(),
       condicionesLugar: json['condiciones_lugar']?.toString(),
+      comportamientoAnimal: json['comportamiento_animal']?.toString(),
+      dificultadMovilidad: json['dificultad_movilidad']?.toString(),
       observacionesAdicionales: json['observaciones_adicionales']?.toString(),
       aceptoPolitica: json['acepto_politica'] == true,
+      versionPolitica: json['version_politica']?.toString(),
+      fechaAutorizacion: json['fecha_autorizacion']?.toString(),
       estado: json['estado']?.toString() ?? 'recibido',
       leidoAdmin: json['leido_admin'] == true,
       observacionesInternas: json['observaciones_internas']?.toString(),

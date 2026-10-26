@@ -17,11 +17,8 @@ class DenunciaReporteScreen extends StatefulWidget {
 class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  // 1. Datos del reportante
-  bool _esAnonimo = false;
+  // 1. Datos del reportante (Identificación obligatoria, sin documento ni correo)
   final _ctrlNombre = TextEditingController();
-  final _ctrlDocumento = TextEditingController();
-  final _ctrlCorreo = TextEditingController();
   final _ctrlTelefono = TextEditingController();
   final _ctrlCiudadReportante = TextEditingController(text: 'Pasto');
   final _ctrlBarrioReportante = TextEditingController();
@@ -31,22 +28,23 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
   String _tipoAnimal = 'Perro';
   final _ctrlUbicacion = TextEditingController();
   final _ctrlCiudadCaso = TextEditingController(text: 'San Juan de Pasto');
+  DateTime? _fechaIncidenteSeleccionada;
   final _ctrlFechaSituacion = TextEditingController();
   String _peligroInmediato = 'no'; // 'si', 'no', 'no_seguro'
   final _ctrlDescripcion = TextEditingController();
 
-  // 3. Descripción física y estado del animal
-  final _ctrlCaracteristicas = TextEditingController();
-  final _ctrlEstadoSalud = TextEditingController();
-  final _ctrlHeridasVisibles = TextEditingController();
-  final _ctrlDificultadMovilidad = TextEditingController();
-  final _ctrlCondicionesLugar = TextEditingController();
-  final _ctrlObservaciones = TextEditingController();
+  // 3. Estado del animal (Títulos claros, profesionales, sin duplicados)
+  final _ctrlCaracteristicas = TextEditingController(); // Estado físico del animal
+  final _ctrlHeridasVisibles = TextEditingController(); // Lesiones o heridas visibles
+  final _ctrlCondicionesAlimentacion = TextEditingController(); // Condiciones de alimentación y agua
+  final _ctrlCondicionesLugar = TextEditingController(); // Condiciones del lugar donde se encuentra
+  final _ctrlComportamientoAnimal = TextEditingController(); // Comportamiento y estado general
+  final _ctrlObservacionesAdicionales = TextEditingController(); // Único campo de observaciones
 
   // 4. Evidencias seleccionadas
   final List<({Uint8List bytes, String nombre, int tamano})> _archivosSeleccionados = [];
 
-  // 5. Protección de datos
+  // 5. Protección de datos (Ley 1581 de 2012)
   bool _aceptoPolitica = false;
 
   bool _enviando = false;
@@ -69,8 +67,6 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
   @override
   void dispose() {
     _ctrlNombre.dispose();
-    _ctrlDocumento.dispose();
-    _ctrlCorreo.dispose();
     _ctrlTelefono.dispose();
     _ctrlCiudadReportante.dispose();
     _ctrlBarrioReportante.dispose();
@@ -79,12 +75,49 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
     _ctrlFechaSituacion.dispose();
     _ctrlDescripcion.dispose();
     _ctrlCaracteristicas.dispose();
-    _ctrlEstadoSalud.dispose();
     _ctrlHeridasVisibles.dispose();
-    _ctrlDificultadMovilidad.dispose();
+    _ctrlCondicionesAlimentacion.dispose();
     _ctrlCondicionesLugar.dispose();
-    _ctrlObservaciones.dispose();
+    _ctrlComportamientoAnimal.dispose();
+    _ctrlObservacionesAdicionales.dispose();
     super.dispose();
+  }
+
+  Future<void> _seleccionarFechaIncidente() async {
+    final DateTime hoy = DateTime.now();
+    final DateTime inicial = _fechaIncidenteSeleccionada ?? hoy;
+
+    final DateTime? seleccionada = await showDatePicker(
+      context: context,
+      initialDate: inicial.isAfter(hoy) ? hoy : inicial,
+      firstDate: DateTime(2020),
+      lastDate: hoy,
+      helpText: 'Selecciona la fecha del incidente',
+      cancelText: 'Cancelar',
+      confirmText: 'Aceptar',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.rosa,
+              onPrimary: Colors.white,
+              onSurface: AppColors.texto,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (seleccionada != null) {
+      setState(() {
+        _fechaIncidenteSeleccionada = seleccionada;
+        final anio = seleccionada.year.toString();
+        final mes = seleccionada.month.toString().padLeft(2, '0');
+        final dia = seleccionada.day.toString().padLeft(2, '0');
+        _ctrlFechaSituacion.text = '$anio-$mes-$dia';
+      });
+    }
   }
 
   Future<void> _seleccionarArchivos() async {
@@ -155,17 +188,33 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           children: [
             Icon(Icons.privacy_tip_outlined, color: AppColors.rosa),
             SizedBox(width: 10),
-            Expanded(child: Text('Tratamiento de Datos Personales', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            Expanded(
+              child: Text(
+                'Tratamiento de Datos Personales',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
         content: const SingleChildScrollView(
           child: Text(
-            'En cumplimiento de la normativa legal de protección de datos personales (Ley 1581 de 2012 de la República de Colombia), la Fundación Maritza Arévalo y el sistema Paw Match informan:\n\n'
-            '1. FINALIDAD DEL TRATAMIENTO: Los datos personales recopilados a través de este formulario serán utilizados única y exclusivamente para recibir, verificar, gestionar y realizar el seguimiento respectivo al caso de presunto maltrato, abandono o riesgo animal reportado.\n\n'
-            '2. CONFIDENCIALIDAD: Sus datos de contacto no serán compartidos públicamente ni divulgados a terceras personas no autorizadas. En caso de reporte anónimo, la información del caso será gestionada preservando el anonimato del denunciante.\n\n'
-            '3. DERECHOS DEL TITULAR: Como titular de la información, usted tiene derecho a conocer, actualizar y rectificar sus datos personales mediante comunicación a los canales oficiales de la organización.\n\n'
-            '4. ALCANCE: El envío del reporte no constituye una denuncia formal ante autoridades judiciales ni garantiza atención de emergencia en tiempo real.',
-            style: TextStyle(fontSize: 13.5, height: 1.5, color: AppColors.texto),
+            'POLÍTICA DE TRATAMIENTO DE DATOS PERSONALES\n'
+            'FUNDACIÓN MARITZA ARÉVALO (Versión 1.0 - Ley 1581 de 2012)\n\n'
+            '1. RESPONSABLE DEL TRATAMIENTO:\n'
+            'Fundación Maritza Arévalo, entidad comprometida con la protección y el bienestar animal en Colombia.\n\n'
+            '2. FINALIDAD DEL TRATAMIENTO:\n'
+            'Los datos personales recopilados a través de este formulario (nombre completo, número de teléfono y dirección o barrio de contacto) serán tratados única y exclusivamente para:\n'
+            '• Gestionar, verificar y realizar el seguimiento a la denuncia de posible maltrato o riesgo animal reportada.\n'
+            '• Establecer comunicación con la persona que reporta para ampliar detalles o coordinar acciones cuando sea estrictamente necesario para la atención del caso.\n\n'
+            '3. CONFIDENCIALIDAD Y ACCESO RESTRINGIDO:\n'
+            'La información personal será tratada bajo estrictos estándares de confidencialidad y estará disponible únicamente para el personal administrativo y operativo debidamente autorizado de la Fundación Maritza Arévalo.\n'
+            'Los datos no se publicarán ni se divulgarán de forma indiscriminada. No aparecerán en fichas públicas ni se compartirán con la persona denunciada.\n'
+            'La fundación únicamente podrá compartir información ante requerimiento formal de autoridad competente u obligación legal expresa.\n\n'
+            '4. MEDIDAS DE SEGURIDAD:\n'
+            'La fundación implementa medidas técnicas, humanas y administrativas para garantizar la seguridad de los registros, evitando su adulteración, pérdida, consulta o acceso no autorizado.\n\n'
+            '5. DERECHOS DEL TITULAR (HABEAS DATA):\n'
+            'Conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013, usted tiene derecho a conocer, actualizar, rectificar y suprimir sus datos personales, así como revocar la autorización otorgada, mediante los canales oficiales de atención de la Fundación Maritza Arévalo.',
+            style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.texto),
           ),
         ),
         actions: [
@@ -193,7 +242,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
     if (!_aceptoPolitica) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debes aceptar la política de tratamiento de datos personales para continuar.'),
+          content: Text('Debes autorizar el tratamiento de datos personales para registrar la denuncia.'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -204,26 +253,23 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
 
     try {
       final res = await DenunciasService.enviarDenuncia(
-        esAnonimo: _esAnonimo,
-        nombreReportante: _ctrlNombre.text,
-        documentoReportante: _ctrlDocumento.text,
-        correoReportante: _ctrlCorreo.text,
-        telefonoReportante: _ctrlTelefono.text,
-        ciudadReportante: _ctrlCiudadReportante.text,
-        barrioReportante: _ctrlBarrioReportante.text,
+        nombreReportante: _ctrlNombre.text.trim(),
+        telefonoReportante: _ctrlTelefono.text.trim(),
+        ciudadReportante: _ctrlCiudadReportante.text.trim(),
+        barrioReportante: _ctrlBarrioReportante.text.trim(),
         tipoReporte: _tipoReporte,
         tipoAnimal: _tipoAnimal,
-        ubicacionAnimal: _ctrlUbicacion.text,
-        ciudadCaso: _ctrlCiudadCaso.text,
-        fechaSituacion: _ctrlFechaSituacion.text,
+        ubicacionAnimal: _ctrlUbicacion.text.trim(),
+        ciudadCaso: _ctrlCiudadCaso.text.trim(),
+        fechaSituacion: _ctrlFechaSituacion.text.trim(),
         peligroInmediato: _peligroInmediato,
-        descripcionCaso: _ctrlDescripcion.text,
-        caracteristicasAnimal: _ctrlCaracteristicas.text,
-        estadoSalud: _ctrlEstadoSalud.text,
-        heridasVisibles: _ctrlHeridasVisibles.text,
-        dificultadMovilidad: _ctrlDificultadMovilidad.text,
-        condicionesLugar: _ctrlCondicionesLugar.text,
-        observacionesAdicionales: _ctrlObservaciones.text,
+        descripcionCaso: _ctrlDescripcion.text.trim(),
+        caracteristicasAnimal: _ctrlCaracteristicas.text.trim(),
+        heridasVisibles: _ctrlHeridasVisibles.text.trim(),
+        condicionesAlimentacion: _ctrlCondicionesAlimentacion.text.trim(),
+        condicionesLugar: _ctrlCondicionesLugar.text.trim(),
+        comportamientoAnimal: _ctrlComportamientoAnimal.text.trim(),
+        observacionesAdicionales: _ctrlObservacionesAdicionales.text.trim(),
         aceptoPolitica: _aceptoPolitica,
         archivos: _archivosSeleccionados.map((a) => (bytes: a.bytes, nombre: a.nombre)).toList(),
       );
@@ -289,7 +335,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
             ),
             const SizedBox(height: 12),
             const Text(
-              'Tu reporte ha sido recibido correctamente. La información será revisada para evaluar la situación y determinar los pasos que puedan seguirse según las características del caso y la disponibilidad de atención.',
+              'Tu reporte ha sido recibido correctamente. La información será revisada para evaluar la situación y determinar los pasos a seguir según las características del caso y la disponibilidad de atención.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13.5, color: Colors.black87, height: 1.45),
             ),
@@ -347,7 +393,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
               ),
               onPressed: () {
                 Navigator.pop(ctx);
-                Navigator.pop(context); // Vuelve al WelcomeScreen
+                Navigator.pop(context); // Regresar al WelcomeScreen
               },
               child: const Text('Entendido y volver al inicio', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
@@ -385,25 +431,16 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // =========================================================
-                    // 2. SECCIÓN INFORMATIVA: ¿Cuándo puedes reportar un caso?
-                    // =========================================================
+                    // Sección Informativa
                     _seccionInformativa(escritorio),
-
                     const SizedBox(height: 20),
 
-                    // =========================================================
-                    // 3. SECCIÓN: Antes de enviar tu reporte
-                    // =========================================================
+                    // Sección: Antes de enviar tu reporte
                     _seccionOrientaciones(escritorio),
-
                     const SizedBox(height: 24),
 
-                    // =========================================================
-                    // 4. FORMULARIO: Cuéntanos qué está pasando
-                    // =========================================================
+                    // Formulario Completo
                     _seccionFormulario(escritorio),
-
                     const SizedBox(height: 40),
                   ],
                 ),
@@ -416,7 +453,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 2. Componente Sección Informativa
+  // Sección Informativa
   // ─────────────────────────────────────────────────────────────
   Widget _seccionInformativa(bool escritorio) {
     return BloqueLanding(
@@ -509,7 +546,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 3. Componente Sección Orientaciones
+  // Sección Orientaciones
   // ─────────────────────────────────────────────────────────────
   Widget _seccionOrientaciones(bool escritorio) {
     return BloqueLanding(
@@ -526,7 +563,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           _tarjetaOrientacion(
             icono: Icons.edit_note_rounded,
             titulo: 'Proporciona información clara',
-            detalle: 'Describe lo ocurrido, la ubicación del animal, las condiciones que observaste y, si lo sabes, desde cuándo sucede la situación. Procura que la información sea lo más precisa posible.',
+            detalle: 'Describe lo ocurrido, la ubicación del animal, las condiciones que observaste y la fecha del incidente. Procura que la información sea lo más precisa posible.',
           ),
           const SizedBox(height: 12),
           _tarjetaOrientacion(
@@ -546,7 +583,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           _tarjetaOrientacion(
             icono: Icons.fact_check_rounded,
             titulo: 'Sobre la atención de los casos',
-            detalle: 'La organización revisará la información recibida y determinará las posibles acciones según su capacidad de atención. Cuando corresponda y existan datos verificados, podrá orientar al reportante hacia entidades competentes u otras alternativas de ayuda. No podemos garantizar rescates en todos los casos ni resultados específicos.',
+            detalle: 'La organización revisará la información recibida y determinará las posibles acciones según su capacidad de atención. Cuando corresponda y existan datos verificados, podrá orientar al reportante hacia entidades competentes u otras alternativas de ayuda.',
           ),
         ],
       ),
@@ -592,7 +629,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 4. Componente Formulario Completo
+  // Formulario Completo
   // ─────────────────────────────────────────────────────────────
   Widget _seccionFormulario(bool escritorio) {
     return BloqueLanding(
@@ -612,78 +649,84 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           ),
           const Divider(height: 36, color: AppColors.bordeRosa),
 
-          // 4.1. Información de la persona que reporta
+          // 1. Información de la persona que reporta (Simplificada y Obligatoria)
           _subtituloGrupo('1. Información de la persona que reporta'),
-          const SizedBox(height: 10),
-          SwitchListTile(
-            title: const Text('Deseo reportar de forma anónima', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-            subtitle: const Text('Oculta tu nombre e identidad en el registro'),
-            value: _esAnonimo,
-            activeThumbColor: AppColors.rosa,
-            contentPadding: EdgeInsets.zero,
-            onChanged: (val) => setState(() => _esAnonimo = val),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.rosaSuave,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.bordeRosa),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.lock_outline_rounded, color: AppColors.rosa, size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Tus datos personales son confidenciales y de uso exclusivo de la Fundación Maritza Arévalo para el seguimiento del caso. No serán publicados ni compartidos con la persona denunciada.',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.texto, height: 1.4),
+                  ),
+                ),
+              ],
+            ),
           ),
-          if (!_esAnonimo) ...[
-            const SizedBox(height: 12),
-            _campoTexto(
-              controller: _ctrlNombre,
-              label: 'Nombre y apellidos *',
-              icono: Icons.person_outline_rounded,
-              validator: (v) => _esAnonimo ? null : ((v == null || v.trim().isEmpty) ? 'Ingresa tu nombre' : null),
+          const SizedBox(height: 16),
+
+          _campoTexto(
+            controller: _ctrlNombre,
+            label: 'Nombre completo *',
+            icono: Icons.person_outline_rounded,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return 'El nombre completo es obligatorio';
+              if (v.trim().length < 3) return 'Ingresa un nombre válido';
+              return null;
+            },
+          ),
+          const SizedBox(height: 14),
+
+          _campoTexto(
+            controller: _ctrlTelefono,
+            label: 'Número de teléfono de contacto *',
+            icono: Icons.phone_outlined,
+            keyboardType: TextInputType.phone,
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) {
+                return 'El teléfono de contacto es obligatorio';
+              }
+              final limpio = v.trim().replaceAll(RegExp(r'[\s\-\+\(\)]'), '');
+              if (limpio.length < 7 || limpio.length > 15 || !RegExp(r'^[0-9]+$').hasMatch(limpio)) {
+                return 'Ingresa un número de teléfono válido (mínimo 7 dígitos)';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 14),
+
+          _filaResponsive(
+            escritorio: escritorio,
+            izquierda: _campoTexto(
+              controller: _ctrlCiudadReportante,
+              label: 'Ciudad o municipio *',
+              icono: Icons.location_city_rounded,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa la ciudad' : null,
             ),
-            const SizedBox(height: 14),
-            _filaResponsive(
-              escritorio: escritorio,
-              izquierda: _campoTexto(
-                controller: _ctrlDocumento,
-                label: 'Documento de identidad (opcional)',
-                icono: Icons.badge_outlined,
-              ),
-              derecha: _campoTexto(
-                controller: _ctrlTelefono,
-                label: 'Número de contacto (teléfono) *',
-                icono: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-                validator: (v) => _esAnonimo ? null : ((v == null || v.trim().isEmpty) ? 'Ingresa tu teléfono' : null),
-              ),
+            derecha: _campoTexto(
+              controller: _ctrlBarrioReportante,
+              label: 'Dirección o barrio para localización *',
+              icono: Icons.home_work_outlined,
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Indica tu dirección o barrio de contacto' : null,
             ),
-            const SizedBox(height: 14),
-            _campoTexto(
-              controller: _ctrlCorreo,
-              label: 'Correo electrónico *',
-              icono: Icons.email_outlined,
-              keyboardType: TextInputType.emailAddress,
-              validator: (v) {
-                if (_esAnonimo) return null;
-                if (v == null || v.trim().isEmpty) return 'Ingresa tu correo';
-                if (!v.contains('@') || !v.contains('.')) return 'Ingresa un correo válido';
-                return null;
-              },
-            ),
-            const SizedBox(height: 14),
-            _filaResponsive(
-              escritorio: escritorio,
-              izquierda: _campoTexto(
-                controller: _ctrlCiudadReportante,
-                label: 'Ciudad o municipio de residencia *',
-                icono: Icons.location_city_rounded,
-                validator: (v) => _esAnonimo ? null : ((v == null || v.trim().isEmpty) ? 'Ingresa la ciudad' : null),
-              ),
-              derecha: _campoTexto(
-                controller: _ctrlBarrioReportante,
-                label: 'Barrio de residencia (opcional)',
-                icono: Icons.home_work_outlined,
-              ),
-            ),
-          ],
+          ),
 
           const Divider(height: 40, color: AppColors.bordeRosa),
 
-          // 4.2. Información del caso
+          // 2. Información del caso
           _subtituloGrupo('2. Información del caso'),
           const SizedBox(height: 14),
 
-          // Selector tipo de reporte
+          // Tipo de reporte
           DropdownButtonFormField<String>(
             initialValue: _tipoReporte,
             decoration: _decoracionCampo(label: 'Tipo de situación reportada *', icono: Icons.warning_amber_rounded),
@@ -695,7 +738,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Selector tipo de animal
+          // Tipo de animal
           DropdownButtonFormField<String>(
             initialValue: _tipoAnimal,
             decoration: _decoracionCampo(label: 'Tipo de animal *', icono: Icons.pets_rounded),
@@ -714,11 +757,21 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
               icono: Icons.location_city_rounded,
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Indica la ciudad del caso' : null,
             ),
-            derecha: _campoTexto(
-              controller: _ctrlFechaSituacion,
-              label: 'Fecha o tiempo aproximado * (ej. Hoy, Hace 3 días)',
-              icono: Icons.calendar_today_rounded,
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'Indica cuándo ocurrió' : null,
+            derecha: InkWell(
+              onTap: _seleccionarFechaIncidente,
+              borderRadius: BorderRadius.circular(14),
+              child: IgnorePointer(
+                child: TextFormField(
+                  controller: _ctrlFechaSituacion,
+                  readOnly: true,
+                  decoration: _decoracionCampo(
+                    label: 'Fecha del incidente (Día/Mes/Año) *',
+                    icono: Icons.calendar_month_rounded,
+                    sufijo: const Icon(Icons.arrow_drop_down, color: AppColors.rosa),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Selecciona la fecha del incidente' : null,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 14),
@@ -759,7 +812,6 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
             ],
           ),
 
-          // Aviso destacado si seleccionó "Sí"
           if (_peligroInmediato == 'si') ...[
             const SizedBox(height: 14),
             Container(
@@ -808,57 +860,67 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
 
           const Divider(height: 40, color: AppColors.bordeRosa),
 
-          // 4.3. Descripción física y estado del animal
-          _subtituloGrupo('3. Cuéntanos cómo se encuentra el animal'),
+          // 3. ¿Cómo se encuentra el animal? (Títulos claros y profesionales)
+          _subtituloGrupo('3. ¿Cómo se encuentra el animal?'),
           const SizedBox(height: 6),
-          const Text('Completa los campos que conozcas (puedes omitir los que desconozcas).', style: TextStyle(fontSize: 12.5, color: Colors.grey)),
-          const SizedBox(height: 14),
+          const Text(
+            'Organiza la información observable. Diligencia los aspectos que conozcas para facilitar la evaluación.',
+            style: TextStyle(fontSize: 12.5, color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
 
-          _campoTexto(
+          _campoConTitulo(
+            titulo: 'Estado físico del animal',
+            ayuda: 'Color, tamaño aproximado, condición de peso, pelaje o raza aproximada.',
             controller: _ctrlCaracteristicas,
-            label: 'Color, tamaño y características físicas (raza aproximada, pelaje, etc.)',
-            icono: Icons.palette_outlined,
+            icono: Icons.pets_rounded,
           ),
           const SizedBox(height: 14),
 
-          _filaResponsive(
-            escritorio: escritorio,
-            izquierda: _campoTexto(
-              controller: _ctrlEstadoSalud,
-              label: 'Estado de salud aparente (desnutrido, débil, etc.)',
-              icono: Icons.health_and_safety_outlined,
-            ),
-            derecha: _campoTexto(
-              controller: _ctrlHeridasVisibles,
-              label: 'Presencia de heridas o lesiones visibles',
-              icono: Icons.healing_outlined,
-            ),
+          _campoConTitulo(
+            titulo: 'Lesiones o heridas visibles',
+            ayuda: 'Heridas expuestas, sangrado, laceraciones, fracturas aparentes o quemaduras.',
+            controller: _ctrlHeridasVisibles,
+            icono: Icons.healing_rounded,
           ),
           const SizedBox(height: 14),
 
-          _filaResponsive(
-            escritorio: escritorio,
-            izquierda: _campoTexto(
-              controller: _ctrlDificultadMovilidad,
-              label: 'Dificultad para caminar o desplazarse',
-              icono: Icons.directions_walk_rounded,
-            ),
-            derecha: _campoTexto(
-              controller: _ctrlCondicionesLugar,
-              label: 'Condiciones del lugar (amarrado, intemperie, etc.)',
-              icono: Icons.roofing_rounded,
-            ),
+          _campoConTitulo(
+            titulo: 'Condiciones de alimentación y agua',
+            ayuda: 'Disponibilidad de agua limpia, alimento, signos evidentes de desnutrición o sed.',
+            controller: _ctrlCondicionesAlimentacion,
+            icono: Icons.restaurant_rounded,
           ),
           const SizedBox(height: 14),
-          _campoTexto(
-            controller: _ctrlObservaciones,
-            label: 'Otras observaciones importantes',
+
+          _campoConTitulo(
+            titulo: 'Condiciones del lugar donde se encuentra',
+            ayuda: 'A la intemperie, sol o lluvia, amarrado, espacio reducido, falta de aseo o ventilación.',
+            controller: _ctrlCondicionesLugar,
+            icono: Icons.roofing_rounded,
+          ),
+          const SizedBox(height: 14),
+
+          _campoConTitulo(
+            titulo: 'Comportamiento y estado general',
+            ayuda: 'Asustado, agresivo por dolor, decaído, sin movilidad o con dificultad para caminar.',
+            controller: _ctrlComportamientoAnimal,
+            icono: Icons.psychology_rounded,
+          ),
+          const SizedBox(height: 14),
+
+          // ÚNICO CAMPO DE OBSERVACIONES
+          _campoConTitulo(
+            titulo: 'Observaciones adicionales',
+            ayuda: 'Cualquier otro detalle importante para el seguimiento del caso por parte de la fundación.',
+            controller: _ctrlObservacionesAdicionales,
             icono: Icons.notes_rounded,
+            maxLines: 3,
           ),
 
           const Divider(height: 40, color: AppColors.bordeRosa),
 
-          // 4.4. Adjunta evidencias del caso
+          // 4. Adjunta evidencias del caso
           _subtituloGrupo('4. Adjunta evidencias del caso'),
           const SizedBox(height: 6),
           const Text(
@@ -897,19 +959,38 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
 
           const Divider(height: 40, color: AppColors.bordeRosa),
 
-          // 5. Protección de datos personales
-          _subtituloGrupo('5. Protección de tus datos personales'),
+          // 5. Protección de datos personales (Ley 1581 de 2012)
+          _subtituloGrupo('5. Tratamiento y protección de datos personales'),
           const SizedBox(height: 8),
-          const Text(
-            '“Los datos que proporciones serán tratados para recibir, evaluar y gestionar tu reporte, establecer contacto cuando sea necesario y realizar el seguimiento correspondiente. La información será utilizada de acuerdo con la política de tratamiento de datos personales de la organización y la normativa aplicable.”',
-            style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.45),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.rosaSuave,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.bordeRosa),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Responsable: Fundación Maritza Arévalo',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.texto),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'En cumplimiento de la Ley 1581 de 2012 y normatividad colombiana de protección de datos personales, le informamos que sus datos serán tratados de forma confidencial y con acceso restringido exclusivamente al personal autorizado de la Fundación Maritza Arévalo para la gestión, verificación y seguimiento de este caso.\n\n'
+                  'Sus datos no se publicarán ni divulgarán indiscriminadamente. La fundación aplica estrictas medidas de seguridad y solo podrá transferir información cuando exista una obligación legal o una autoridad competente lo requiera. Usted conserva sus derechos de consulta, actualización y rectificación conforme a la ley.',
+                  style: TextStyle(fontSize: 12.5, height: 1.45, color: Colors.black87),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               icon: const Icon(Icons.policy_rounded, size: 18, color: AppColors.rosa),
-              label: const Text('Ver política de privacidad y protección de datos', style: TextStyle(color: AppColors.rosa, fontWeight: FontWeight.bold)),
+              label: const Text('Consultar política de tratamiento de datos personales completa', style: TextStyle(color: AppColors.rosa, fontWeight: FontWeight.bold, fontSize: 13)),
               onPressed: _mostrarPoliticaPrivacidad,
             ),
           ),
@@ -919,7 +1000,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
             contentPadding: EdgeInsets.zero,
             activeColor: AppColors.rosa,
             title: const Text(
-              'Declaro que he leído la política de tratamiento de datos personales y autorizo el uso de la información proporcionada para las finalidades descritas, conforme a dicha política. *',
+              'He leído la política de tratamiento de datos personales de la Fundación Maritza Arévalo y autorizo expresamente el tratamiento de mis datos de contacto para la verificación y seguimiento de esta denuncia. *',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
             ),
             onChanged: (val) => setState(() => _aceptoPolitica = val ?? false),
@@ -927,7 +1008,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
 
           const SizedBox(height: 28),
 
-          // 6. Botón Enviar reporte
+          // Botón Enviar reporte
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -957,6 +1038,36 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
     return Text(
       titulo,
       style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w800, color: AppColors.rosa),
+    );
+  }
+
+  Widget _campoConTitulo({
+    required String titulo,
+    required String ayuda,
+    required TextEditingController controller,
+    required IconData icono,
+    int maxLines = 2,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          titulo,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.texto),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          ayuda,
+          style: const TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          style: const TextStyle(fontSize: 14),
+          decoration: _decoracionCampo(label: titulo, icono: icono),
+        ),
+      ],
     );
   }
 
@@ -1099,11 +1210,16 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
     );
   }
 
-  InputDecoration _decoracionCampo({required String label, required IconData icono}) {
+  InputDecoration _decoracionCampo({
+    required String label,
+    required IconData icono,
+    Widget? sufijo,
+  }) {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(fontSize: 13.5, color: Colors.black54),
       prefixIcon: Icon(icono, color: AppColors.rosa, size: 22),
+      suffixIcon: sufijo,
       filled: true,
       fillColor: AppColors.rosaSuave,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1178,5 +1294,3 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
     );
   }
 }
-
-

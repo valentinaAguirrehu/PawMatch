@@ -54,13 +54,10 @@ class DenunciasService {
 
   /// Envía una nueva denuncia ciudadana con sus archivos de evidencias.
   static Future<Map<String, dynamic>> enviarDenuncia({
-    required bool esAnonimo,
-    String? nombreReportante,
-    String? documentoReportante,
-    String? correoReportante,
-    String? telefonoReportante,
-    String? ciudadReportante,
-    String? barrioReportante,
+    required String nombreReportante,
+    required String telefonoReportante,
+    required String barrioReportante,
+    String ciudadReportante = 'San Juan de Pasto',
     required String tipoReporte,
     required String tipoAnimal,
     required String ubicacionAnimal,
@@ -71,8 +68,10 @@ class DenunciasService {
     String? caracteristicasAnimal,
     String? estadoSalud,
     String? heridasVisibles,
-    String? dificultadMovilidad,
+    String? condicionesAlimentacion,
     String? condicionesLugar,
+    String? comportamientoAnimal,
+    String? dificultadMovilidad,
     String? observacionesAdicionales,
     required bool aceptoPolitica,
     List<({Uint8List bytes, String nombre})> archivos = const [],
@@ -84,15 +83,10 @@ class DenunciasService {
       req.headers['x-usuario-id'] = Session.idUsuario!;
     }
 
-    req.fields['es_anonimo'] = esAnonimo.toString();
-    if (!esAnonimo) {
-      if (nombreReportante != null) req.fields['nombre_reportante'] = nombreReportante.trim();
-      if (documentoReportante != null) req.fields['documento_reportante'] = documentoReportante.trim();
-      if (correoReportante != null) req.fields['correo_reportante'] = correoReportante.trim();
-      if (telefonoReportante != null) req.fields['telefono_reportante'] = telefonoReportante.trim();
-      if (ciudadReportante != null) req.fields['ciudad_reportante'] = ciudadReportante.trim();
-      if (barrioReportante != null) req.fields['barrio_reportante'] = barrioReportante.trim();
-    }
+    req.fields['nombre_reportante'] = nombreReportante.trim();
+    req.fields['telefono_reportante'] = telefonoReportante.trim();
+    req.fields['barrio_reportante'] = barrioReportante.trim();
+    req.fields['ciudad_reportante'] = ciudadReportante.trim();
 
     req.fields['tipo_reporte'] = tipoReporte.trim();
     req.fields['tipo_animal'] = tipoAnimal.trim();
@@ -111,11 +105,17 @@ class DenunciasService {
     if (heridasVisibles != null && heridasVisibles.trim().isNotEmpty) {
       req.fields['heridas_visibles'] = heridasVisibles.trim();
     }
-    if (dificultadMovilidad != null && dificultadMovilidad.trim().isNotEmpty) {
-      req.fields['dificultad_movilidad'] = dificultadMovilidad.trim();
+    if (condicionesAlimentacion != null && condicionesAlimentacion.trim().isNotEmpty) {
+      req.fields['condiciones_alimentacion'] = condicionesAlimentacion.trim();
     }
     if (condicionesLugar != null && condicionesLugar.trim().isNotEmpty) {
       req.fields['condiciones_lugar'] = condicionesLugar.trim();
+    }
+    if (comportamientoAnimal != null && comportamientoAnimal.trim().isNotEmpty) {
+      req.fields['comportamiento_animal'] = comportamientoAnimal.trim();
+    }
+    if (dificultadMovilidad != null && dificultadMovilidad.trim().isNotEmpty) {
+      req.fields['dificultad_movilidad'] = dificultadMovilidad.trim();
     }
     if (observacionesAdicionales != null && observacionesAdicionales.trim().isNotEmpty) {
       req.fields['observaciones_adicionales'] = observacionesAdicionales.trim();
@@ -133,7 +133,7 @@ class DenunciasService {
       );
     }
 
-    final streamed = await req.send();
+    final streamed = await req.send().timeout(const Duration(seconds: 40));
     final res = await http.Response.fromStream(streamed);
 
     String bodyStr = '';
@@ -161,7 +161,7 @@ class DenunciasService {
     }
   }
 
-  /// Lista denuncias para el panel de administración.
+  /// Lista denuncias para el panel de administración con control de timeout.
   static Future<List<Denuncia>> listarParaAdmin({String? estado, String? query}) async {
     final queryParams = <String, String>{};
     if (estado != null && estado.isNotEmpty) queryParams['estado'] = estado;
@@ -171,9 +171,14 @@ class DenunciasService {
       queryParameters: queryParams.isNotEmpty ? queryParams : null,
     );
 
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 15));
     if (res.statusCode != 200) {
-      throw Exception('Error al cargar la lista de denuncias');
+      String msg = 'Error al cargar la lista de denuncias';
+      try {
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d['error'] != null) msg = d['error'];
+      } catch (_) {}
+      throw Exception(msg);
     }
 
     final List lista = jsonDecode(utf8.decode(res.bodyBytes)) as List;
@@ -183,10 +188,15 @@ class DenunciasService {
   /// Consulta el detalle completo de una denuncia (la marca como leída).
   static Future<DenunciaDetalle> obtenerDetalle(String id) async {
     final uri = Uri.parse('$_url/$id');
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 15));
 
     if (res.statusCode != 200) {
-      throw Exception('Error al consultar el detalle de la denuncia');
+      String msg = 'Error al consultar el detalle de la denuncia';
+      try {
+        final d = jsonDecode(utf8.decode(res.bodyBytes));
+        if (d['error'] != null) msg = d['error'];
+      } catch (_) {}
+      throw Exception(msg);
     }
 
     final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
@@ -210,7 +220,7 @@ class DenunciasService {
         'observaciones_internas': observacionesInternas,
         'acciones_realizadas': accionesRealizadas,
       }),
-    );
+    ).timeout(const Duration(seconds: 15));
 
     if (res.statusCode != 200) {
       String msg = 'Error al actualizar el estado';
@@ -226,7 +236,7 @@ class DenunciasService {
   /// Reintenta el envío de la notificación por correo al administrador.
   static Future<void> reintentarCorreo(String id) async {
     final uri = Uri.parse('$_url/$id/reintentar-correo');
-    final res = await http.post(uri, headers: _headers);
+    final res = await http.post(uri, headers: _headers).timeout(const Duration(seconds: 25));
 
     if (res.statusCode != 200) {
       String msg = 'Error al reenviar el correo';
@@ -240,13 +250,14 @@ class DenunciasService {
 
   /// URL para streaming seguro de archivo.
   static String getUrlArchivo(String idDenuncia, String idArchivo) {
-    return '$_url/$idDenuncia/archivos/$idArchivo';
+    final adminId = Session.idUsuario ?? '';
+    return '$_url/$idDenuncia/archivos/$idArchivo?adminId=$adminId';
   }
 
-  /// Descarga los bytes de un archivo adjunto con autenticación de administrador.
+  /// Descarga los bytes de un archivo adjunto con autenticación de administrador y timeout.
   static Future<Uint8List> descargarArchivoBytes(String idDenuncia, String idArchivo) async {
     final uri = Uri.parse(getUrlArchivo(idDenuncia, idArchivo));
-    final res = await http.get(uri, headers: _headers);
+    final res = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 30));
     if (res.statusCode == 200) {
       return res.bodyBytes;
     }

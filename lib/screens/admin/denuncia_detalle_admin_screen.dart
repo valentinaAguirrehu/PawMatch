@@ -18,6 +18,7 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
   String? _error;
   DenunciaDetalle? _detalle;
   bool _actualizando = false;
+  String? _descargandoArchivoId;
 
   @override
   void initState() {
@@ -188,18 +189,13 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
   }
 
   Future<void> _verVideoCompleto(DenunciaArchivo archivo) async {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const Center(
-        child: CircularProgressIndicator(color: AppColors.rosa),
-      ),
-    );
+    if (_descargandoArchivoId != null) return;
+    setState(() => _descargandoArchivoId = archivo.id);
     try {
       final bytes = await DenunciasService.descargarArchivoBytes(widget.idDenuncia, archivo.id);
       if (!mounted) return;
-      Navigator.pop(context);
-      mostrarDialogoPrevisualizarVideo(
+      setState(() => _descargandoArchivoId = null);
+      await mostrarDialogoPrevisualizarVideo(
         context,
         nombre: archivo.nombreOriginal,
         bytes: bytes,
@@ -207,7 +203,7 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context);
+      setState(() => _descargandoArchivoId = null);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al cargar video: $e'), backgroundColor: Colors.redAccent),
       );
@@ -445,11 +441,13 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _filaDato('Características físicas:', d.caracteristicasAnimal?.isNotEmpty == true ? d.caracteristicasAnimal! : 'No especificado'),
-                  _filaDato('Estado de salud aparente:', d.estadoSalud?.isNotEmpty == true ? d.estadoSalud! : 'No especificado'),
-                  _filaDato('Heridas visibles:', d.heridasVisibles?.isNotEmpty == true ? d.heridasVisibles! : 'Ninguna reportada'),
-                  _filaDato('Dificultad de movilidad:', d.dificultadMovilidad?.isNotEmpty == true ? d.dificultadMovilidad! : 'Normal'),
+                  _filaDato('Estado físico del animal:', d.caracteristicasAnimal?.isNotEmpty == true ? d.caracteristicasAnimal! : 'No especificado'),
+                  _filaDato('Lesiones o heridas visibles:', d.heridasVisibles?.isNotEmpty == true ? d.heridasVisibles! : 'Ninguna reportada'),
+                  if (d.condicionesAlimentacion?.isNotEmpty == true)
+                    _filaDato('Alimentación y agua:', d.condicionesAlimentacion!),
                   _filaDato('Condiciones del lugar:', d.condicionesLugar?.isNotEmpty == true ? d.condicionesLugar! : 'No especificadas'),
+                  if (d.comportamientoAnimal?.isNotEmpty == true)
+                    _filaDato('Comportamiento y estado:', d.comportamientoAnimal!),
                   if (d.observacionesAdicionales?.isNotEmpty == true)
                     _filaDato('Observaciones adicionales:', d.observacionesAdicionales!),
                 ],
@@ -462,40 +460,16 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
             _tarjeta(
               titulo: 'Datos de la Persona que Reporta',
               icono: Icons.person_outline_rounded,
-              child: d.esAnonimo
-                  ? Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.amber.shade200),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.visibility_off_rounded, color: Colors.amber, size: 24),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Este caso fue enviado de forma ANÓNIMA. No se registraron datos de contacto personales.',
-                              style: TextStyle(fontSize: 13, color: Colors.black87),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _filaDato('Nombre completo:', d.nombreReportante ?? 'No informado'),
-                        if (d.documentoReportante?.isNotEmpty == true)
-                          _filaDato('Documento de identidad:', d.documentoReportante!),
-                        _filaDato('Teléfono de contacto:', d.telefonoReportante ?? 'No informado'),
-                        _filaDato('Correo electrónico:', d.correoReportante ?? 'No informado'),
-                        _filaDato('Ciudad de residencia:', d.ciudadReportante ?? 'No informada'),
-                        if (d.barrioReportante?.isNotEmpty == true)
-                          _filaDato('Barrio:', d.barrioReportante!),
-                      ],
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _filaDato('Nombre completo:', d.nombreReportante ?? 'No informado'),
+                  _filaDato('Teléfono de contacto:', d.telefonoReportante ?? 'No informado'),
+                  _filaDato('Ciudad:', d.ciudadReportante ?? 'San Juan de Pasto'),
+                  _filaDato('Dirección o barrio:', d.barrioReportante?.isNotEmpty == true ? d.barrioReportante! : 'No especificado'),
+                  _filaDato('Autorización de datos:', '${d.aceptoPolitica ? "Autorizado conforme a Ley 1581 de 2012" : "No"} (${d.versionPolitica ?? "v1.0"})'),
+                ],
+              ),
             ),
 
             const SizedBox(height: 16),
@@ -545,8 +519,14 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
                                       backgroundColor: Colors.white,
                                       foregroundColor: AppColors.rosa,
                                     ),
-                                    onPressed: () => _verVideoCompleto(a),
-                                    child: const Text('Ver video'),
+                                    onPressed: _descargandoArchivoId != null ? null : () => _verVideoCompleto(a),
+                                    child: _descargandoArchivoId == a.id
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(color: AppColors.rosa, strokeWidth: 2),
+                                          )
+                                        : const Text('Ver video'),
                                   )
                                 else
                                   FilledButton.tonal(
