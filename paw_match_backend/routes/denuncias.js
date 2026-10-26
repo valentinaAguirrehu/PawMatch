@@ -112,7 +112,7 @@ const upload = multer({
 
 // Middleware de verificación de rol administrador
 async function requireAdmin(req, res, next) {
-  const userId = req.header('x-usuario-id');
+  const userId = req.header('x-usuario-id') || req.query.adminId;
   if (!userId) {
     return res.status(401).json({ error: 'Debes iniciar sesión como administrador' });
   }
@@ -129,7 +129,7 @@ async function requireAdmin(req, res, next) {
 
     const usuario = result.rows[0];
     if (usuario.rol !== 'administrador' || usuario.estado_cuenta !== 'activo') {
-      return res.status(403).json({ error: 'Acceso restringido solo para administradores activos' });
+      return res.status(403).json({ error: 'Acceso restringido solo para personal autorizado de la Fundación Maritza Arévalo' });
     }
 
     req.admin = usuario;
@@ -151,33 +151,13 @@ function generarRadicado() {
   return `DEN-${anio}-${codigo}`;
 }
 
-// Obtiene los correos de los administradores activos a notificar
-async function obtenerCorreosAdministradores() {
-  const correos = new Set();
-
-  if (process.env.ADMIN_EMAIL && process.env.ADMIN_EMAIL.trim()) {
-    process.env.ADMIN_EMAIL.split(',').forEach(c => {
-      const limpio = c.trim();
-      if (limpio && limpio.includes('@')) correos.add(limpio);
-    });
+// Obtiene ÚNICAMENTE el correo administrativo configurado en .env (sin agregar destinatarios innecesarios)
+function obtenerCorreosAdministradores() {
+  const correoAdmin = (process.env.ADMIN_EMAIL || process.env.GMAIL_USER || '').trim();
+  if (correoAdmin && correoAdmin.includes('@')) {
+    return [correoAdmin];
   }
-
-  try {
-    const resAdmins = await pool.query(
-      "SELECT correo FROM usuario WHERE rol = 'administrador' AND estado_cuenta = 'activo'"
-    );
-    resAdmins.rows.forEach(r => {
-      if (r.correo && r.correo.includes('@')) correos.add(r.correo.trim());
-    });
-  } catch (err) {
-    console.warn('[DENUNCIAS] No se pudieron leer administradores de BD:', err.message);
-  }
-
-  if (correos.size === 0 && process.env.GMAIL_USER && process.env.GMAIL_USER.trim()) {
-    correos.add(process.env.GMAIL_USER.trim());
-  }
-
-  return Array.from(correos);
+  return [];
 }
 
 // ============================================================================
@@ -202,13 +182,10 @@ router.post('/', (req, res, next) => {
   const client = await pool.connect();
   try {
     const {
-      es_anonimo,
       nombre_reportante,
-      documento_reportante,
-      correo_reportante,
       telefono_reportante,
-      ciudad_reportante,
       barrio_reportante,
+      ciudad_reportante,
       tipo_reporte,
       tipo_animal,
       ubicacion_animal,
@@ -219,25 +196,30 @@ router.post('/', (req, res, next) => {
       caracteristicas_animal,
       estado_salud,
       heridas_visibles,
-      dificultad_movilidad,
+      condiciones_alimentacion,
       condiciones_lugar,
+      comportamiento_animal,
+      dificultad_movilidad,
       observaciones_adicionales,
       acepto_politica,
     } = req.body;
 
-    const esAnonimoBool = String(es_anonimo).toLowerCase() === 'true';
+    // Validación obligatoria de la persona reportante (no se admite anonimato)
+    if (!nombre_reportante || !nombre_reportante.trim()) {
+      return res.status(400).json({ error: 'El nombre completo de la persona que reporta es obligatorio' });
+    }
 
-    // Validación de datos personales si no es anónimo
-    if (!esAnonimoBool) {
-      if (!nombre_reportante || !nombre_reportante.trim()) {
-        return res.status(400).json({ error: 'El nombre y apellidos del reportante son requeridos' });
-      }
-      if (!correo_reportante || !correo_reportante.includes('@')) {
-        return res.status(400).json({ error: 'Debes proporcionar un correo electrónico válido' });
-      }
-      if (!telefono_reportante || !telefono_reportante.trim()) {
-        return res.status(400).json({ error: 'El número de teléfono de contacto es obligatorio' });
-      }
+    if (!telefono_reportante || !telefono_reportante.trim()) {
+      return res.status(400).json({ error: 'El número de teléfono de contacto es obligatorio' });
+    }
+
+    const telLimpio = telefono_reportante.trim().replace(/[\s\-\(\)\+]/g, '');
+    if (telLimpio.length < 7 || telLimpio.length > 15 || !/^\d+$/.test(telLimpio)) {
+      return res.status(400).json({ error: 'Ingresa un número de teléfono válido (mínimo 7 dígitos numéricos)' });
+    }
+
+    if (!barrio_reportante || !barrio_reportante.trim()) {
+      return res.status(400).json({ error: 'La dirección o barrio donde localizar al reportante es obligatoria para el seguimiento' });
     }
 
     // Validación de campos del caso
@@ -254,7 +236,7 @@ router.post('/', (req, res, next) => {
       return res.status(400).json({ error: 'La ciudad o municipio del caso es obligatoria' });
     }
     if (!fecha_situacion || !fecha_situacion.trim()) {
-      return res.status(400).json({ error: 'Debes indicar la fecha o tiempo aproximado de la situación' });
+      return res.status(400).json({ error: 'Debes seleccionar la fecha del incidente en el calendario' });
     }
     if (!descripcion_caso || !descripcion_caso.trim()) {
       return res.status(400).json({ error: 'Por favor describe lo sucedido con el mayor detalle posible' });
@@ -262,7 +244,7 @@ router.post('/', (req, res, next) => {
 
     const aceptoPoliticaBool = String(acepto_politica).toLowerCase() === 'true';
     if (!aceptoPoliticaBool) {
-      return res.status(400).json({ error: 'Debes aceptar la política de tratamiento de datos personales' });
+      return res.status(400).json({ error: 'Debes autorizar el tratamiento de datos personales para registrar la denuncia' });
     }
 
     // Detectar si el usuario que reporta tiene sesión iniciada
@@ -287,39 +269,36 @@ router.post('/', (req, res, next) => {
 
     await client.query('BEGIN');
 
-    // Insertar denuncia
+    // Insertar denuncia completa
     const insertDenunciaQuery = `
       INSERT INTO denuncia (
         radicado, id_usuario, es_anonimo,
-        nombre_reportante, documento_reportante, correo_reportante,
-        telefono_reportante, ciudad_reportante, barrio_reportante,
+        nombre_reportante, telefono_reportante, ciudad_reportante, barrio_reportante,
         tipo_reporte, tipo_animal, ubicacion_animal, ciudad_caso,
         fecha_situacion, peligro_inmediato, descripcion_caso,
         caracteristicas_animal, estado_salud, heridas_visibles,
-        dificultad_movilidad, condiciones_lugar, observaciones_adicionales,
-        acepto_politica, estado, leido_admin, estado_correo
+        condiciones_alimentacion, condiciones_lugar, comportamiento_animal, dificultad_movilidad,
+        observaciones_adicionales, acepto_politica, version_politica, fecha_autorizacion,
+        estado, leido_admin, estado_correo
       ) VALUES (
-        $1, $2, $3,
-        $4, $5, $6,
-        $7, $8, $9,
-        $10, $11, $12, $13,
+        $1, $2, false,
+        $3, $4, $5, $6,
+        $7, $8, $9, $10,
+        $11, $12, $13,
         $14, $15, $16,
-        $17, $18, $19,
-        $20, $21, $22,
-        $23, 'recibido', false, 'pendiente'
+        $17, $18, $19, $20,
+        $21, true, 'v1.0', CURRENT_TIMESTAMP,
+        'recibido', false, 'pendiente'
       ) RETURNING id_denuncia, radicado, fecha_creacion, estado;
     `;
 
     const valores = [
       radicado,
       idUsuarioSesion,
-      esAnonimoBool,
-      esAnonimoBool ? 'Anónimo' : (nombre_reportante || '').trim(),
-      esAnonimoBool ? null : (documento_reportante || '').trim(),
-      esAnonimoBool ? null : (correo_reportante || '').trim().toLowerCase(),
-      esAnonimoBool ? null : (telefono_reportante || '').trim(),
-      esAnonimoBool ? null : (ciudad_reportante || '').trim(),
-      esAnonimoBool ? null : (barrio_reportante || '').trim(),
+      nombre_reportante.trim(),
+      telefono_reportante.trim(),
+      (ciudad_reportante || 'San Juan de Pasto').trim(),
+      barrio_reportante.trim(),
       tipo_reporte.trim(),
       tipo_animal.trim(),
       ubicacion_animal.trim(),
@@ -330,10 +309,11 @@ router.post('/', (req, res, next) => {
       (caracteristicas_animal || '').trim(),
       (estado_salud || '').trim(),
       (heridas_visibles || '').trim(),
-      (dificultad_movilidad || '').trim(),
+      (condiciones_alimentacion || '').trim(),
       (condiciones_lugar || '').trim(),
+      (comportamiento_animal || '').trim(),
+      (dificultad_movilidad || '').trim(),
       (observaciones_adicionales || '').trim(),
-      aceptoPoliticaBool,
     ];
 
     const resDenuncia = await client.query(insertDenunciaQuery, valores);
@@ -580,14 +560,25 @@ router.get('/:id/archivos/:idArchivo', requireAdmin, async (req, res) => {
     }
 
     const archivo = r.rows[0];
-    if (!fs.existsSync(archivo.ruta_archivo)) {
+    const rutaAbsoluta = path.resolve(archivo.ruta_archivo);
+    if (!fs.existsSync(rutaAbsoluta)) {
       return res.status(404).json({ error: 'El archivo físico no fue encontrado en el servidor' });
     }
 
-    if (archivo.tipo_mime) {
-      res.setHeader('Content-Type', archivo.tipo_mime);
+    let mimeType = archivo.tipo_mime;
+    const ext = path.extname(archivo.nombre_original || '').toLowerCase();
+    if (ext === '.mp4') mimeType = 'video/mp4';
+    else if (ext === '.webm') mimeType = 'video/webm';
+    else if (ext === '.mov') mimeType = 'video/quicktime';
+    else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+    else if (ext === '.png') mimeType = 'image/png';
+    else if (ext === '.webp') mimeType = 'image/webp';
+
+    if (mimeType) {
+      res.setHeader('Content-Type', mimeType);
     }
-    res.sendFile(path.resolve(archivo.ruta_archivo));
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.sendFile(rutaAbsoluta);
   } catch (err) {
     console.error('[DENUNCIAS ERROR] Error sirviendo archivo:', err);
     res.status(500).json({ error: 'Error al obtener archivo de evidencia' });
