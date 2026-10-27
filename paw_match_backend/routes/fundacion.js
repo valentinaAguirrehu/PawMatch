@@ -131,7 +131,7 @@ async function requireAdmin(req, res, next) {
   if (!userId) return res.status(401).json({ error: 'Debes iniciar sesión' });
   try {
     const result = await pool.query(
-      "SELECT id_usuario FROM usuario WHERE id_usuario = $1 AND rol = 'administrador'",
+      "SELECT id_usuario FROM usuario WHERE id_usuario = $1 AND LOWER(rol) IN ('administrador', 'superadmin')",
       [userId],
     );
     if (result.rows.length === 0) {

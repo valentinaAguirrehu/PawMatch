@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/pet.dart';
 import 'api_service.dart';
@@ -8,10 +10,40 @@ import 'session.dart';
 class PetsService {
   static String get _url => '${ApiService.baseUrl}/mascotas';
 
+  /// Notificador con el conteo de mascotas en la base de datos que esperan un hogar (no adoptadas).
+  static final ValueNotifier<int> peluditosEsperando = ValueNotifier<int>(0);
+  static Timer? _timerMonitoreo;
+
   static Map<String, String> get _headersAdmin => {
     'Content-Type': 'application/json',
     'x-usuario-id': Session.idUsuario ?? '',
   };
+
+  /// Inicia el monitoreo periódico del conteo de peluditos.
+  static void iniciarMonitoreo() {
+    refrescarConteo();
+    _timerMonitoreo?.cancel();
+    _timerMonitoreo = Timer.periodic(const Duration(seconds: 15), (_) {
+      refrescarConteo();
+    });
+  }
+
+  static void detenerMonitoreo() {
+    _timerMonitoreo?.cancel();
+    _timerMonitoreo = null;
+  }
+
+  /// Consulta la base de datos a través de la API y actualiza el contador reactivo.
+  static Future<int> refrescarConteo() async {
+    try {
+      final mascotas = await listar();
+      final esperando = mascotas.where((p) => !p.estaAdoptada).length;
+      peluditosEsperando.value = esperando;
+      return esperando;
+    } catch (_) {
+      return peluditosEsperando.value;
+    }
+  }
 
   /// Lista mascotas. [estado] puede ser 'disponible', 'en_proceso' o 'adoptado'.
   static Future<List<Pet>> listar({String? estado}) async {
@@ -20,10 +52,18 @@ class PetsService {
     };
     if (estado != null) parametros['estado'] = estado;
     final uri = Uri.parse(_url).replace(queryParameters: parametros);
-    final resp = await http.get(uri);
+    final resp = await http.get(
+      uri,
+      headers: const {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      },
+    );
     _validar(resp, 200);
     final data = jsonDecode(resp.body) as List<dynamic>;
-    return data.map((e) => Pet.fromJson(e as Map<String, dynamic>)).toList();
+    final mascotas = data.map((e) => Pet.fromJson(e as Map<String, dynamic>)).toList();
+    peluditosEsperando.value = mascotas.where((p) => !p.estaAdoptada).length;
+    return mascotas;
   }
 
   /// Trae una mascota con su personalidad (para el formulario de edición).
@@ -53,7 +93,9 @@ class PetsService {
       body: jsonEncode(pet.toJson()),
     );
     _validar(resp, 201);
-    return Pet.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    final creada = Pet.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    unawaited(refrescarConteo());
+    return creada;
   }
 
   static Future<Pet> actualizar(String id, Pet pet) async {
@@ -63,7 +105,9 @@ class PetsService {
       body: jsonEncode(pet.toJson()),
     );
     _validar(resp, 200);
-    return Pet.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    final editada = Pet.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
+    unawaited(refrescarConteo());
+    return editada;
   }
 
   static Future<void> eliminar(String id) async {
@@ -72,6 +116,7 @@ class PetsService {
       headers: _headersAdmin,
     );
     _validar(resp, 200);
+    unawaited(refrescarConteo());
   }
 
   static void _validar(http.Response resp, int esperado) {

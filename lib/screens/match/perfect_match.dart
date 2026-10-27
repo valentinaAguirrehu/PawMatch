@@ -2,16 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
+import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
+import 'package:paw_match/screens/apadrinamiento/pasos_apadrinamiento_screen.dart';
+import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
+import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
+import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 /// Las tres mascotas con mayor compatibilidad con la persona en sesión.
 class PerfectMatchScreen extends StatefulWidget {
-  const PerfectMatchScreen({super.key});
+  final VoidCallback onCerrarSesion;
+
+  const PerfectMatchScreen({super.key, required this.onCerrarSesion});
 
   @override
   State<PerfectMatchScreen> createState() => _PerfectMatchScreenState();
@@ -20,11 +30,15 @@ class PerfectMatchScreen extends StatefulWidget {
 class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
   late Future<RankingMatch> _future;
 
+  /// Mascotas cuya solicitud de adopción del usuario actual ya está aprobada.
+  Set<String> _adoptadasPorMi = {};
+
   @override
   void initState() {
     super.initState();
     MatchEstado.instancia.addListener(_alActualizarPersonalidad);
     _future = MatchService.mejores();
+    _cargarAdopciones();
   }
 
   @override
@@ -38,17 +52,37 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     _cargar();
   }
 
+  /// Hay adopción aprobada cuando la solicitud del usuario para esa mascota
+  /// está en estado `aprobada`.
+  bool _yaEsFamilia(String idMascota) => _adoptadasPorMi.contains(idMascota);
+
+  Future<void> _cargarAdopciones() async {
+    try {
+      final solicitudes = await AdoptionService.listMine();
+      if (!mounted) return;
+      setState(() {
+        _adoptadasPorMi = {
+          for (final solicitud in solicitudes)
+            if (solicitud.isApproved) solicitud.petId,
+        };
+      });
+    } catch (_) {}
+  }
+
   Future<void> _cargar() async {
     final futuro = MatchService.mejores();
     setState(() => _future = futuro);
-    await futuro.catchError(
-      (_) => const RankingMatch(
-        tienePersonalidad: false,
-        nombreUsuario: '',
-        usuario: {},
-        mejores: [],
+    await Future.wait([
+      futuro.catchError(
+        (_) => const RankingMatch(
+          tienePersonalidad: false,
+          nombreUsuario: '',
+          usuario: {},
+          mejores: [],
+        ),
       ),
-    );
+      _cargarAdopciones(),
+    ]);
   }
 
   Future<void> _abrirCuestionario() {
@@ -57,37 +91,57 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     ).push(MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()));
   }
 
-  /// Placeholder hasta conectar las solicitudes de adopción y apadrinamiento.
-  void _accionPendiente(String accion, String nombre) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppColors.rosa,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        content: Text('$accion a $nombre estará disponible pronto'),
-      ),
+  Future<void> _abrirAdopcion(Pet pet) async {
+    final listo = await perfilListoParaAdoptar(context);
+    if (!listo || !mounted) return;
+    final enviada = await AdoptionFormScreen.mostrar(context, pet: pet);
+    if (enviada == true && mounted) _cargarAdopciones();
+  }
+
+  Future<void> _abrirApadrinamiento(Pet pet) async {
+    final seguir = await PasosApadrinamientoScreen.mostrar(context, pet: pet);
+    if (!seguir || !mounted) return;
+    SolicitudApadrinamientoDialog.mostrar(
+      context,
+      pet: pet,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: _cargar,
-      child: FutureBuilder<RankingMatch>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: const [
-                SizedBox(height: 120),
-                Center(child: CircularProgressIndicator()),
-              ],
-            );
-          }
-          if (snap.hasError) return _error(snap.error);
-          return _contenido(snap.data!);
-        },
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBF8F9),
+      body: SafeArea(
+        child: Column(
+          children: [
+            BarraSuperior(
+              iconoTitulo: Icons.stars_rounded,
+              titulo: 'Mi Match Perfecto',
+              onCerrarSesion: widget.onCerrarSesion,
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _cargar,
+                child: FutureBuilder<RankingMatch>(
+                  future: _future,
+                  builder: (context, snap) {
+                    if (snap.connectionState != ConnectionState.done) {
+                      return ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(child: CircularProgressIndicator()),
+                        ],
+                      );
+                    }
+                    if (snap.hasError) return _error(snap.error);
+                    return _contenido(snap.data!);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -135,9 +189,19 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
               children: [
                 const EncabezadoCuestionarioUsuario(
                   titulo: '¡Tu Alma Gemela Ideal!',
+                  mostrarLogo: false,
+                  estiloTitulo: TextStyle(
+                    fontFamily: 'serif',
+                    fontSize: 18,
+                    height: 1.25,
+                    fontWeight: FontWeight.w600,
+                    fontStyle: FontStyle.italic,
+                    letterSpacing: 0.3,
+                    color: AppColors.texto,
+                  ),
                   icono: FeatureIcon.compatibilidad(
                     color: AppColors.rosa,
-                    tamano: 28,
+                    tamano: 20,
                   ),
                   detalle:
                       'Comparamos tus respuestas con la personalidad de cada mascota para '
@@ -176,21 +240,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Tu match perfecto ${FeatureIcon.huella}',
-          textAlign: TextAlign.center,
-          style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
         _TarjetaDestacada(
           key: ValueKey(destacado.mascota.id),
           match: destacado,
           nombreUsuario: ranking.nombreUsuario,
           usuario: ranking.usuario,
-          onAdoptar: () =>
-              _accionPendiente('Adoptar', destacado.mascota.nombre),
-          onApadrinar: () =>
-              _accionPendiente('Apadrinar', destacado.mascota.nombre),
+          yaEsFamilia: _yaEsFamilia(destacado.mascota.id),
+          adoptada: destacado.mascota.estaAdoptada,
+          onAdoptar: () => _abrirAdopcion(destacado.mascota),
+          onApadrinar: () => _abrirApadrinamiento(destacado.mascota),
         ),
         if (siguientes.isNotEmpty) ...[
           const SizedBox(height: 22),
@@ -211,14 +269,10 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                     match: siguientes[i],
                     nombreUsuario: ranking.nombreUsuario,
                     usuario: ranking.usuario,
-                    onAdoptar: () => _accionPendiente(
-                      'Adoptar',
-                      siguientes[i].mascota.nombre,
-                    ),
-                    onApadrinar: () => _accionPendiente(
-                      'Apadrinar',
-                      siguientes[i].mascota.nombre,
-                    ),
+                    yaEsFamilia: _yaEsFamilia(siguientes[i].mascota.id),
+                    adoptada: siguientes[i].mascota.estaAdoptada,
+                    onAdoptar: () => _abrirAdopcion(siguientes[i].mascota),
+                    onApadrinar: () => _abrirApadrinamiento(siguientes[i].mascota),
                   ),
               ];
               if (!ladoALado) {
@@ -290,6 +344,8 @@ class _TarjetaDestacada extends StatefulWidget {
   final CompatibilidadMatch match;
   final String nombreUsuario;
   final Map<String, int> usuario;
+  final bool yaEsFamilia;
+  final bool adoptada;
   final VoidCallback onAdoptar;
   final VoidCallback onApadrinar;
 
@@ -298,6 +354,8 @@ class _TarjetaDestacada extends StatefulWidget {
     required this.match,
     required this.nombreUsuario,
     required this.usuario,
+    required this.yaEsFamilia,
+    required this.adoptada,
     required this.onAdoptar,
     required this.onApadrinar,
   });
@@ -405,8 +463,11 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
               ),
               const SizedBox(height: 14),
               _BotonesMatch(
+                yaEsFamilia: widget.yaEsFamilia,
+                adoptada: widget.adoptada,
                 onAdoptar: widget.onAdoptar,
                 onApadrinar: widget.onApadrinar,
+                mascota: pet,
               ),
             ],
           ),
@@ -517,6 +578,8 @@ class _TarjetaSecundaria extends StatefulWidget {
   final CompatibilidadMatch match;
   final String nombreUsuario;
   final Map<String, int> usuario;
+  final bool yaEsFamilia;
+  final bool adoptada;
   final VoidCallback onAdoptar;
   final VoidCallback onApadrinar;
 
@@ -526,6 +589,8 @@ class _TarjetaSecundaria extends StatefulWidget {
     required this.match,
     required this.nombreUsuario,
     required this.usuario,
+    required this.yaEsFamilia,
+    required this.adoptada,
     required this.onAdoptar,
     required this.onApadrinar,
   });
@@ -648,8 +713,11 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
               const SizedBox(height: 12),
               _BotonesMatch(
                 compactos: true,
+                yaEsFamilia: widget.yaEsFamilia,
+                adoptada: widget.adoptada,
                 onAdoptar: widget.onAdoptar,
                 onApadrinar: widget.onApadrinar,
+                mascota: pet,
               ),
             ],
           ),
@@ -682,16 +750,54 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
 class _BotonesMatch extends StatelessWidget {
   final VoidCallback onAdoptar;
   final VoidCallback onApadrinar;
+  final bool yaEsFamilia;
+  final bool adoptada;
   final bool compactos;
+  final Pet? mascota;
 
   const _BotonesMatch({
     required this.onAdoptar,
     required this.onApadrinar,
+    required this.yaEsFamilia,
+    required this.adoptada,
     this.compactos = false,
+    this.mascota,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (Session.esAdmin) {
+      final alto = compactos ? 42.0 : 48.0;
+      final texto = TextStyle(
+        fontSize: compactos ? 13 : 15,
+        fontWeight: FontWeight.w700,
+      );
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () {
+            if (mascota != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => PetDetailScreen(pet: mascota!)),
+              );
+            }
+          },
+          style: OutlinedButton.styleFrom(
+            minimumSize: Size.fromHeight(alto),
+            foregroundColor: AppColors.rosa,
+            side: const BorderSide(color: AppColors.rosa, width: 1.5),
+            shape: const StadiumBorder(),
+            textStyle: texto,
+          ),
+          icon: const Icon(Icons.tune_rounded, size: 18),
+          label: const Text('Gestionar Mascota'),
+        ),
+      );
+    }
+
+    if (yaEsFamilia) return const _ChipFamilia();
+
     final alto = compactos ? 42.0 : 48.0;
     final texto = TextStyle(
       fontSize: compactos ? 13 : 15,
@@ -717,7 +823,12 @@ class _BotonesMatch extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: OutlinedButton.icon(
+          child: adoptada
+              ? const _ChipFamilia(
+                  texto: '¡Ya es parte de una familia! 💖',
+                  compacto: true,
+                )
+              : OutlinedButton.icon(
             onPressed: onApadrinar,
             style: OutlinedButton.styleFrom(
               minimumSize: Size.fromHeight(alto),
@@ -732,6 +843,43 @@ class _BotonesMatch extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChipFamilia extends StatelessWidget {
+  final String texto;
+  final bool compacto;
+
+  const _ChipFamilia({
+    this.texto = '¡Ya es parte de tu familia! 💖',
+    this.compacto = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(
+        horizontal: compacto ? 6 : 12,
+        vertical: compacto ? 8 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.blanco,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.bordeRosa),
+      ),
+      child: Text(
+        texto,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: AppColors.rosa,
+          fontWeight: FontWeight.w800,
+          fontSize: compacto ? 11 : null,
+          height: 1.2,
+        ),
+      ),
     );
   }
 }

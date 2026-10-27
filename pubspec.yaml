@@ -37,6 +37,18 @@ dependencies:
   http: ^1.2.2
   image_picker: ^1.2.3
   font_awesome_flutter: ^11.0.0
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  web: ^1.1.1
+  file_picker: ^13.1.0
+  shared_preferences: ^2.5.6
+  table_calendar: ^3.1.3
+  flutter_localizations:
+    sdk: flutter
+  intl: 0.20.2
+
+dependency_overrides:
+  image: 4.10.0
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +74,11 @@ flutter:
 
   assets:
     - assets/images/logo.png
+    - assets/images/denuncias_hero.jpg
+    - assets/images/inicio/
+    - assets/images/inicio/fundacion_hero.jpg
+    - assets/images/inicio/familia.jpg
+    - assets/images/inicio/juntos.jpg
     - assets/fundacion/
   # To add assets to your application, add an assets section, like this:
   # assets:

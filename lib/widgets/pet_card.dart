@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import '../models/pet.dart';
 import '../services/api_service.dart';
+import '../services/session.dart';
 
 /// En la BD la foto se guarda como ruta relativa (/uploads/mascotas/x.jpg).
 /// Aquí se le antepone el servidor (así funciona en emulador, celular y web).
@@ -33,7 +34,7 @@ class PetImage extends StatelessWidget {
       fit: fit,
       width: double.infinity,
       height: double.infinity,
-      errorBuilder: (_, __, ___) => placeholder,
+      errorBuilder: (_, error, stack) => placeholder,
       loadingBuilder: (context, child, progress) => progress == null
           ? child
           : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -79,46 +80,293 @@ class PetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-    final detalle = [
-      pet.raza ?? pet.especie,
-      if (pet.edad != null) pet.edadTexto,
-    ].join(' · ');
+    final especie = pet.especie.toLowerCase();
+    final edadTxt = pet.edad == null
+        ? 'edad no reg.'
+        : pet.edadTexto.toLowerCase();
+    final subtituloFoto = '$edadTxt · $especie';
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: 1,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: PetImage(url: pet.foto)),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    pet.nombre,
-                    style: t.titleMedium,
-                    maxLines: 1,
+    final descripcionCorta = (pet.descripcion != null && pet.descripcion!.trim().isNotEmpty)
+        ? pet.descripcion!.trim()
+        : 'Hermoso ${pet.especie.toLowerCase()} rescatado, lleno de amor y buscando una familia que lo cuide para siempre.';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.grey.withValues(alpha: 0.12),
+          width: 1,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. Foto cuadrada, igual en todas las tarjetas, con el nombre encima
+              AspectRatio(
+                aspectRatio: 1.0,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                      child: PetImage(url: pet.foto, fit: BoxFit.cover),
+                    ),
+                    // Sombra degradada para que el nombre blanco y texto se lean siempre nítidos
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            stops: const [0.45, 1.0],
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.75),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Nombre y subtitulo en la esquina inferior izquierda (como en la foto de referencia)
+                    Positioned(
+                      left: 12,
+                      right: 12,
+                      bottom: 8,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            pet.nombre,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black54,
+                                  blurRadius: 4,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtituloFoto,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFFF72AD), // rosado luminoso sobre la foto
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black54,
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 2. Sección inferior: descripción
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                child: SizedBox(
+                  height: 38,
+                  child: Text(
+                    descripcionCorta,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: Colors.grey.shade700,
+                    ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    detalle,
-                    style: t.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  EstadoChip(estado: pet.estadoAdopcion),
+                ),
+              ),
+
+              // 3. Pie: el tamaño queda arriba y el botón ocupa todo el ancho,
+              // con el texto centrado.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _chipTamano(),
+                    ),
+                    const SizedBox(height: 8),
+                    _accionTarjeta(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chipTamano() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.rosaSuave,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.bordeRosa,
+          width: 1,
+        ),
+      ),
+      child: Text(
+        (pet.tamano ?? 'mediano').toLowerCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.rosa,
+          fontWeight: FontWeight.bold,
+          fontSize: 11.5,
+        ),
+      ),
+    );
+  }
+
+  /// Si ya fue adoptada, el aviso de familia ocupa el lugar del botón.
+  Widget _accionTarjeta() {
+    if (pet.estaAdoptada) return _avisoFamilia();
+
+    const radio = 16.0;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radio),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.34),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(radio),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Ink(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFFFF6FB3),
+                  AppColors.rosa,
                 ],
               ),
             ),
-          ],
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Text(
+                'Conoce más sobre mí',
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  height: 1.2,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _avisoFamilia() {
+    final esMia = pet.adoptadaPor(Session.idUsuario);
+    final texto = pet
+        .mensajeFamiliaPara(Session.idUsuario)
+        .replaceAll('💖', '')
+        .trim();
+
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 40),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.rosaClaro,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.bordeRosa),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            esMia ? Icons.favorite_rounded : Icons.home_rounded,
+            size: 15,
+            color: AppColors.rosa,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              texto,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.rosa,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                height: 1.15,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

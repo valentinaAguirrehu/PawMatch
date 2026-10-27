@@ -32,6 +32,26 @@ class User {
 
   bool get documentoPendiente => documentoIdentidad.trim().isEmpty;
 
+  bool get telefonoPendiente => telefono.trim().isEmpty;
+
+  bool get nacimientoPendiente => fechaNacimiento == null;
+
+  /// Campos del perfil que aún no tienen valor. Vacío si ya se puede adoptar.
+  List<String> get datosPendientes {
+    final faltan = <String>[];
+    if (nombres.trim().isEmpty) faltan.add('Nombres');
+    if (apellidos.trim().isEmpty) faltan.add('Apellidos');
+    if (correo.trim().isEmpty) faltan.add('Correo electrónico');
+    if (telefonoPendiente) faltan.add('Teléfono');
+    if (nacimientoPendiente) faltan.add('Fecha de nacimiento');
+    if (documentoPendiente) faltan.add('Documento de identidad');
+    if (direccionPendiente) faltan.add('Dirección');
+    if (fotoPendiente) faltan.add('Foto de perfil');
+    return faltan;
+  }
+
+  bool get perfilCompleto => datosPendientes.isEmpty;
+
   factory User.fromJson(Map<String, dynamic> json) {
     final nacimiento = json['fecha_nacimiento'];
     return User(

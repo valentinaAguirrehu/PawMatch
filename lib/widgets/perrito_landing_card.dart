@@ -97,22 +97,30 @@ class PerritoLandingCard extends StatelessWidget {
             ),
             Expanded(
               flex: 6,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                child: LayoutBuilder(
-                  builder: (context, constraints) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        pet.nombre,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tema.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.texto,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final esEstrecho = constraints.maxWidth < 185;
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      esEstrecho ? 10 : 14,
+                      esEstrecho ? 10 : 12,
+                      esEstrecho ? 10 : 14,
+                      8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          pet.nombre,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: (esEstrecho ? tema.titleSmall : tema.titleMedium)?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.texto,
+                            fontSize: esEstrecho ? 14 : null,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
+                        const SizedBox(height: 6),
                       SizedBox(
                         height: 72,
                         child: ClipRect(
@@ -185,9 +193,10 @@ class PerritoLandingCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
-              ),
+                );
+              },
             ),
+          ),
           ],
         ),
       ),

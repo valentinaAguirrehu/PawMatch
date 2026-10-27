@@ -3,6 +3,7 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/home/menu_screen.dart';
 import 'package:paw_match/services/match_estado.dart';
+import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/personalidad_usuario_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
@@ -21,14 +22,9 @@ Future<void> abrirDestinoTrasAuth(BuildContext context) async {
     }
   }
   if (!context.mounted) return;
-  Navigator.pushAndRemoveUntil(
+  Navegacion.ir(
     context,
-    MaterialPageRoute(
-      builder: (_) => mostrarCuestionario
-          ? const UserPersonalityScreen()
-          : const MenuScreen(),
-    ),
-    (_) => false,
+    mostrarCuestionario ? const UserPersonalityScreen() : const MenuScreen(),
   );
 }
 
@@ -57,20 +53,16 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen> {
       await PersonalidadUsuarioService.guardar(valores);
       MatchEstado.instancia.publicar(valores);
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
+      Navegacion.ir(
         context,
-        MaterialPageRoute(
-          builder: (_) => MenuScreen(indiceInicial: MenuScreen.indiceMatch),
-        ),
-        (_) => false,
+        MenuScreen(indiceInicial: MenuScreen.indiceMatch),
       );
     } catch (e) {
       if (!mounted) return;
+      setState(() => _guardando = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
-    } finally {
-      if (mounted) setState(() => _guardando = false);
     }
   }
 

@@ -8,6 +8,8 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
   final String titulo;
   final String detalle;
   final Widget? icono;
+  final bool mostrarLogo;
+  final TextStyle? estiloTitulo;
 
   const EncabezadoCuestionarioUsuario({
     super.key,
@@ -16,6 +18,8 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
         'Responde de 1 a 5. Con esto buscamos la mascota que mejor '
         'encaja contigo.',
     this.icono,
+    this.mostrarLogo = true,
+    this.estiloTitulo,
   });
 
   @override
@@ -30,8 +34,10 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const LogoPaw(tamano: 72),
-          const SizedBox(height: 12),
+          if (mostrarLogo) ...[
+            const LogoPaw(tamano: 72),
+            const SizedBox(height: 12),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -43,10 +49,11 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
                 child: Text(
                   titulo,
                   textAlign: TextAlign.center,
-                  style: t.headlineSmall?.copyWith(
-                    color: AppColors.texto,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: estiloTitulo ??
+                      t.headlineSmall?.copyWith(
+                        color: AppColors.texto,
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
               ),
             ],

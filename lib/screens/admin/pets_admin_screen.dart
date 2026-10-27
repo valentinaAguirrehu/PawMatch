@@ -20,11 +20,11 @@ class _PetsAdminScreenState extends State<PetsAdminScreen> {
   }
 
   Future<void> _abrirFormulario([Pet? pet]) async {
-    final guardado = await Navigator.push<bool>(
+    final guardado = await Navigator.push<Pet>(
       context,
       MaterialPageRoute(builder: (_) => PetsFormScreen(pet: pet)),
     );
-    if (guardado == true) _recargar();
+    if (guardado != null) _recargar();
   }
 
   Future<void> _eliminar(Pet pet) async {
