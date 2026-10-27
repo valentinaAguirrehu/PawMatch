@@ -23,6 +23,9 @@ class SolicitudApadrinamiento {
   final String? fechaVerificacionCorreo;
   final bool aceptoRequisitos;
   final String? fechaAceptacionRequisitos;
+  final String estadoApadrinamiento;
+  final String? motivoCancelacion;
+  final DateTime? fechaCancelacion;
 
   // Datos agregados del solicitante
   final String solicitanteNombres;
@@ -64,6 +67,9 @@ class SolicitudApadrinamiento {
     this.fechaVerificacionCorreo,
     this.aceptoRequisitos = true,
     this.fechaAceptacionRequisitos,
+    this.estadoApadrinamiento = 'activa',
+    this.motivoCancelacion,
+    this.fechaCancelacion,
     this.solicitanteNombres = '',
     this.solicitanteApellidos = '',
     this.solicitanteCorreo = '',
@@ -148,6 +154,9 @@ class SolicitudApadrinamiento {
       mascotaRaza: json['mascota_raza']?.toString() ?? '',
       mascotaEdad: json['mascota_edad'] != null ? int.tryParse(json['mascota_edad'].toString()) : null,
       mascotaFotos: json['mascota_fotos']?.toString() ?? '',
+      estadoApadrinamiento: json['estado_apadrinamiento']?.toString() ?? 'activa',
+      motivoCancelacion: json['motivo_cancelacion']?.toString(),
+      fechaCancelacion: json['fecha_cancelacion'] != null ? DateTime.tryParse(json['fecha_cancelacion'].toString()) : null,
     );
   }
 }

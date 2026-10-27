@@ -5,12 +5,18 @@ import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/models/seguimiento_apadrinamiento.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/pets_service.dart';
+import 'package:paw_match/services/reporte_padrino_pdf_service.dart';
+import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
+import 'package:paw_match/widgets/star_rating_selector.dart';
+import 'package:paw_match/widgets/tarjeta_seguimiento.dart';
 
 class MisApadrinamientosScreen extends StatefulWidget {
   const MisApadrinamientosScreen({super.key});
@@ -22,21 +28,30 @@ class MisApadrinamientosScreen extends StatefulWidget {
 
 class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   late Future<List<SolicitudApadrinamiento>> _future = _cargar();
+  late Future<ResumenPadrino?> _resumenFuture = _cargarResumen();
 
   @override
   void initState() {
     super.initState();
     ApadrinamientoService.marcarLeidasUsuario();
+    _resumenFuture = _cargarResumen();
   }
 
   Future<List<SolicitudApadrinamiento>> _cargar() =>
       ApadrinamientoService.listarMisSolicitudes();
 
+  Future<ResumenPadrino?> _cargarResumen() =>
+      SeguimientoApadrinamientoService.obtenerResumenPadrino(Session.idUsuario ?? '');
+
   Future<void> _recargar() async {
     setState(() {
       _future = _cargar();
+      _resumenFuture = _cargarResumen();
     });
-    await _future.catchError((_) => <SolicitudApadrinamiento>[]);
+    await Future.wait([
+      _future.catchError((_) => <SolicitudApadrinamiento>[]),
+      _resumenFuture.catchError((_) => null),
+    ]);
   }
 
   String? _descargandoPdfId;
@@ -297,10 +312,14 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
             onRefresh: _recargar,
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: lista.length,
+              itemCount: lista.length + 1,
               separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (context, i) {
-                final s = lista[i];
+                if (i == 0) {
+                  return _construirCabeceraPadrino();
+                }
+
+                final s = lista[i - 1];
                 final color = switch (s.estado) {
                   'aprobada' =>
                     s.tieneContrato ? Colors.green : Colors.amber.shade800,
@@ -722,6 +741,12 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                                     ),
                                     onPressed: () => _contactarWhatsApp(s),
                                   ),
+                                  const SizedBox(height: 12),
+                                  _SeccionSeguimientoUsuario(
+                                    solicitud: s,
+                                    idSolicitud: s.id,
+                                    nombreMascota: s.mascotaNombre,
+                                  ),
                                 ],
                               ),
                             ),
@@ -912,4 +937,273 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
       ),
     );
   }
+
+  /// Cabecera con nombre de usuario, promedio de estrellas y aviso de incumplimiento si aplica.
+  Widget _construirCabeceraPadrino() {
+    return FutureBuilder<ResumenPadrino?>(
+      future: _resumenFuture,
+      builder: (context, snap) {
+        final resumen = snap.data;
+        final nombre = '${Session.nombre} ${Session.apellidos}'.trim();
+        final tieneAlerta = resumen?.tieneAlerta == true;
+
+        return Column(
+          children: [
+            Card(
+              elevation: 1.5,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: Color(0xFFF0E5EC)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: AppColors.rosa.withValues(alpha: 0.12),
+                      radius: 20,
+                      child: const Icon(Icons.volunteer_activism, color: AppColors.rosa, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            nombre.isNotEmpty ? nombre : 'Padrino PawMatch',
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Calificación como padrino',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    StarRatingBadge(
+                      rating: resumen?.calificacionPromedio ?? 0.0,
+                      totalSeguimientos: resumen?.totalSeguimientos ?? 0,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (tieneAlerta) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEBEE),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.red.shade300, width: 1.2),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Aviso importante sobre tu apadrinamiento',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                              color: Colors.red.shade900,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Se han registrado alertas de incumplimiento en tus seguimientos recientes. Para evitar la cancelación de tu apadrinamiento y el bloqueo de tu cuenta, por favor comunícate con la fundación o ponte al día en tus compromisos.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red.shade800,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
 }
+
+/// Sección de historial de seguimiento dentro de la tarjeta de apadrinamiento del usuario.
+class _SeccionSeguimientoUsuario extends StatefulWidget {
+  final SolicitudApadrinamiento solicitud;
+  final String idSolicitud;
+  final String nombreMascota;
+
+  const _SeccionSeguimientoUsuario({
+    required this.solicitud,
+    required this.idSolicitud,
+    required this.nombreMascota,
+  });
+
+  @override
+  State<_SeccionSeguimientoUsuario> createState() =>
+      _SeccionSeguimientoUsuarioState();
+}
+
+class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> {
+  late Future<List<SeguimientoApadrinamientoItem>> _historialFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _historialFuture =
+        SeguimientoApadrinamientoService.obtenerHistorial(widget.idSolicitud);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<SeguimientoApadrinamientoItem>>(
+      future: _historialFuture,
+      builder: (context, snap) {
+        final lista = snap.data ?? [];
+        final cargando = snap.connectionState == ConnectionState.waiting;
+        final proximo = lista.isNotEmpty ? lista.first.proximoSeguimiento : null;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFF0E5EC)),
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: false,
+              tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.rosa.withValues(alpha: 0.12),
+                radius: 18,
+                child: const Icon(
+                  Icons.assignment_turned_in_outlined,
+                  color: AppColors.rosa,
+                  size: 20,
+                ),
+              ),
+              title: Text(
+                'Seguimiento de ${widget.nombreMascota}',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+              ),
+              subtitle: Text(
+                lista.isEmpty
+                    ? (cargando ? 'Cargando reportes...' : 'Sin seguimientos registrados')
+                    : '${lista.length} seguimiento(s) · Próximo: ${proximo != null ? "${proximo.day}/${proximo.month}/${proximo.year}" : "Por programar"}',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+              children: [
+                if (cargando)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (lista.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Aún no se han registrado seguimientos oficiales para ${widget.nombreMascota}. Pronto el administrador añadirá los reportes.',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'El reporte se habilita a partir de 3 seguimientos (0/3)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: lista.length >= 3
+                        ? SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.rosa,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                              ),
+                              onPressed: () {
+                                ReportePadrinoPdfService.generarYDescargarReporte(
+                                  padrinoNombre: widget.solicitud.solicitanteNombreCompleto,
+                                  padrinoCorreo: widget.solicitud.solicitanteCorreo,
+                                  padrinoTelefono: widget.solicitud.solicitanteTelefono,
+                                  mascotaNombre: widget.solicitud.mascotaNombre,
+                                  mascotaEspecie: widget.solicitud.mascotaEspecie,
+                                  mascotaRaza: widget.solicitud.mascotaRaza,
+                                  mascotaEdad: widget.solicitud.mascotaEdad != null ? '${widget.solicitud.mascotaEdad} años' : null,
+                                  seguimientos: lista,
+                                  estadoApadrinamiento: widget.solicitud.estadoApadrinamiento,
+                                  motivoCancelacion: widget.solicitud.motivoCancelacion,
+                                  fechaCancelacion: widget.solicitud.fechaCancelacion,
+                                );
+                              },
+                              icon: const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                              label: const Text(
+                                'Descargar reporte PDF',
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                              ),
+                            ),
+                          )
+                        : Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.info_outline_rounded, size: 16, color: Colors.grey.shade700),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Text(
+                                    'El reporte se habilita a partir de 3 seguimientos (${lista.length}/3)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                  ),
+                  ...lista.map((it) => TarjetaSeguimiento(seguimiento: it)),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
