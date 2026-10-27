@@ -55,16 +55,19 @@ class LandingBarra extends StatelessWidget {
                       ),
                   const Spacer(),
                   if (angosto) ...[
-                    IconButton(
-                      tooltip: 'Iniciar sesión',
+                    TextButton(
                       onPressed: onIniciarSesion,
-                      icon: const Icon(Icons.login),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      child: const Text('Iniciar sesión'),
                     ),
                     const SizedBox(width: 4),
                     FilledButton(
                       onPressed: onRegistrarse,
                       style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 40),
+                        minimumSize: const Size(0, 38),
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         shape: const StadiumBorder(),
                       ),

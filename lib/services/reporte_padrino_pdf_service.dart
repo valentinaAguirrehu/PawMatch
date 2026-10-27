@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -26,8 +27,20 @@ class ReportePadrinoPdfService {
     return '$dia/$mes/${f.year}';
   }
 
-  /// Genera el documento PDF y lo abre para compartir/descargar mediante Printing.sharePdf
-  static Future<void> generarYDescargarReporte({
+  /// Carga el logo institucional de PawMatch de forma segura.
+  static Future<pw.MemoryImage?> _cargarLogoPawMatch() async {
+    try {
+      final ByteData data = await rootBundle.load('assets/images/logo.png');
+      final Uint8List bytes = data.buffer.asUint8List();
+      return pw.MemoryImage(bytes);
+    } catch (e) {
+      debugPrint('[PDF] Logo no encontrado en assets/images/logo.png: $e');
+      return null;
+    }
+  }
+
+  /// Solo abre la vista previa dentro de la app (sin descargar).
+  static Future<void> verReporte({
     required String padrinoNombre,
     required String padrinoCorreo,
     String? padrinoTelefono,
@@ -36,9 +49,15 @@ class ReportePadrinoPdfService {
     String? mascotaRaza,
     String? mascotaEdad,
     required List<SeguimientoApadrinamientoItem> seguimientos,
+    int cicloReporte = 1,
+    List<CicloEvaluacionItem> ciclosAnteriores = const [],
     String? estadoApadrinamiento,
     String? motivoCancelacion,
     DateTime? fechaCancelacion,
+    String? decisionAdmin,
+    String? notaDecision,
+    DateTime? fechaDecision,
+    String? adminDecisionNombre,
   }) async {
     final bytes = await construirPdfBytes(
       padrinoNombre: padrinoNombre,
@@ -49,14 +68,68 @@ class ReportePadrinoPdfService {
       mascotaRaza: mascotaRaza,
       mascotaEdad: mascotaEdad,
       seguimientos: seguimientos,
+      cicloReporte: cicloReporte,
+      ciclosAnteriores: ciclosAnteriores,
       estadoApadrinamiento: estadoApadrinamiento,
       motivoCancelacion: motivoCancelacion,
       fechaCancelacion: fechaCancelacion,
+      decisionAdmin: decisionAdmin,
+      notaDecision: notaDecision,
+      fechaDecision: fechaDecision,
+      adminDecisionNombre: adminDecisionNombre,
     );
 
-    final sanitizedPet =
-        mascotaNombre.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
-    final filename = 'Reporte_Padrino_$sanitizedPet.pdf';
+    final sanitizedPet = mascotaNombre.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    final filename = 'Reporte_Ciclo${cicloReporte}_$sanitizedPet.pdf';
+
+    await Printing.layoutPdf(
+      onLayout: (_) => bytes,
+      name: filename,
+    );
+  }
+
+  /// Solo descarga / comparte el reporte PDF (sin abrir vista previa dentro de la app).
+  static Future<void> descargarReporte({
+    required String padrinoNombre,
+    required String padrinoCorreo,
+    String? padrinoTelefono,
+    required String mascotaNombre,
+    String? mascotaEspecie,
+    String? mascotaRaza,
+    String? mascotaEdad,
+    required List<SeguimientoApadrinamientoItem> seguimientos,
+    int cicloReporte = 1,
+    List<CicloEvaluacionItem> ciclosAnteriores = const [],
+    String? estadoApadrinamiento,
+    String? motivoCancelacion,
+    DateTime? fechaCancelacion,
+    String? decisionAdmin,
+    String? notaDecision,
+    DateTime? fechaDecision,
+    String? adminDecisionNombre,
+  }) async {
+    final bytes = await construirPdfBytes(
+      padrinoNombre: padrinoNombre,
+      padrinoCorreo: padrinoCorreo,
+      padrinoTelefono: padrinoTelefono,
+      mascotaNombre: mascotaNombre,
+      mascotaEspecie: mascotaEspecie,
+      mascotaRaza: mascotaRaza,
+      mascotaEdad: mascotaEdad,
+      seguimientos: seguimientos,
+      cicloReporte: cicloReporte,
+      ciclosAnteriores: ciclosAnteriores,
+      estadoApadrinamiento: estadoApadrinamiento,
+      motivoCancelacion: motivoCancelacion,
+      fechaCancelacion: fechaCancelacion,
+      decisionAdmin: decisionAdmin,
+      notaDecision: notaDecision,
+      fechaDecision: fechaDecision,
+      adminDecisionNombre: adminDecisionNombre,
+    );
+
+    final sanitizedPet = mascotaNombre.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    final filename = 'Reporte_Ciclo${cicloReporte}_$sanitizedPet.pdf';
 
     await Printing.sharePdf(
       bytes: bytes,
@@ -64,7 +137,7 @@ class ReportePadrinoPdfService {
     );
   }
 
-  /// Construye los bytes del PDF respetando la tipografía, colores y tablas requeridas.
+  /// Construye los bytes del PDF respetando la tipografía, colores, logo y tablas requeridas.
   static Future<Uint8List> construirPdfBytes({
     required String padrinoNombre,
     required String padrinoCorreo,
@@ -74,9 +147,15 @@ class ReportePadrinoPdfService {
     String? mascotaRaza,
     String? mascotaEdad,
     required List<SeguimientoApadrinamientoItem> seguimientos,
+    int cicloReporte = 1,
+    List<CicloEvaluacionItem> ciclosAnteriores = const [],
     String? estadoApadrinamiento,
     String? motivoCancelacion,
     DateTime? fechaCancelacion,
+    String? decisionAdmin,
+    String? notaDecision,
+    DateTime? fechaDecision,
+    String? adminDecisionNombre,
   }) async {
     pw.ThemeData tema;
     try {
@@ -90,16 +169,36 @@ class ReportePadrinoPdfService {
       );
     }
 
+    final logoImage = await _cargarLogoPawMatch();
     final pdf = pw.Document(theme: tema);
 
-    // Cálculos
-    final totalSeguimientos = seguimientos.length;
-    final int sumaNotas =
-        seguimientos.fold(0, (acc, item) => acc + item.calificacion);
-    final double promedio =
-        totalSeguimientos > 0 ? (sumaNotas / totalSeguimientos) : 0.0;
+    // Filtrar seguimientos pertenecientes al ciclo especificado
+    final List<SeguimientoApadrinamientoItem> segsCiclo = seguimientos
+        .where((s) => s.ciclo == cicloReporte || seguimientos.length <= 3)
+        .toList();
+
+    final listaSegs = segsCiclo.isNotEmpty ? segsCiclo : seguimientos;
+    final totalSeguimientos = listaSegs.length;
+
+    final int sumaNotas = listaSegs.fold(0, (acc, item) => acc + item.calificacion);
+    final double promedio = totalSeguimientos > 0 ? (sumaNotas / totalSeguimientos) : 0.0;
     final int incumplimientos =
-        seguimientos.where((s) => !s.cumplimiento || s.calificacion <= 2).length;
+        listaSegs.where((s) => !s.cumplimiento || s.calificacion <= 2).length;
+
+    // Resumen de aportes del ciclo
+    int totalAportesRevisados = 0;
+    int aportesRecibidos = 0;
+    int aportesNoRecibidos = 0;
+    for (final seg in listaSegs) {
+      for (final ap in seg.aportes) {
+        totalAportesRevisados++;
+        if (ap.recibido) {
+          aportesRecibidos++;
+        } else {
+          aportesNoRecibidos++;
+        }
+      }
+    }
 
     // Clasificación y estilos de color
     final String clasificacionTexto;
@@ -130,63 +229,73 @@ class ReportePadrinoPdfService {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 36),
-        build: (context) => [
-          // 1. ENCABEZADO
-          pw.Container(
-            padding: const pw.EdgeInsets.only(bottom: 12),
-            decoration: const pw.BoxDecoration(
-              border: pw.Border(
-                bottom: pw.BorderSide(color: PdfColors.grey300, width: 1.5),
-              ),
+        header: (context) => pw.Container(
+          padding: const pw.EdgeInsets.only(bottom: 10),
+          margin: const pw.EdgeInsets.only(bottom: 14),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              bottom: pw.BorderSide(color: PdfColors.grey300, width: 1.5),
             ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Column(
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Expanded(
+                child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
                       FundacionInfo.nombre.toUpperCase(),
                       style: pw.TextStyle(
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: pw.FontWeight.bold,
                         color: PdfColor.fromHex('#880E4F'),
                       ),
                     ),
                     pw.SizedBox(height: 3),
                     pw.Text(
-                      'Reporte Oficial de Seguimiento de Apadrinamiento',
+                      'Reporte Oficial de Seguimiento de Apadrinamiento · Ciclo $cicloReporte',
                       style: pw.TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         color: PdfColors.grey700,
                         fontWeight: pw.FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text(
-                      'Fecha de emisión:',
-                      style: pw.TextStyle(fontSize: 8.5, color: PdfColors.grey600),
-                    ),
-                    pw.Text(
-                      fechaHoyStr,
-                      style: pw.TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.grey900,
-                      ),
-                    ),
-                  ],
+              ),
+              if (logoImage != null)
+                pw.Container(
+                  width: 55,
+                  height: 55,
+                  margin: const pw.EdgeInsets.only(left: 10),
+                  child: pw.Image(logoImage, fit: pw.BoxFit.contain),
                 ),
-              ],
-            ),
+            ],
+          ),
+        ),
+        build: (context) => [
+          // 1. FECHA DE EMISIÓN Y TÍTULO
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'EVALUACIÓN DEL CICLO $cicloReporte (SEGUIMIENTOS ${(cicloReporte - 1) * 3 + 1} A ${cicloReporte * 3})',
+                style: pw.TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColor.fromHex('#AD1457'),
+                ),
+              ),
+              pw.Text(
+                'Emisión: $fechaHoyStr',
+                style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
+              ),
+            ],
           ),
 
-          pw.SizedBox(height: 16),
+          pw.SizedBox(height: 12),
 
           // 2. DATOS DEL PADRINO Y DE LA MASCOTA
           pw.Row(
@@ -195,7 +304,7 @@ class ReportePadrinoPdfService {
               // Columna Padrino
               pw.Expanded(
                 child: pw.Container(
-                  padding: const pw.EdgeInsets.all(12),
+                  padding: const pw.EdgeInsets.all(10),
                   decoration: pw.BoxDecoration(
                     color: PdfColor.fromHex('#FAFAFA'),
                     borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
@@ -207,12 +316,12 @@ class ReportePadrinoPdfService {
                       pw.Text(
                         'DATOS DEL PADRINO',
                         style: pw.TextStyle(
-                          fontSize: 10,
+                          fontSize: 9.5,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColor.fromHex('#AD1457'),
                         ),
                       ),
-                      pw.SizedBox(height: 6),
+                      pw.SizedBox(height: 5),
                       _filaDato('Nombre:', padrinoNombre),
                       _filaDato('Correo:', padrinoCorreo),
                       if (padrinoTelefono != null && padrinoTelefono.isNotEmpty)
@@ -221,11 +330,11 @@ class ReportePadrinoPdfService {
                   ),
                 ),
               ),
-              pw.SizedBox(width: 14),
+              pw.SizedBox(width: 12),
               // Columna Mascota
               pw.Expanded(
                 child: pw.Container(
-                  padding: const pw.EdgeInsets.all(12),
+                  padding: const pw.EdgeInsets.all(10),
                   decoration: pw.BoxDecoration(
                     color: PdfColor.fromHex('#FAFAFA'),
                     borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
@@ -237,12 +346,12 @@ class ReportePadrinoPdfService {
                       pw.Text(
                         'MASCOTA APADRINADA',
                         style: pw.TextStyle(
-                          fontSize: 10,
+                          fontSize: 9.5,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColor.fromHex('#AD1457'),
                         ),
                       ),
-                      pw.SizedBox(height: 6),
+                      pw.SizedBox(height: 5),
                       _filaDato('Nombre:', mascotaNombre),
                       if (mascotaEspecie != null && mascotaEspecie.isNotEmpty)
                         _filaDato('Especie:', mascotaEspecie),
@@ -257,11 +366,11 @@ class ReportePadrinoPdfService {
             ],
           ),
 
-          pw.SizedBox(height: 14),
+          pw.SizedBox(height: 12),
 
-          // 3. RESUMEN Y PUNTUACIÓN FINAL
+          // 3. RESUMEN Y PUNTUACIÓN FINAL DEL CICLO
           pw.Container(
-            padding: const pw.EdgeInsets.all(14),
+            padding: const pw.EdgeInsets.all(12),
             decoration: pw.BoxDecoration(
               color: colorPuntuacionFondo,
               borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
@@ -275,37 +384,48 @@ class ReportePadrinoPdfService {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        'RESUMEN GENERAL DE SEGUIMIENTOS',
+                        'RESUMEN DEL CICLO $cicloReporte',
                         style: pw.TextStyle(
                           fontSize: 10,
                           fontWeight: pw.FontWeight.bold,
                           color: colorPuntuacionTexto,
                         ),
                       ),
-                      pw.SizedBox(height: 6),
+                      pw.SizedBox(height: 4),
                       pw.Text(
-                        'Total de seguimientos: $totalSeguimientos',
-                        style: const pw.TextStyle(fontSize: 10),
+                        'Seguimientos en este ciclo: $totalSeguimientos de 3',
+                        style: const pw.TextStyle(fontSize: 9),
                       ),
                       pw.SizedBox(height: 2),
                       pw.Text(
-                        'Calificación promedio: ${promedio.toStringAsFixed(1)} / 5',
-                        style: const pw.TextStyle(fontSize: 10),
+                        'Calificación promedio del ciclo: ${promedio.toStringAsFixed(1)} / 5',
+                        style: const pw.TextStyle(fontSize: 9),
                       ),
                       pw.SizedBox(height: 2),
                       pw.Text(
-                        'Incumplimientos registrados: $incumplimientos',
+                        'Incumplimientos en este ciclo: $incumplimientos',
                         style: pw.TextStyle(
-                          fontSize: 10,
+                          fontSize: 9,
                           fontWeight: incumplimientos > 0 ? pw.FontWeight.bold : pw.FontWeight.normal,
                           color: incumplimientos > 0 ? PdfColor.fromHex('#C62828') : PdfColors.black,
                         ),
                       ),
+                      if (totalAportesRevisados > 0) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          'Aportes revisados: $totalAportesRevisados (Recibidos: $aportesRecibidos · No recibidos: $aportesNoRecibidos)',
+                          style: pw.TextStyle(
+                            fontSize: 9,
+                            fontWeight: aportesNoRecibidos > 0 ? pw.FontWeight.bold : pw.FontWeight.normal,
+                            color: aportesNoRecibidos > 0 ? PdfColor.fromHex('#C62828') : PdfColor.fromHex('#1B5E20'),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: pw.BoxDecoration(
                     color: PdfColors.white,
                     borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
@@ -315,18 +435,18 @@ class ReportePadrinoPdfService {
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
                       pw.Text(
-                        'PUNTUACIÓN FINAL',
+                        'PUNTUACIÓN DEL CICLO',
                         style: pw.TextStyle(
-                          fontSize: 8.5,
+                          fontSize: 8,
                           color: PdfColors.grey700,
                           fontWeight: pw.FontWeight.bold,
                         ),
                       ),
-                      pw.SizedBox(height: 4),
+                      pw.SizedBox(height: 3),
                       pw.Text(
                         clasificacionTexto,
                         style: pw.TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: pw.FontWeight.bold,
                           color: colorPuntuacionTexto,
                         ),
@@ -335,7 +455,7 @@ class ReportePadrinoPdfService {
                       pw.Text(
                         '${promedio.toStringAsFixed(1)} / 5',
                         style: pw.TextStyle(
-                          fontSize: 11,
+                          fontSize: 10.5,
                           fontWeight: pw.FontWeight.bold,
                           color: colorPuntuacionBorde,
                         ),
@@ -347,85 +467,81 @@ class ReportePadrinoPdfService {
             ),
           ),
 
-          // 6. ALERTA DE CANCELACIÓN (Si aplica)
-          if ((estadoApadrinamiento == 'cancelada') ||
-              (motivoCancelacion != null && motivoCancelacion.trim().isNotEmpty)) ...[
+          // 4. COMPARATIVO CON CICLOS ANTERIORES (si cicloReporte > 1)
+          if (cicloReporte > 1 && ciclosAnteriores.isNotEmpty) ...[
             pw.SizedBox(height: 12),
-            pw.Container(
-              padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(
-                color: PdfColor.fromHex('#FFEBEE'),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-                border: pw.Border.all(color: PdfColor.fromHex('#E53935'), width: 1.2),
+            pw.Text(
+              'RESUMEN COMPARATIVO DE CICLOS ANTERIORES',
+              style: pw.TextStyle(
+                fontSize: 10,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColor.fromHex('#880E4F'),
               ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'APADRINAMIENTO CANCELADO',
-                    style: pw.TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#B71C1C'),
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  if (fechaCancelacion != null)
-                    pw.Text(
-                      'Fecha de cancelación: ${_formatearFecha(fechaCancelacion)}',
-                      style: const pw.TextStyle(fontSize: 9.5),
-                    ),
-                  if (motivoCancelacion != null && motivoCancelacion.trim().isNotEmpty) ...[
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      'Motivo: $motivoCancelacion',
-                      style: pw.TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColor.fromHex('#C62828'),
-                      ),
-                    ),
-                  ],
-                ],
+            ),
+            pw.SizedBox(height: 5),
+            pw.TableHelper.fromTextArray(
+              border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.8),
+              headerStyle: pw.TextStyle(
+                fontSize: 8.5,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
               ),
+              headerDecoration: pw.BoxDecoration(
+                color: PdfColor.fromHex('#AD1457'),
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              cellAlignment: pw.Alignment.centerLeft,
+              cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              headers: ['Ciclo', 'Promedio', 'Puntuación', 'Decisión', 'Fecha'],
+              data: ciclosAnteriores.map((c) {
+                return [
+                  'Ciclo ${c.ciclo}',
+                  '${c.promedio.toStringAsFixed(1)} / 5',
+                  c.clasificacionTexto,
+                  c.decision == 'continuar' ? 'Continuar' : 'Cancelar',
+                  _formatearFechaCorta(c.fechaDecision),
+                ];
+              }).toList(),
             ),
           ],
 
-          pw.SizedBox(height: 16),
+          pw.SizedBox(height: 14),
 
-          // 5. TABLA DE HISTORIAL DE SEGUIMIENTOS
+          // 5. TABLA DE HISTORIAL DE SEGUIMIENTOS DEL CICLO
           pw.Text(
-            'HISTORIAL DETALLADO DE SEGUIMIENTOS',
+            'DETALLE DE SEGUIMIENTOS DEL CICLO $cicloReporte',
             style: pw.TextStyle(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: pw.FontWeight.bold,
               color: PdfColor.fromHex('#880E4F'),
             ),
           ),
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 6),
 
           pw.TableHelper.fromTextArray(
             border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.8),
             headerStyle: pw.TextStyle(
-              fontSize: 9,
+              fontSize: 8.5,
               fontWeight: pw.FontWeight.bold,
               color: PdfColors.white,
             ),
             headerDecoration: pw.BoxDecoration(
               color: PdfColor.fromHex('#AD1457'),
             ),
-            cellStyle: const pw.TextStyle(fontSize: 8.5),
+            cellStyle: const pw.TextStyle(fontSize: 8),
             cellAlignment: pw.Alignment.centerLeft,
             cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
             headers: <String>[
+              'Seg.',
               'Fecha',
               'Administrador',
               'Calificación',
               'Cumplió',
-              'Observaciones / Comentarios'
+              'Observaciones'
             ],
-            data: seguimientos.map((s) {
+            data: listaSegs.map((s) {
               return [
+                '#${s.numeroSeguimiento}',
                 _formatearFechaCorta(s.fechaSeguimiento),
                 s.adminNombre.isNotEmpty ? s.adminNombre : 'Administrador',
                 '${s.calificacion} / 5',
@@ -434,21 +550,179 @@ class ReportePadrinoPdfService {
               ];
             }).toList(),
             columnWidths: {
-              0: const pw.FixedColumnWidth(65),
-              1: const pw.FixedColumnWidth(95),
-              2: const pw.FixedColumnWidth(65),
-              3: const pw.FixedColumnWidth(55),
-              4: const pw.FlexColumnWidth(),
+              0: const pw.FixedColumnWidth(35),
+              1: const pw.FixedColumnWidth(60),
+              2: const pw.FixedColumnWidth(85),
+              3: const pw.FixedColumnWidth(60),
+              4: const pw.FixedColumnWidth(50),
+              5: const pw.FlexColumnWidth(),
             },
           ),
 
-          pw.SizedBox(height: 20),
+          // 6. DETALLE DE APORTES POR CADA SEGUIMIENTO
+          if (listaSegs.any((s) => s.aportes.isNotEmpty)) ...[
+            pw.SizedBox(height: 12),
+            pw.Text(
+              'REVISIÓN DE APORTES COMPROMETIDOS',
+              style: pw.TextStyle(
+                fontSize: 10,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColor.fromHex('#880E4F'),
+              ),
+            ),
+            pw.SizedBox(height: 5),
+            ...listaSegs.where((s) => s.aportes.isNotEmpty).map((s) {
+              return pw.Container(
+                margin: const pw.EdgeInsets.only(bottom: 6),
+                padding: const pw.EdgeInsets.all(6),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#F9FAFC'),
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                  border: pw.Border.all(color: PdfColors.grey300),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      'Seguimiento #${s.numeroSeguimiento} (${_formatearFechaCorta(s.fechaSeguimiento)}):',
+                      style: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: PdfColors.grey800),
+                    ),
+                    pw.SizedBox(height: 3),
+                    ...s.aportes.map((ap) {
+                      final tipoStr = ap.tipo.toUpperCase();
+                      final recStr = ap.recibido ? 'RECIBIDO' : 'NO RECIBIDO';
+                      final colorAp = ap.recibido ? PdfColor.fromHex('#1B5E20') : PdfColor.fromHex('#C62828');
+
+                      String extra = '';
+                      if (ap.tipo == 'monetario') {
+                        extra = 'Medio: ${ap.medio ?? '-'}' +
+                            (ap.montoRecibido != null ? ' · Monto: \$${ap.montoRecibido!.toStringAsFixed(0)}' : '') +
+                            (ap.referencia != null && ap.referencia!.isNotEmpty ? ' · Ref: ${ap.referencia}' : '');
+                      } else {
+                        extra = ap.detalleRecibido != null && ap.detalleRecibido!.isNotEmpty
+                            ? 'Detalle: ${ap.detalleRecibido}'
+                            : '';
+                      }
+                      if (!ap.recibido && ap.observacion != null && ap.observacion!.isNotEmpty) {
+                        extra += ' · Motivo: ${ap.observacion}';
+                      }
+
+                      return pw.Padding(
+                        padding: const pw.EdgeInsets.symmetric(vertical: 1.5, horizontal: 4),
+                        child: pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Container(
+                              padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: pw.BoxDecoration(
+                                color: ap.recibido ? PdfColor.fromHex('#E8F5E9') : PdfColor.fromHex('#FFEBEE'),
+                                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                              ),
+                              child: pw.Text(
+                                '$tipoStr: $recStr',
+                                style: pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold, color: colorAp),
+                              ),
+                            ),
+                            pw.SizedBox(width: 6),
+                            pw.Expanded(
+                              child: pw.Text(
+                                extra.isNotEmpty ? extra : (ap.comprometido ?? ''),
+                                style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              );
+            }),
+          ],
+
+          // 7. DECISIÓN DE LA FUNDACIÓN
+          if (decisionAdmin != null ||
+              estadoApadrinamiento == 'cancelada' ||
+              (motivoCancelacion != null && motivoCancelacion.trim().isNotEmpty)) ...[
+            pw.SizedBox(height: 12),
+            () {
+              final esCancelada = decisionAdmin == 'cancelar' || estadoApadrinamiento == 'cancelada';
+              final colorFondo = esCancelada ? PdfColor.fromHex('#FFEBEE') : PdfColor.fromHex('#E8F5E9');
+              final colorBorde = esCancelada ? PdfColor.fromHex('#E53935') : PdfColor.fromHex('#2E7D32');
+              final colorTitulo = esCancelada ? PdfColor.fromHex('#B71C1C') : PdfColor.fromHex('#1B5E20');
+              final titulo = esCancelada
+                  ? 'Decisión de la fundación: Apadrinamiento cancelado'
+                  : 'Decisión de la fundación: Continúa como padrino';
+
+              return pw.Container(
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  color: colorFondo,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  border: pw.Border.all(color: colorBorde, width: 1.2),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      titulo,
+                      style: pw.TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: colorTitulo,
+                      ),
+                    ),
+                    pw.SizedBox(height: 4),
+                    if (fechaDecision != null || fechaCancelacion != null)
+                      pw.Text(
+                        'Fecha de decisión: ${_formatearFecha(fechaDecision ?? fechaCancelacion!)}',
+                        style: const pw.TextStyle(fontSize: 8.5),
+                      ),
+                    if (adminDecisionNombre != null && adminDecisionNombre.trim().isNotEmpty) ...[
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Evaluado por: $adminDecisionNombre',
+                        style: const pw.TextStyle(fontSize: 8.5),
+                      ),
+                    ],
+                    if (notaDecision != null && notaDecision.trim().isNotEmpty) ...[
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Nota / Observaciones: $notaDecision',
+                        style: pw.TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.grey900,
+                        ),
+                      ),
+                    ],
+                    if (esCancelada &&
+                        motivoCancelacion != null &&
+                        motivoCancelacion.trim().isNotEmpty &&
+                        motivoCancelacion != notaDecision) ...[
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Motivo de cancelación: $motivoCancelacion',
+                        style: pw.TextStyle(
+                          fontSize: 8.5,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColor.fromHex('#C62828'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }(),
+          ],
+
+          pw.SizedBox(height: 16),
 
           // Pie institucional
           pw.Center(
             child: pw.Text(
               'Documento emitido por el sistema PawMatch para la ${FundacionInfo.nombre}.',
-              style: pw.TextStyle(fontSize: 8, color: PdfColors.grey500),
+              style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey500),
             ),
           ),
         ],
@@ -465,11 +739,11 @@ class ReportePadrinoPdfService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 55,
+            width: 50,
             child: pw.Text(
               etiqueta,
               style: pw.TextStyle(
-                fontSize: 9,
+                fontSize: 8.5,
                 fontWeight: pw.FontWeight.bold,
                 color: PdfColors.grey700,
               ),
@@ -478,7 +752,7 @@ class ReportePadrinoPdfService {
           pw.Expanded(
             child: pw.Text(
               valor,
-              style: pw.TextStyle(fontSize: 9, color: PdfColors.black),
+              style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.black),
             ),
           ),
         ],

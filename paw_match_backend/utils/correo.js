@@ -821,6 +821,100 @@ Fundación Maritza Arévalo – Protección y bienestar animal.
   });
 }
 
+/**
+ * Notifica al padrino sobre la decisión del administrador en la evaluación de su apadrinamiento.
+ */
+async function enviarCorreoDecisionApadrinamiento({
+  destinatario,
+  nombrePadrino,
+  nombreMascota,
+  decision,
+  nota,
+  adminNombre,
+}) {
+  const esContinuar = decision === 'continuar';
+  const asunto = esContinuar
+    ? `Evaluación de apadrinamiento de ${nombreMascota}: Continuación aprobada – Fundación Maritza Arévalo`
+    : `Notificación: Cancelación de apadrinamiento de ${nombreMascota} – Fundación Maritza Arévalo`;
+
+  const textoPlano = `
+Estimado(a) ${nombrePadrino}:
+
+Le comunicamos que la Fundación Maritza Arévalo ha realizado la evaluación oficial de su apadrinamiento con ${nombreMascota}.
+
+Decisión de la fundación: ${esContinuar ? 'CONTINUAR CON EL APADRINAMIENTO' : 'APADRINAMIENTO CANCELADO'}
+${nota ? `Observaciones / Nota del administrador: ${nota}\n` : ''}
+${!esContinuar ? 'Por este motivo, el apadrinamiento ha sido cancelado y su cuenta ha quedado inhabilitada para nuevas solicitudes de apadrinamiento.\n' : ''}
+Evaluación realizada por: ${adminNombre || 'Administración Fundación Maritza Arévalo'}
+
+Atentamente,
+Fundación Maritza Arévalo – Protección y bienestar animal.
+`.trim();
+
+  const colorCabecera = esContinuar ? '#2E7D32' : '#C62828';
+  const colorBadge = esContinuar ? '#E8F5E9' : '#FFEBEE';
+  const titulo = esContinuar
+    ? 'Evaluación de Apadrinamiento: Proceso Continuado'
+    : 'Notificación: Apadrinamiento Cancelado';
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 16px; background-color: #fafafa;">
+      <div style="text-align: center; margin-bottom: 22px;">
+        <div style="display: inline-block; background-color: #fce4ec; padding: 8px 18px; border-radius: 20px; margin-bottom: 12px;">
+          <span style="color: #ed4f9d; font-weight: 800; font-size: 13px; letter-spacing: 0.5px;">
+            🐾 FUNDACIÓN MARITZA ARÉVALO
+          </span>
+        </div>
+        <h2 style="color: ${colorCabecera}; margin: 0 0 6px 0; font-size: 21px; font-weight: 800;">
+          ${titulo}
+        </h2>
+        <div style="font-size: 14px; color: #555; font-weight: 600;">Mascota: <strong style="color: #ed4f9d;">${escaparHtml(nombreMascota)}</strong></div>
+      </div>
+
+      <div style="background-color: #ffffff; padding: 24px; border-radius: 14px; border: 1px solid #eeeeee; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+        <p style="font-size: 15px; color: #333; line-height: 1.6; margin-top: 0;">
+          Hola, <strong>${escaparHtml(nombrePadrino)}</strong>:
+        </p>
+
+        <p style="font-size: 14.5px; color: #444; line-height: 1.6;">
+          El equipo administrativo de la Fundación Maritza Arévalo ha completado la evaluación de seguimiento del apadrinamiento de <strong>${escaparHtml(nombreMascota)}</strong>.
+        </p>
+
+        <div style="background-color: ${colorBadge}; border-left: 4px solid ${colorCabecera}; padding: 14px 16px; border-radius: 8px; margin: 18px 0;">
+          <p style="margin: 0; color: ${colorCabecera}; font-size: 14px; line-height: 1.5; font-weight: 800;">
+            ${esContinuar ? '✅ Decisión: Continúa el apadrinamiento' : '❌ Decisión: Apadrinamiento cancelado'}
+          </p>
+          ${nota ? `<p style="margin: 8px 0 0 0; color: #333; font-size: 13.5px; line-height: 1.4;"><strong>Nota:</strong> ${escaparHtml(nota)}</p>` : ''}
+        </div>
+
+        ${!esContinuar ? `
+        <div style="background-color: #fff3e0; border-radius: 8px; padding: 12px 14px; margin-top: 14px;">
+          <p style="margin: 0; color: #d84315; font-size: 13px; font-weight: 600;">
+            ⚠️ Tu cuenta no podrá presentar nuevas solicitudes de apadrinamiento en el sistema.
+          </p>
+        </div>
+        ` : `
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          Agradecemos tu compromiso y apoyo para con el bienestar de nuestras mascotas.
+        </p>
+        `}
+      </div>
+
+      <p style="text-align: center; font-size: 12px; color: #888; margin-top: 20px;">
+        Evaluado por: <strong>${escaparHtml(adminNombre || 'Administrador')}</strong> · Fundación Maritza Arévalo
+      </p>
+    </div>
+  `;
+
+  return await enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Decisión apadrinamiento (${nombreMascota})`,
+  });
+}
+
 module.exports = {
   enviarCorreoAprobacionApadrinamiento,
   enviarCorreoRechazoApadrinamiento,
@@ -830,6 +924,7 @@ module.exports = {
   enviarCorreoVerificacionSolicitud,
   enviarCorreoNuevaDenunciaAdmin,
   enviarCorreoAlertaIncumplimientoApadrinamiento,
+  enviarCorreoDecisionApadrinamiento,
   enviarEmailGenerico,
   obtenerTransporter,
 };

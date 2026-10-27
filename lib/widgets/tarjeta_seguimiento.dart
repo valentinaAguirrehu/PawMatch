@@ -51,23 +51,39 @@ class TarjetaSeguimiento extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fila superior: Fecha, Estrellas y Badge de Cumplimiento
+          // Fila superior: Consecutivo, Ciclo, Fecha y Badge de Cumplimiento
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: AppColors.rosa.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '#${seguimiento.numeroSeguimiento} · Ciclo ${seguimiento.ciclo}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11.5,
+                        color: AppColors.rosa,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Icon(
                     Icons.calendar_today_outlined,
-                    size: 14,
+                    size: 13,
                     color: Colors.grey.shade600,
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 4),
                   Text(
                     _formatearFecha(seguimiento.fechaSeguimiento),
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                      fontSize: 12.5,
                       color: Colors.grey.shade800,
                     ),
                   ),
@@ -75,7 +91,7 @@ class TarjetaSeguimiento extends StatelessWidget {
               ),
               // Badge cumplió / no cumplió
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3.5),
                 decoration: BoxDecoration(
                   color: cumplio ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
                   borderRadius: BorderRadius.circular(12),
@@ -88,14 +104,14 @@ class TarjetaSeguimiento extends StatelessWidget {
                   children: [
                     Icon(
                       cumplio ? Icons.check_circle_rounded : Icons.cancel_rounded,
-                      size: 14,
+                      size: 13,
                       color: cumplio ? Colors.green.shade700 : Colors.red.shade700,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       cumplio ? 'Cumplió' : 'Incumplió',
                       style: TextStyle(
-                        fontSize: 11.5,
+                        fontSize: 11,
                         fontWeight: FontWeight.w800,
                         color: cumplio ? Colors.green.shade800 : Colors.red.shade800,
                       ),
@@ -134,9 +150,97 @@ class TarjetaSeguimiento extends StatelessWidget {
             ],
           ),
 
+          // Aportes del padrino revisados en este seguimiento
+          if (seguimiento.aportes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF9FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE8ECF4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Aportes revisados:',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  ...seguimiento.aportes.map((ap) {
+                    final rec = ap.recibido;
+                    final colorFondo = rec ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE);
+                    final colorBorde = rec ? Colors.green.shade300 : Colors.red.shade400;
+                    final colorTexto = rec ? Colors.green.shade900 : Colors.red.shade900;
+                    final colorIcono = rec ? Colors.green.shade700 : Colors.red.shade700;
+
+                    String detalle = '';
+                    if (ap.tipo == 'monetario') {
+                      detalle = 'Monetario: ${rec ? "Recibido" : "NO RECIBIDO"}';
+                      if (rec && ap.montoRecibido != null) {
+                        detalle += ' · \$${ap.montoRecibido!.toStringAsFixed(0)}';
+                      }
+                      if (rec && ap.medio != null) {
+                        detalle += ' (${ap.medio})';
+                      }
+                      if (rec && ap.referencia != null && ap.referencia!.isNotEmpty) {
+                        detalle += ' Ref: ${ap.referencia}';
+                      }
+                    } else if (ap.tipo == 'especie') {
+                      detalle = 'Especie: ${rec ? "Recibido" : "NO RECIBIDO"}';
+                      if (rec && ap.detalleRecibido != null && ap.detalleRecibido!.isNotEmpty) {
+                        detalle += ' (${ap.detalleRecibido})';
+                      }
+                    } else {
+                      detalle = 'Otra ayuda: ${rec ? "Cumplió" : "NO CUMPLIÓ"}';
+                      if (rec && ap.detalleRecibido != null && ap.detalleRecibido!.isNotEmpty) {
+                        detalle += ' (${ap.detalleRecibido})';
+                      }
+                    }
+
+                    if (!rec && ap.observacion != null && ap.observacion!.trim().isNotEmpty) {
+                      detalle += ' · Motivo: ${ap.observacion!.trim()}';
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(top: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: colorFondo,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: colorBorde),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(rec ? Icons.check_circle_outline : Icons.cancel_outlined, size: 14, color: colorIcono),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              detalle,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                color: colorTexto,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+
           // Observaciones
           if (seguimiento.observaciones.trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(10),
@@ -148,7 +252,7 @@ class TarjetaSeguimiento extends StatelessWidget {
               child: Text(
                 seguimiento.observaciones.trim(),
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12.5,
                   color: Colors.grey.shade800,
                   height: 1.35,
                 ),
