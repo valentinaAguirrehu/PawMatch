@@ -749,6 +749,78 @@ Fundación Maritza Arévalo – Protección y bienestar animal.
   };
 }
 
+/**
+ * Notifica al padrino cuando acumula 3 incumplimientos consecutivos en su seguimiento.
+ */
+async function enviarCorreoAlertaIncumplimientoApadrinamiento({
+  destinatario,
+  nombrePadrino,
+  nombreMascota,
+  consecutivos = 3,
+}) {
+  const asunto = `Alerta importante: Seguimiento de apadrinamiento de ${nombreMascota} – Fundación Maritza Arévalo`;
+  const textoPlano = `
+Estimado(a) ${nombrePadrino}:
+
+Nos comunicamos desde la Fundación Maritza Arévalo para informarle que se han registrado ${consecutivos} seguimientos consecutivos en los cuales no se evidencia el cumplimiento de los compromisos acordados para el apadrinamiento de ${nombreMascota}.
+
+Le recordamos que el aporte y compromiso asumido son indispensables para garantizar el sustento, alimentación y atención veterinaria de la mascota. Debido a la reiteración de incumplimientos, su apadrinamiento se encuentra en riesgo inminente de cancelación y su usuario podría ser inhabilitado para realizar nuevos apadrinamientos.
+
+Por favor, póngase en contacto a la brevedad con la administración de la fundación o ingrese a la aplicación PawMatch para revisar sus compromisos.
+
+Atentamente,
+Fundación Maritza Arévalo – Protección y bienestar animal.
+`.trim();
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #ffccd5; border-radius: 16px; background-color: #fffafb;">
+      <div style="text-align: center; margin-bottom: 22px;">
+        <div style="display: inline-block; background-color: #fce4ec; padding: 8px 18px; border-radius: 20px; margin-bottom: 12px;">
+          <span style="color: #ed4f9d; font-weight: 800; font-size: 13px; letter-spacing: 0.5px;">
+            🐾 FUNDACIÓN MARITZA ARÉVALO
+          </span>
+        </div>
+        <h2 style="color: #c2185b; margin: 0 0 6px 0; font-size: 22px; font-weight: 800;">
+          Aviso de Incumplimiento en Apadrinamiento
+        </h2>
+        <div style="font-size: 14px; color: #666; font-weight: 600;">Mascota: <strong style="color: #ed4f9d;">${escaparHtml(nombreMascota)}</strong></div>
+      </div>
+
+      <div style="background-color: #ffffff; padding: 24px; border-radius: 14px; border: 1px solid #ffd6e0; box-shadow: 0 2px 8px rgba(0,0,0,0.03);">
+        <p style="font-size: 15px; color: #333; line-height: 1.6; margin-top: 0;">
+          Hola, <strong>${escaparHtml(nombrePadrino)}</strong>:
+        </p>
+        
+        <p style="font-size: 14.5px; color: #444; line-height: 1.6;">
+          Nos comunicamos de la <strong>Fundación Maritza Arévalo</strong> para notificarte que se han registrado <strong>${consecutivos} seguimientos consecutivos</strong> con calificación baja o reporte de incumplimiento en el apadrinamiento de <strong>${escaparHtml(nombreMascota)}</strong>.
+        </p>
+
+        <div style="background-color: #fff3e0; border-left: 4px solid #ff5722; padding: 14px 16px; border-radius: 8px; margin: 18px 0;">
+          <p style="margin: 0; color: #bf360c; font-size: 13.5px; line-height: 1.5; font-weight: 600;">
+            ⚠️ Tu apadrinamiento se encuentra en riesgo de ser cancelado definitivamente. Además, tu cuenta podría quedar inhabilitada para crear nuevas solicitudes de apadrinamiento.
+          </p>
+        </div>
+
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          El bienestar de nuestras mascotas rescatadas depende directamente del compromiso de sus padrinos. Te invitamos a comunicarte con la administración o ingresar a la app PawMatch para regularizar tu situación.
+        </p>
+      </div>
+
+      <p style="text-align: center; font-size: 12.5px; color: #888; margin-top: 20px; font-weight: 600;">
+        Fundación Maritza Arévalo – Protección y bienestar animal.
+      </p>
+    </div>
+  `;
+
+  return await enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Alerta incumplimiento apadrinamiento (${nombreMascota})`,
+  });
+}
+
 module.exports = {
   enviarCorreoAprobacionApadrinamiento,
   enviarCorreoRechazoApadrinamiento,
@@ -757,6 +829,7 @@ module.exports = {
   enviarCorreoContratoAdopcion,
   enviarCorreoVerificacionSolicitud,
   enviarCorreoNuevaDenunciaAdmin,
+  enviarCorreoAlertaIncumplimientoApadrinamiento,
   enviarEmailGenerico,
   obtenerTransporter,
 };

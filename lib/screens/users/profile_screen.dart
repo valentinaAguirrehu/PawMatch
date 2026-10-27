@@ -11,9 +11,11 @@ import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/pet_card.dart';
+import 'package:paw_match/widgets/star_rating_selector.dart';
 
 const _pendiente = 'Sin completar';
 const _colorPendiente = Color(0xFFC62828);
@@ -59,6 +61,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _guardandoFoto = false;
   bool _cargando = true;
   String? _error;
+  double? _calificacionPadrino;
+  int _totalSeguimientosPadrino = 0;
 
   static const _meses = [
     'ene', 'feb', 'mar', 'abr', 'may', 'jun',
@@ -106,6 +110,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final usuario = await ApiService.obtenerUsuario(id);
       if (!mounted) return;
       _aplicar(usuario);
+
+      // Cargar calificación promedio como padrino
+      SeguimientoApadrinamientoService.obtenerResumenPadrino(usuario.id).then((resumen) {
+        if (mounted && resumen != null) {
+          setState(() {
+            _calificacionPadrino = resumen.calificacionPromedio;
+            _totalSeguimientosPadrino = resumen.totalSeguimientos;
+          });
+        }
+      }).catchError((_) {});
+
       setState(() => _cargando = false);
     } catch (e) {
       if (!mounted) return;
@@ -358,6 +373,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fotoPerfil: usuario.fotoPerfil,
             pendiente: fotoPendiente,
             cargando: _cargando || _guardandoFoto,
+            calificacionPadrino: _calificacionPadrino,
+            totalSeguimientosPadrino: _totalSeguimientosPadrino,
             onFoto: _elegirFoto,
           ),
           if (!Session.isAdmin && !_editando) ...[
@@ -725,6 +742,8 @@ class _EncabezadoPerfil extends StatelessWidget {
   final String? fotoPerfil;
   final bool pendiente;
   final bool cargando;
+  final double? calificacionPadrino;
+  final int totalSeguimientosPadrino;
   final VoidCallback onFoto;
 
   const _EncabezadoPerfil({
@@ -734,6 +753,8 @@ class _EncabezadoPerfil extends StatelessWidget {
     required this.fotoPerfil,
     required this.pendiente,
     required this.cargando,
+    this.calificacionPadrino,
+    this.totalSeguimientosPadrino = 0,
     required this.onFoto,
   });
 
@@ -806,10 +827,24 @@ class _EncabezadoPerfil extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        Text(
-          nombre,
-          textAlign: TextAlign.center,
-          style: texto.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Text(
+              nombre,
+              textAlign: TextAlign.center,
+              style: texto.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            if (calificacionPadrino != null && calificacionPadrino! > 0)
+              StarRatingBadge(
+                rating: calificacionPadrino!,
+                totalSeguimientos: totalSeguimientosPadrino,
+                compacto: true,
+              ),
+          ],
         ),
         if (pendiente) ...[
           const SizedBox(height: 6),

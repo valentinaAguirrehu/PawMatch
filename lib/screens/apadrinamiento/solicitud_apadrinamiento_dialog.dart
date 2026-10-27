@@ -13,6 +13,7 @@ import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/pets_service.dart';
+import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
@@ -30,8 +31,47 @@ class SolicitudApadrinamientoDialog extends StatefulWidget {
     BuildContext context, {
     required Pet pet,
     VoidCallback? onEnviadaExitosamente,
-  }) {
+  }) async {
+    // 1. Verificar si el usuario está bloqueado para apadrinar por incumplimiento
+    final idUsuario = Session.idUsuario;
+    if (idUsuario != null && idUsuario.isNotEmpty) {
+      final resumen = await SeguimientoApadrinamientoService.obtenerResumenPadrino(idUsuario);
+      if (resumen != null && resumen.bloqueadoApadrinar) {
+        if (!context.mounted) return;
+        return showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Icon(Icons.block_rounded, color: Colors.red.shade700, size: 28),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Cuenta Inhabilitada',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'Tu cuenta se encuentra inhabilitada para crear nuevas solicitudes de apadrinamiento debido al registro reiterado de incumplimientos en tus seguimientos previos.\n\nPara solicitar asistencia o regularizar tu caso, por favor comunícate directamente con la administración de la Fundación Maritza Arévalo.',
+              style: TextStyle(fontSize: 14, height: 1.45),
+            ),
+            actions: [
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+
     if (pet.estaAdoptada) {
+      if (!context.mounted) return;
       return showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -55,6 +95,7 @@ class SolicitudApadrinamientoDialog extends StatefulWidget {
       );
     }
 
+    if (!context.mounted) return;
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,

@@ -12,6 +12,8 @@ const {
 } = require('../utils/correo');
 
 const router = express.Router();
+const seguimientoRouter = require('./seguimiento_apadrinamiento');
+router.use('/seguimiento', seguimientoRouter);
 
 // Carpeta privada para documentos de identidad (NO servida públicamente)
 const privateUploadsDir = path.join(__dirname, '..', 'private_uploads', 'documentos_apadrinamiento');
@@ -84,7 +86,7 @@ async function autenticarUsuario(req) {
 
   try {
     const res = await pool.query(
-      'SELECT id_usuario, rol, estado_cuenta, nombres, apellidos, correo FROM usuario WHERE id_usuario = $1',
+      'SELECT id_usuario, rol, estado_cuenta, nombres, apellidos, correo, bloqueado_apadrinar FROM usuario WHERE id_usuario = $1',
       [userId]
     );
     if (res.rows.length === 0) return null;
@@ -122,6 +124,13 @@ router.post('/', upload.single('documento'), async (req, res) => {
     // Si se subió un archivo pero no está autenticado, lo eliminamos por seguridad
     if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     return res.status(401).json({ error: 'Debes iniciar sesión para apadrinar' });
+  }
+
+  if (usuario.bloqueado_apadrinar) {
+    if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(403).json({
+      error: 'Tu cuenta se encuentra bloqueada para apadrinar debido al registro reiterado de incumplimientos en seguimientos previos. Comunícate con la fundación si requieres asistencia.',
+    });
   }
 
   const {
