@@ -516,7 +516,14 @@ router.put('/notificaciones/marcar-usuario', async (req, res) => {
 
   try {
     await pool.query(
-      "UPDATE solicitudapadrinamiento SET leido_usuario = true WHERE id_usuario = $1 AND leido_usuario = false",
+      `UPDATE solicitudapadrinamiento 
+       SET leido_usuario = true,
+           fecha_vista_usuario = COALESCE(fecha_vista_usuario, NOW()),
+           eliminar_despues_de = CASE 
+             WHEN estado IN ('rechazada', 'cancelada') THEN COALESCE(eliminar_despues_de, NOW() + INTERVAL '2 hours')
+             ELSE eliminar_despues_de
+           END
+       WHERE id_usuario = $1 AND leido_usuario = false`,
       [usuario.id_usuario]
     );
     res.json({ ok: true });
@@ -542,6 +549,14 @@ router.get('/', async (req, res) => {
   const soloMias = req.query.mis_solicitudes === 'true' || !esAdmin;
 
   try {
+    // Limpieza automática: eliminar solicitudes rechazadas o canceladas cuyo plazo de 2 horas expiró
+    await pool.query(
+      `DELETE FROM solicitudapadrinamiento
+       WHERE estado IN ('rechazada', 'cancelada')
+         AND eliminar_despues_de IS NOT NULL
+         AND eliminar_despues_de <= NOW()`
+    ).catch(() => {});
+
     let query = `
       SELECT 
         s.id_solicitud_apadrinamiento,
@@ -561,6 +576,8 @@ router.get('/', async (req, res) => {
         to_char(s.fecha_inicio_apadrinamiento, 'YYYY-MM-DD') AS fecha_inicio_apadrinamiento,
         s.leido_admin,
         s.leido_usuario,
+        to_char(s.fecha_vista_usuario, 'YYYY-MM-DD HH24:MI:SS') AS fecha_vista_usuario,
+        to_char(s.eliminar_despues_de, 'YYYY-MM-DD HH24:MI:SS') AS eliminar_despues_de,
         GREATEST(
           COALESCE(s.veces_rechazada, 1),
           (
@@ -584,15 +601,70 @@ router.get('/', async (req, res) => {
         to_char(s.fecha_verificacion_correo, 'YYYY-MM-DD HH24:MI:SS') AS fecha_verificacion_correo,
         COALESCE(s.acepto_requisitos, true) AS acepto_requisitos,
         to_char(s.fecha_aceptacion_requisitos, 'YYYY-MM-DD HH24:MI:SS') AS fecha_aceptacion_requisitos,
+        COALESCE(s.estado_apadrinamiento, 'activa') AS estado_apadrinamiento,
+        s.motivo_cancelacion,
+        to_char(s.fecha_cancelacion, 'YYYY-MM-DD HH24:MI:SS') AS fecha_cancelacion,
+        s.decision_admin,
+        s.nota_decision,
+        s.id_admin_decision,
+        to_char(s.fecha_decision, 'YYYY-MM-DD') AS fecha_decision,
+        COALESCE(s.aporta_monetario, false) AS aporta_monetario,
+        s.monto_comprometido,
+        s.periodicidad,
+        COALESCE(s.aporta_especie, false) AS aporta_especie,
+        COALESCE(s.aporta_otro, false) AS aporta_otro,
+        s.detalle_otro,
         m.nombre AS mascota_nombre,
         m.especie AS mascota_especie,
         m.raza AS mascota_raza,
         m.edad AS mascota_edad,
         m.fotos AS mascota_fotos,
-        m.estado_apadrinamiento AS mascota_estado_apadrinamiento
+        m.estado_apadrinamiento AS mascota_estado_apadrinamiento,
+        ev.evaluaciones_ciclos,
+        seg_list.seguimientos_resumen
       FROM solicitudapadrinamiento s
       INNER JOIN usuario u ON u.id_usuario = s.id_usuario
       INNER JOIN mascota m ON m.id_mascota = s.id_mascota
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(
+          json_agg(
+            json_build_object(
+              'id_evaluacion', ec.id_evaluacion,
+              'ciclo', ec.ciclo,
+              'promedio', ec.promedio,
+              'puntuacion', ec.puntuacion,
+              'decision', ec.decision,
+              'nota', ec.nota,
+              'fecha_decision', ec.fecha_decision,
+              'visto_por_usuario', ec.visto_por_usuario,
+              'fecha_vista_usuario', ec.fecha_vista_usuario,
+              'admin_nombres', u_adm.nombres,
+              'admin_apellidos', u_adm.apellidos
+            ) ORDER BY ec.ciclo ASC
+          ),
+          '[]'::json
+        ) AS evaluaciones_ciclos
+        FROM evaluacion_ciclo ec
+        LEFT JOIN usuario u_adm ON ec.id_administrador = u_adm.id_usuario
+        WHERE ec.id_solicitud_apadrinamiento = s.id_solicitud_apadrinamiento
+      ) ev ON true
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(
+          json_agg(
+            json_build_object(
+              'id_seguimiento_apadrinacion', seg.id_seguimiento_apadrinacion,
+              'numero_seguimiento', seg.numero_seguimiento,
+              'ciclo', seg.ciclo,
+              'calificacion', seg.calificacion,
+              'cumplimiento', seg.cumplimiento,
+              'fecha_seguimiento', seg.fecha_seguimiento
+            ) ORDER BY seg.numero_seguimiento ASC
+          ),
+          '[]'::json
+        ) AS seguimientos_resumen
+        FROM seguimientoapadrinamiento seg
+        WHERE seg.id_solicitud_apadrinamiento = s.id_solicitud_apadrinamiento
+      ) seg_list ON true
     `;
 
     const params = [];
@@ -614,8 +686,42 @@ router.get('/', async (req, res) => {
     }
 
     const resultado = await pool.query(query, params);
+    
+    // Calcular estadísticas de ciclo para cada solicitud
+    const rows = resultado.rows.map(row => {
+      const seguimientos = Array.isArray(row.seguimientos_resumen) ? row.seguimientos_resumen : [];
+      const evaluaciones = Array.isArray(row.evaluaciones_ciclos) ? row.evaluaciones_ciclos : [];
+      
+      let maxCiclo = 1;
+      for (const seg of seguimientos) {
+        const c = seg.ciclo || Math.ceil((seg.numero_seguimiento || 1) / 3);
+        if (c > maxCiclo) maxCiclo = c;
+      }
+      const segsEnMax = seguimientos.filter(
+        seg => (seg.ciclo || Math.ceil((seg.numero_seguimiento || 1) / 3)) === maxCiclo
+      );
+      const evaluadoMax = evaluaciones.some(e => parseInt(e.ciclo, 10) === maxCiclo);
+      
+      let cicloActual = maxCiclo;
+      let seguimientosEnCiclo = segsEnMax.length;
+      if (segsEnMax.length >= 3 && evaluadoMax) {
+        cicloActual = maxCiclo + 1;
+        seguimientosEnCiclo = 0;
+      }
+      
+      const tieneReporteNuevo = evaluaciones.some(e => e.visto_por_usuario === false || e.visto_por_usuario === 'false');
+
+      return {
+        ...row,
+        ciclo_actual: cicloActual,
+        seguimientos_en_ciclo: seguimientosEnCiclo,
+        total_seguimientos: seguimientos.length,
+        tiene_reporte_nuevo: tieneReporteNuevo,
+      };
+    });
+
     res.set('Cache-Control', 'no-store');
-    res.json(resultado.rows);
+    res.json(rows);
   } catch (err) {
     console.error('Error listando solicitudes de apadrinamiento:', err);
     res.status(500).json({ error: 'No se pudieron consultar las solicitudes' });

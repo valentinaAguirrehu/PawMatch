@@ -1,4 +1,130 @@
-/// Modelo de datos para el módulo de Seguimiento de Apadrinamiento.
+/// Modelo de datos para un aporte revisado en un seguimiento.
+class SeguimientoAporteItem {
+  final String idAporte;
+  final String idSeguimiento;
+  final String tipo; // 'monetario', 'especie', 'otro'
+  final String? comprometido;
+  final bool recibido;
+  final String? medio; // 'efectivo', 'transferencia', 'consignación', 'otro'
+  final double? montoRecibido;
+  final String? referencia;
+  final String? detalleRecibido;
+  final String? observacion;
+
+  const SeguimientoAporteItem({
+    required this.idAporte,
+    required this.idSeguimiento,
+    required this.tipo,
+    this.comprometido,
+    required this.recibido,
+    this.medio,
+    this.montoRecibido,
+    this.referencia,
+    this.detalleRecibido,
+    this.observacion,
+  });
+
+  factory SeguimientoAporteItem.fromJson(Map<String, dynamic> json) {
+    return SeguimientoAporteItem(
+      idAporte: (json['id_aporte'] ?? '').toString(),
+      idSeguimiento: (json['id_seguimiento_apadrinacion'] ?? '').toString(),
+      tipo: (json['tipo'] ?? 'monetario').toString(),
+      comprometido: json['comprometido']?.toString(),
+      recibido: json['recibido'] == true || json['recibido'] == 'true',
+      medio: json['medio']?.toString(),
+      montoRecibido: double.tryParse(json['monto_recibido']?.toString() ?? ''),
+      referencia: json['referencia']?.toString(),
+      detalleRecibido: json['detalle_recibido']?.toString(),
+      observacion: json['observacion']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'tipo': tipo,
+      'comprometido': comprometido,
+      'recibido': recibido,
+      'medio': medio,
+      'monto_recibido': montoRecibido,
+      'referencia': referencia,
+      'detalle_recibido': detalleRecibido,
+      'observacion': observacion,
+    };
+  }
+}
+
+/// Modelo para una evaluación formal de ciclo (cerrado con 3 seguimientos).
+class CicloEvaluacionItem {
+  final String idEvaluacion;
+  final int ciclo;
+  final double promedio;
+  final String puntuacion; // 'buen', 'regular', 'mal'
+  final String decision; // 'continuar', 'cancelar'
+  final String? nota;
+  final String? idAdministrador;
+  final String adminNombre;
+  final DateTime fechaDecision;
+  bool vistoPorUsuario;
+  DateTime? fechaVistaUsuario;
+
+  CicloEvaluacionItem({
+    required this.idEvaluacion,
+    required this.ciclo,
+    required this.promedio,
+    required this.puntuacion,
+    required this.decision,
+    this.nota,
+    this.idAdministrador,
+    required this.adminNombre,
+    required this.fechaDecision,
+    required this.vistoPorUsuario,
+    this.fechaVistaUsuario,
+  });
+
+  factory CicloEvaluacionItem.fromJson(Map<String, dynamic> json) {
+    DateTime parseFecha(dynamic v) {
+      if (v == null) return DateTime.now();
+      if (v is DateTime) return v;
+      return DateTime.tryParse(v.toString()) ?? DateTime.now();
+    }
+
+    final adminNom = [
+      (json['admin_nombres'] ?? '').toString().trim(),
+      (json['admin_apellidos'] ?? '').toString().trim(),
+    ].where((s) => s.isNotEmpty).join(' ');
+
+    return CicloEvaluacionItem(
+      idEvaluacion: (json['id_evaluacion'] ?? '').toString(),
+      ciclo: int.tryParse(json['ciclo']?.toString() ?? '1') ?? 1,
+      promedio: double.tryParse(json['promedio']?.toString() ?? '0') ?? 0.0,
+      puntuacion: (json['puntuacion'] ?? 'buen').toString(),
+      decision: (json['decision'] ?? 'continuar').toString(),
+      nota: json['nota']?.toString(),
+      idAdministrador: json['id_administrador']?.toString(),
+      adminNombre: adminNom.isNotEmpty ? adminNom : 'Administrador',
+      fechaDecision: parseFecha(json['fecha_decision']),
+      vistoPorUsuario: json['visto_por_usuario'] == true || json['visto_por_usuario'] == 'true',
+      fechaVistaUsuario: json['fecha_vista_usuario'] != null ? DateTime.tryParse(json['fecha_vista_usuario'].toString()) : null,
+    );
+  }
+
+  String get clasificacionTexto {
+    switch (puntuacion.toLowerCase()) {
+      case 'buen':
+        return 'BUEN APADRINANTE';
+      case 'regular':
+        return 'APADRINANTE REGULAR';
+      case 'mal':
+        return 'MAL APADRINANTE';
+      default:
+        return promedio >= 4.0
+            ? 'BUEN APADRINANTE'
+            : (promedio >= 3.0 ? 'APADRINANTE REGULAR' : 'MAL APADRINANTE');
+    }
+  }
+}
+
+/// Modelo de datos para un seguimiento individual.
 class SeguimientoApadrinamientoItem {
   final String idSeguimiento;
   final String idSolicitud;
@@ -10,7 +136,10 @@ class SeguimientoApadrinamientoItem {
   final DateTime? proximoSeguimiento;
   final int calificacion;
   final bool correoAlertaEnviado;
+  final int numeroSeguimiento;
+  final int ciclo;
   final DateTime? createdAt;
+  final List<SeguimientoAporteItem> aportes;
 
   const SeguimientoApadrinamientoItem({
     required this.idSeguimiento,
@@ -23,7 +152,10 @@ class SeguimientoApadrinamientoItem {
     this.proximoSeguimiento,
     required this.calificacion,
     required this.correoAlertaEnviado,
+    required this.numeroSeguimiento,
+    required this.ciclo,
     this.createdAt,
+    this.aportes = const [],
   });
 
   factory SeguimientoApadrinamientoItem.fromJson(Map<String, dynamic> json) {
@@ -44,6 +176,16 @@ class SeguimientoApadrinamientoItem {
       (json['admin_apellidos'] ?? json['apellidos'] ?? '').toString().trim(),
     ].where((s) => s.isNotEmpty).join(' ');
 
+    final numSeg = int.tryParse(json['numero_seguimiento']?.toString() ?? '1') ?? 1;
+    final cicloCalc = int.tryParse(json['ciclo']?.toString() ?? '') ?? ((numSeg + 2) ~/ 3);
+
+    List<SeguimientoAporteItem> listaAportes = [];
+    if (json['aportes'] is List) {
+      listaAportes = (json['aportes'] as List)
+          .map((a) => SeguimientoAporteItem.fromJson(a as Map<String, dynamic>))
+          .toList();
+    }
+
     return SeguimientoApadrinamientoItem(
       idSeguimiento: (json['id_seguimiento_apadrinacion'] ?? json['id'] ?? '').toString(),
       idSolicitud: (json['id_solicitud_apadrinamiento'] ?? '').toString(),
@@ -55,12 +197,15 @@ class SeguimientoApadrinamientoItem {
       proximoSeguimiento: parseFechaOpcional(json['proximo_seguimiento']),
       calificacion: int.tryParse(json['calificacion']?.toString() ?? '5') ?? 5,
       correoAlertaEnviado: json['correo_alerta_enviado'] == true || json['correo_alerta_enviado'] == 'true',
+      numeroSeguimiento: numSeg,
+      ciclo: cicloCalc,
       createdAt: parseFechaOpcional(json['created_at']),
+      aportes: listaAportes,
     );
   }
 }
 
-/// Resumen de un apadrinamiento activo para la vista de seguimiento.
+/// Resumen de un apadrinamiento activo para la vista de seguimiento administrativo.
 class ApadrinamientoActivoSeguimiento {
   final String idSolicitud;
   final String estado;
@@ -71,6 +216,14 @@ class ApadrinamientoActivoSeguimiento {
   final String? detalleEspecie;
   final DateTime? fechaInicio;
   final String? contratoArchivo;
+
+  // Aportes comprometidos
+  final bool aportaMonetario;
+  final double? montoComprometido;
+  final String? periodicidad;
+  final bool aportaEspecie;
+  final bool aportaOtro;
+  final String? detalleOtro;
 
   // Mascota
   final String idMascota;
@@ -91,6 +244,13 @@ class ApadrinamientoActivoSeguimiento {
   final double calificacionPromedio;
   final int totalSeguimientos;
 
+  // Ciclos
+  final int cicloActual;
+  final int seguimientosEnCiclo;
+  final bool evaluacionPendiente;
+  final double promedioCicloActual;
+  final List<CicloEvaluacionItem> evaluacionesCiclos;
+
   // Último seguimiento
   final DateTime? ultimoSeguimientoFecha;
   final int? ultimoSeguimientoCalificacion;
@@ -106,6 +266,13 @@ class ApadrinamientoActivoSeguimiento {
   final String? motivoCancelacion;
   final DateTime? fechaCancelacion;
 
+  // Evaluación del administrador
+  final String? decisionAdmin;
+  final String? notaDecision;
+  final String? idAdminDecision;
+  final DateTime? fechaDecision;
+  final String? adminDecisionNombre;
+
   const ApadrinamientoActivoSeguimiento({
     required this.idSolicitud,
     required this.estado,
@@ -116,8 +283,19 @@ class ApadrinamientoActivoSeguimiento {
     this.detalleEspecie,
     this.fechaInicio,
     this.contratoArchivo,
+    this.aportaMonetario = true,
+    this.montoComprometido,
+    this.periodicidad,
+    this.aportaEspecie = false,
+    this.aportaOtro = false,
+    this.detalleOtro,
     this.motivoCancelacion,
     this.fechaCancelacion,
+    this.decisionAdmin,
+    this.notaDecision,
+    this.idAdminDecision,
+    this.fechaDecision,
+    this.adminDecisionNombre,
     required this.idMascota,
     required this.mascotaNombre,
     required this.mascotaFotos,
@@ -133,6 +311,11 @@ class ApadrinamientoActivoSeguimiento {
     required this.padrinoBloqueado,
     required this.calificacionPromedio,
     required this.totalSeguimientos,
+    required this.cicloActual,
+    required this.seguimientosEnCiclo,
+    required this.evaluacionPendiente,
+    required this.promedioCicloActual,
+    this.evaluacionesCiclos = const [],
     this.ultimoSeguimientoFecha,
     this.ultimoSeguimientoCalificacion,
     this.ultimoSeguimientoCumplimiento,
@@ -141,6 +324,12 @@ class ApadrinamientoActivoSeguimiento {
     required this.tieneTresIncumplimientos,
     required this.ultimoCorreoAlertaEnviado,
   });
+
+  bool get esMalPadrino => (evaluacionPendiente ? promedioCicloActual : calificacionPromedio) < 3.0;
+  bool get esBuenPadrino => (evaluacionPendiente ? promedioCicloActual : calificacionPromedio) >= 4.0;
+  bool get esPadrinoRegular =>
+      (evaluacionPendiente ? promedioCicloActual : calificacionPromedio) >= 3.0 &&
+      (evaluacionPendiente ? promedioCicloActual : calificacionPromedio) < 4.0;
 
   String get resumenMascota {
     final partes = [
@@ -152,6 +341,9 @@ class ApadrinamientoActivoSeguimiento {
   }
 
   String get resumenAporte {
+    if (montoComprometido != null && montoComprometido! > 0) {
+      return '\$${montoComprometido!.toStringAsFixed(0)} · ${periodicidad ?? frecuenciaAporte}';
+    }
     if (montoAporte != null && montoAporte! > 0) {
       return '\$$montoAporte · $frecuenciaAporte';
     }
@@ -185,6 +377,18 @@ class ApadrinamientoActivoSeguimiento {
       (json['usuario_apellidos'] ?? json['apellidos'] ?? '').toString().trim(),
     ].where((s) => s.isNotEmpty).join(' ');
 
+    List<CicloEvaluacionItem> listaEvs = [];
+    if (json['evaluaciones_ciclos'] is List) {
+      listaEvs = (json['evaluaciones_ciclos'] as List)
+          .map((e) => CicloEvaluacionItem.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+
+    final cicloAct = int.tryParse(json['ciclo_actual']?.toString() ?? '1') ?? 1;
+    final segsEnCiclo = int.tryParse(json['seguimientos_en_ciclo']?.toString() ?? '0') ?? 0;
+    final evalPend = json['evaluacion_pendiente'] == true || json['evaluacion_pendiente'] == 'true';
+    final promCicloAct = double.tryParse(json['promedio_ciclo_actual']?.toString() ?? '0') ?? 0.0;
+
     return ApadrinamientoActivoSeguimiento(
       idSolicitud: (json['id_solicitud_apadrinamiento'] ?? '').toString(),
       estado: (json['estado'] ?? 'aprobada').toString(),
@@ -195,6 +399,12 @@ class ApadrinamientoActivoSeguimiento {
       detalleEspecie: json['detalle_especie']?.toString(),
       fechaInicio: parseFecha(json['fecha_inicio_apadrinamiento']),
       contratoArchivo: json['contrato_apadrinamiento_archivo']?.toString(),
+      aportaMonetario: json['aporta_monetario'] == null || json['aporta_monetario'] == true || json['aporta_monetario'] == 'true',
+      montoComprometido: double.tryParse(json['monto_comprometido']?.toString() ?? json['monto_aporte']?.toString() ?? ''),
+      periodicidad: json['periodicidad']?.toString() ?? json['frecuencia_aporte']?.toString(),
+      aportaEspecie: json['aporta_especie'] == true || json['aporta_especie'] == 'true',
+      aportaOtro: json['aporta_otro'] == true || json['aporta_otro'] == 'true',
+      detalleOtro: json['detalle_otro']?.toString(),
       idMascota: (json['id_mascota'] ?? '').toString(),
       mascotaNombre: (json['mascota_nombre'] ?? json['nombre'] ?? '').toString(),
       mascotaFotos: json['mascota_fotos'] ?? json['fotos'] ?? '',
@@ -210,6 +420,11 @@ class ApadrinamientoActivoSeguimiento {
       padrinoBloqueado: json['usuario_bloqueado'] == true || json['bloqueado_apadrinar'] == true,
       calificacionPromedio: double.tryParse(json['calificacion_promedio']?.toString() ?? '0') ?? 0.0,
       totalSeguimientos: int.tryParse(json['total_seguimientos']?.toString() ?? '0') ?? 0,
+      cicloActual: cicloAct,
+      seguimientosEnCiclo: segsEnCiclo,
+      evaluacionPendiente: evalPend,
+      promedioCicloActual: promCicloAct,
+      evaluacionesCiclos: listaEvs,
       ultimoSeguimientoFecha: parseFecha(json['ultimo_seguimiento_fecha']),
       ultimoSeguimientoCalificacion: int.tryParse(json['ultimo_seguimiento_calificacion']?.toString() ?? ''),
       ultimoSeguimientoCumplimiento: json['ultimo_seguimiento_cumplimiento'] == null
@@ -221,6 +436,19 @@ class ApadrinamientoActivoSeguimiento {
       ultimoCorreoAlertaEnviado: json['ultimo_correo_enviado'] == true || json['ultimo_correo_enviado'] == 'true',
       motivoCancelacion: json['motivo_cancelacion']?.toString(),
       fechaCancelacion: parseFecha(json['fecha_cancelacion']),
+      decisionAdmin: json['decision_admin']?.toString(),
+      notaDecision: json['nota_decision']?.toString(),
+      idAdminDecision: json['id_admin_decision']?.toString(),
+      fechaDecision: parseFecha(json['fecha_decision']),
+      adminDecisionNombre: [
+        (json['admin_decision_nombres'] ?? '').toString().trim(),
+        (json['admin_decision_apellidos'] ?? '').toString().trim(),
+      ].where((s) => s.isNotEmpty).join(' ').trim().isEmpty
+          ? null
+          : [
+              (json['admin_decision_nombres'] ?? '').toString().trim(),
+              (json['admin_decision_apellidos'] ?? '').toString().trim(),
+            ].where((s) => s.isNotEmpty).join(' ').trim(),
     );
   }
 }
