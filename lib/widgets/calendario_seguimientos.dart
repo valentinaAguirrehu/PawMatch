@@ -13,10 +13,18 @@ class CalendarioSeguimientosWidget extends StatefulWidget {
   final List<ItemCalendarioSeguimiento> eventos;
   final VoidCallback onRecargar;
 
+  /// Texto que precede al nombre de la persona en cada evento.
+  final String etiquetaPersona;
+
+  /// Si se define, abre el formulario de ese módulo en lugar del de apadrinamiento.
+  final void Function(ItemCalendarioSeguimiento item)? onAbrirEvento;
+
   const CalendarioSeguimientosWidget({
     super.key,
     required this.eventos,
     required this.onRecargar,
+    this.etiquetaPersona = 'Padrino',
+    this.onAbrirEvento,
   });
 
   @override
@@ -79,6 +87,10 @@ class _CalendarioSeguimientosWidgetState
   }
 
   void _abrirFormularioSeguimiento(ItemCalendarioSeguimiento item) {
+    if (widget.onAbrirEvento != null) {
+      widget.onAbrirEvento!(item);
+      return;
+    }
     // Convertir a Pet y SolicitudApadrinamiento para abrir el formulario
     final pet = Pet(
       id: item.idMascota,
@@ -339,6 +351,7 @@ class _CalendarioSeguimientosWidgetState
           ...seleccionados.map((item) {
             return _TarjetaEventoCalendario(
               item: item,
+              etiquetaPersona: widget.etiquetaPersona,
               onRegistrarSeguimiento: () => _abrirFormularioSeguimiento(item),
             );
           }),
@@ -364,6 +377,7 @@ class _CalendarioSeguimientosWidgetState
           ...vencidos.map((item) {
             return _TarjetaEventoCalendario(
               item: item,
+              etiquetaPersona: widget.etiquetaPersona,
               onRegistrarSeguimiento: () => _abrirFormularioSeguimiento(item),
             );
           }),
@@ -375,10 +389,12 @@ class _CalendarioSeguimientosWidgetState
 
 class _TarjetaEventoCalendario extends StatelessWidget {
   final ItemCalendarioSeguimiento item;
+  final String etiquetaPersona;
   final VoidCallback onRegistrarSeguimiento;
 
   const _TarjetaEventoCalendario({
     required this.item,
+    required this.etiquetaPersona,
     required this.onRegistrarSeguimiento,
   });
 
@@ -449,7 +465,7 @@ class _TarjetaEventoCalendario extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Padrino: ${item.padrinoNombre}',
+                        '$etiquetaPersona: ${item.padrinoNombre}',
                         style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 2),

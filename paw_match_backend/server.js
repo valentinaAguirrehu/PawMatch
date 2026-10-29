@@ -12,6 +12,7 @@ const pool = require('./db');
 const { asegurarRolSuperAdmin } = require('./utils/roles');
 const denunciasRoutes = require('./routes/denuncias');
 const seguimientoApadrinamientoRoutes = require('./routes/seguimiento_apadrinamiento');
+const seguimientoAdopcionRoutes = require('./routes/seguimiento_adopcion');
 
 const app = express();
 app.use(cors());
@@ -23,6 +24,7 @@ app.use('/api/mascotas', mascotasRoutes);
 app.use('/api/fundacion', fundacionRoutes);
 app.use('/api/solicitudes-apadrinamiento', solicitudesApadrinamientoRoutes);
 app.use('/api/seguimiento-apadrinamiento', seguimientoApadrinamientoRoutes);
+app.use('/api/seguimiento-adopcion', seguimientoAdopcionRoutes);
 app.use('/api/adoption-requests', adoptionRequestsRoutes);
 app.use('/api/noticias', noticiasRoutes);
 app.use('/api/denuncias', denunciasRoutes);
