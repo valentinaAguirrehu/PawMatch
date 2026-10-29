@@ -31,7 +31,9 @@ class _AdminsAdminScreenState extends State<AdminsAdminScreen> {
 
   Future<void> _recargar() async {
     final future = ApiService.listarUsuariosAdmin(rol: 'administrador');
-    setState(() => _future = future);
+    setState(() {
+      _future = future;
+    });
     await future;
   }
 

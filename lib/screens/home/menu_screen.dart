@@ -219,10 +219,7 @@ class _MenuScreenState extends State<MenuScreen> {
   Widget _paginaGestion(_Gestion g) => switch (g) {
     _Gestion.usuarios => const UsersAdminScreen(),
     _Gestion.administradores => const AdminsAdminScreen(),
-    _Gestion.fundacion => const _PantallaAdmin(
-      titulo: 'Información de la fundación',
-      child: FundacionAdminScreen(),
-    ),
+    _Gestion.fundacion => const FundacionAdminScreen(),
     _Gestion.adopciones => const AdoptionFollowUpAdminScreen(),
     _Gestion.apadrinamientos => const ApadrinacionFollowUpAdminScreen(),
   };
@@ -456,22 +453,6 @@ class _PestanasVivasState extends State<_PestanasVivas> {
       index: widget.indice.value,
       sizing: StackFit.expand,
       children: widget.paginas,
-    );
-  }
-}
-
-/// Barra de regreso para las pantallas de administración que no traen la suya.
-class _PantallaAdmin extends StatelessWidget {
-  final String titulo;
-  final Widget child;
-
-  const _PantallaAdmin({required this.titulo, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(titulo)),
-      body: child,
     );
   }
 }

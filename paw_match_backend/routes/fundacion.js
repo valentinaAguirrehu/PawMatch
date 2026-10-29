@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const { esAdministrador } = require('../utils/roles');
 
 const router = express.Router();
 
@@ -131,10 +132,10 @@ async function requireAdmin(req, res, next) {
   if (!userId) return res.status(401).json({ error: 'Debes iniciar sesión' });
   try {
     const result = await pool.query(
-      "SELECT id_usuario FROM usuario WHERE id_usuario = $1 AND LOWER(rol) IN ('administrador', 'superadmin')",
+      'SELECT rol FROM usuario WHERE id_usuario = $1',
       [userId],
     );
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0 || !esAdministrador(result.rows[0].rol)) {
       return res.status(403).json({ error: 'Solo un administrador puede editar la fundación' });
     }
     next();

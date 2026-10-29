@@ -4,7 +4,14 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
+import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/fundacion_service.dart';
+import 'package:paw_match/services/navegacion.dart';
+import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
+import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/fundacion_imagen.dart';
 
 /// Pantalla del administrador para editar, modificar y eliminar la información
@@ -132,6 +139,15 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     _rescatistaNombreCtrl.dispose();
     _rescatistaTextoCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _confirmarCerrarSesion() async {
+    final confirmar = await DialogoCerrarSesion.mostrar(context);
+    if (!confirmar || !mounted) return;
+    ApadrinamientoService.detenerMonitoreo();
+    AdoptionService.detenerMonitoreo();
+    Session.cerrar();
+    Navegacion.ir(context, const WelcomeScreen());
   }
 
   void _aviso(String mensaje, {bool esError = false}) {
@@ -279,12 +295,14 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
           children: [
             Icon(icono, color: AppColors.rosa, size: 22),
             const SizedBox(width: 8),
-            Text(
-              titulo,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                color: AppColors.texto,
+            Expanded(
+              child: Text(
+                titulo,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.texto,
+                ),
               ),
             ),
           ],
@@ -334,19 +352,24 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                titulo,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                  color: AppColors.texto,
+              Expanded(
+                child: Text(
+                  titulo,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.texto,
+                  ),
                 ),
               ),
               if (tieneFoto)
                 TextButton.icon(
                   onPressed: onEliminar,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
                   icon: const Icon(Icons.delete_outline, size: 16, color: Colors.redAccent),
                   label: const Text(
                     'Eliminar',
@@ -398,10 +421,28 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_cargando) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FD),
+      body: SafeArea(
+        child: Column(
+          children: [
+            BarraSuperior(
+              iconoTitulo: Icons.edit_note_outlined,
+              titulo: 'Información',
+              onCerrarSesion: _confirmarCerrarSesion,
+            ),
+            Expanded(
+              child: _cargando
+                  ? const Center(child: CircularProgressIndicator())
+                  : _formulario(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  Widget _formulario() {
     return Form(
       key: _formKey,
       child: ListView(
