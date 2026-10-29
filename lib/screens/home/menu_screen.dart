@@ -57,10 +57,23 @@ class _MenuScreenState extends State<MenuScreen> {
 
   final GlobalKey<NavigatorState> _navKey = GlobalKey<NavigatorState>();
   late final _ObservadorPaginas _obs = _ObservadorPaginas(_alCambiarPila);
-  late final List<Widget> _paginas;
   late final ValueNotifier<int> _indice;
 
   bool _enDetalle = false;
+
+  List<Widget> _obtenerPaginas() => [
+    HomeTab(
+      onVerMascotas: () => _irA(1),
+      onVerMatch: Session.esAdmin ? null : () => _irA(2),
+    ),
+    const PetScreen(),
+    if (Session.esAdmin)
+      const SizedBox.shrink()
+    else
+      PerfectMatchScreen(onCerrarSesion: _confirmarCerrarSesion),
+    NotificationsTab(onCerrarSesion: _confirmarCerrarSesion),
+    ProfileScreen(onCerrarSesion: _confirmarCerrarSesion),
+  ];
 
   @override
   void initState() {
@@ -71,19 +84,6 @@ class _MenuScreenState extends State<MenuScreen> {
     if (Session.esAdmin && indice == MenuScreen.indiceMatch) indice = 0;
     _index = indice;
     _indice = ValueNotifier<int>(indice);
-    _paginas = [
-      HomeTab(
-        onVerMascotas: () => _irA(1),
-        onVerMatch: Session.esAdmin ? null : () => _irA(2),
-      ),
-      const PetScreen(),
-      if (Session.esAdmin)
-        const SizedBox.shrink()
-      else
-        PerfectMatchScreen(onCerrarSesion: _confirmarCerrarSesion),
-      NotificationsTab(onCerrarSesion: _confirmarCerrarSesion),
-      ProfileScreen(onCerrarSesion: _confirmarCerrarSesion),
-    ];
     ApadrinamientoService.iniciarMonitoreo();
     AdoptionService.iniciarMonitoreo();
     PetsService.iniciarMonitoreo();
@@ -313,7 +313,7 @@ class _MenuScreenState extends State<MenuScreen> {
           key: _navKey,
           observers: [_obs],
           onGenerateRoute: (_) => MaterialPageRoute(
-            builder: (_) => _PestanasVivas(indice: _indice, paginas: _paginas),
+            builder: (_) => _PestanasVivas(indice: _indice, paginasBuilder: _obtenerPaginas),
           ),
         ),
         bottomNavigationBar: NavFlotante(
@@ -422,9 +422,9 @@ class _MenuScreenState extends State<MenuScreen> {
 /// Mantiene las pestañas montadas. Cambiar de una a otra no deja la pantalla en blanco.
 class _PestanasVivas extends StatefulWidget {
   final ValueNotifier<int> indice;
-  final List<Widget> paginas;
+  final List<Widget> Function() paginasBuilder;
 
-  const _PestanasVivas({required this.indice, required this.paginas});
+  const _PestanasVivas({required this.indice, required this.paginasBuilder});
 
   @override
   State<_PestanasVivas> createState() => _PestanasVivasState();
@@ -452,7 +452,7 @@ class _PestanasVivasState extends State<_PestanasVivas> {
     return IndexedStack(
       index: widget.indice.value,
       sizing: StackFit.expand,
-      children: widget.paginas,
+      children: widget.paginasBuilder(),
     );
   }
 }

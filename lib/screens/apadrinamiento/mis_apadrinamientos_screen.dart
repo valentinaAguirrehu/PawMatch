@@ -48,7 +48,7 @@ class _InfoBannerPadrino {
 
 class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   static bool _mensajeSesionMostrado = false;
-  int _filtroSeleccionado = 0; // 0: Mis aprobadas, 1: Mis rechazadas o canceladas
+  int _filtroSeleccionado = 0; // 0: Aprobadas, 1: Pendientes, 2: Rechazadas o canceladas
   late Future<List<SolicitudApadrinamiento>> _future = _cargar();
   late Future<ResumenPadrino?> _resumenFuture = _cargarResumen();
 
@@ -60,8 +60,10 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
       if (!mounted) return;
       if (!_mensajeSesionMostrado) {
         _mensajeSesionMostrado = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (mounted) {
+            final lista = await _future.catchError((_) => <SolicitudApadrinamiento>[]);
+            if (!mounted) return;
             _mostrarMensajePrimeraVez(
               resumen ??
                   ResumenPadrino(
@@ -74,6 +76,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                     tieneAlerta: false,
                     solicitudesConAlerta: const [],
                   ),
+              todas: lista,
             );
           }
         });
@@ -352,19 +355,61 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
             );
           }
 
-          final lista = _filtroSeleccionado == 0
-              ? todas
-                  .where((s) =>
-                      s.estado == 'aprobada' ||
-                      s.estadoApadrinamiento == 'activa' ||
-                      s.tieneContrato)
-                  .toList()
-              : todas
-                  .where((s) =>
-                      s.estado == 'rechazada' ||
-                      s.estado == 'cancelada' ||
-                      s.estadoApadrinamiento == 'cancelada')
-                  .toList();
+          final List<SolicitudApadrinamiento> lista;
+          if (_filtroSeleccionado == 0) {
+            // 1. Aprobadas (solo las que ya comenzaron con su primer seguimiento o su primer ciclo)
+            final aprobadas = todas.where((s) {
+              final esAprobadaOContrato = s.estado == 'aprobada' || s.tieneContrato;
+              final tieneSeguimientosOCiclos = s.totalSeguimientos > 0 ||
+                  s.seguimientosEnCiclo > 0 ||
+                  s.cicloActual > 1 ||
+                  s.evaluacionesCiclos.isNotEmpty;
+              return esAprobadaOContrato &&
+                  tieneSeguimientosOCiclos &&
+                  s.estado != 'cancelada' &&
+                  s.estadoApadrinamiento != 'cancelada';
+            }).toList();
+
+            // Ordenar: debe salir de primero la mascota con la que ya tiene ciclos o más seguimientos
+            aprobadas.sort((a, b) {
+              final ciclosA = a.evaluacionesCiclos.length;
+              final ciclosB = b.evaluacionesCiclos.length;
+              if (ciclosA != ciclosB) {
+                return ciclosB.compareTo(ciclosA);
+              }
+              if (a.cicloActual != b.cicloActual) {
+                return b.cicloActual.compareTo(a.cicloActual);
+              }
+              if (a.totalSeguimientos != b.totalSeguimientos) {
+                return b.totalSeguimientos.compareTo(a.totalSeguimientos);
+              }
+              return b.seguimientosEnCiclo.compareTo(a.seguimientosEnCiclo);
+            });
+            lista = aprobadas;
+          } else if (_filtroSeleccionado == 1) {
+            // 2. Pendientes (las que aún no han comenzado su primer seguimiento/ciclo, o pendientes de aprobación)
+            lista = todas.where((s) {
+              final esRechazadaOCancelada = s.estado == 'rechazada' ||
+                  s.estado == 'cancelada' ||
+                  s.estadoApadrinamiento == 'cancelada';
+              if (esRechazadaOCancelada) return false;
+              final tieneSeguimientosOCiclos = s.totalSeguimientos > 0 ||
+                  s.seguimientosEnCiclo > 0 ||
+                  s.cicloActual > 1 ||
+                  s.evaluacionesCiclos.isNotEmpty;
+              final esAprobadaConSeguimiento =
+                  (s.estado == 'aprobada' || s.tieneContrato) &&
+                      tieneSeguimientosOCiclos;
+              return !esAprobadaConSeguimiento;
+            }).toList();
+          } else {
+            // 3. Rechazadas o canceladas
+            lista = todas.where((s) {
+              return s.estado == 'rechazada' ||
+                  s.estado == 'cancelada' ||
+                  s.estadoApadrinamiento == 'cancelada';
+            }).toList();
+          }
 
           final totalElementos = lista.isEmpty ? 2 : lista.length + 1;
 
@@ -373,7 +418,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: totalElementos,
-              separatorBuilder: (_, __) => const SizedBox(height: 16),
+              separatorBuilder: (_, ___) => const SizedBox(height: 16),
               itemBuilder: (context, i) {
                 if (i == 0) {
                   return _construirCabeceraPadrino(todas);
@@ -389,15 +434,19 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                           Icon(
                             _filtroSeleccionado == 0
                                 ? Icons.verified_outlined
-                                : Icons.cancel_outlined,
+                                : (_filtroSeleccionado == 1
+                                    ? Icons.hourglass_empty_rounded
+                                    : Icons.cancel_outlined),
                             size: 42,
                             color: Colors.grey.shade400,
                           ),
                           const SizedBox(height: 10),
                           Text(
                             _filtroSeleccionado == 0
-                                ? 'No tienes apadrinamientos aprobados activos actualmente.'
-                                : 'No tienes solicitudes rechazadas o canceladas.',
+                                ? 'No tienes apadrinamientos con seguimientos activos actualmente.'
+                                : (_filtroSeleccionado == 1
+                                    ? 'No tienes solicitudes de apadrinamiento pendientes.'
+                                    : 'No tienes solicitudes rechazadas o canceladas.'),
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600),
                           ),
@@ -429,7 +478,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                   elevation: 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(color: color.withOpacity(0.35)),
+                    side: BorderSide(color: color.withValues(alpha: 0.35)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(18),
@@ -542,7 +591,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: color.withOpacity(0.12),
+                                color: color.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: color),
                               ),
@@ -573,7 +622,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                                   border: Border.all(color: AppColors.rosa, width: 2.5),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
+                                      color: Colors.black.withValues(alpha: 0.08),
                                       blurRadius: 8,
                                       offset: const Offset(0, 3),
                                     ),
@@ -1131,22 +1180,16 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                 side: const BorderSide(color: Color(0xFFF0E5EC)),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: AppColors.rosa.withValues(alpha: 0.12),
-                      radius: 20,
-                      child: const Icon(Icons.volunteer_activism, color: AppColors.rosa, size: 20),
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             nombre.isNotEmpty ? nombre : 'Padrino PawMatch',
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5),
                           ),
                           const SizedBox(height: 2),
                           const Text(
@@ -1165,7 +1208,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _construirBannerPadrino(resumen),
+            _construirBannerPadrino(resumen, todas),
             const SizedBox(height: 14),
             _construirFiltros(tieneReporteNuevoEnAprobadas),
           ],
@@ -1177,12 +1220,13 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   Widget _construirFiltros(bool tieneReporteNuevoEnAprobadas) {
     return Row(
       children: [
+        // 1. Aprobadas
         Expanded(
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
             onTap: () => setState(() => _filtroSeleccionado = 0),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
               decoration: BoxDecoration(
                 color: _filtroSeleccionado == 0
                     ? AppColors.rosa
@@ -1199,26 +1243,26 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                 children: [
                   Icon(
                     Icons.check_circle_rounded,
-                    size: 16,
+                    size: 15,
                     color: _filtroSeleccionado == 0 ? Colors.white : AppColors.rosa,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      'Mis aprobadas',
+                      'Aprobadas',
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        fontSize: 13,
+                        fontSize: 12.5,
                         color: _filtroSeleccionado == 0 ? Colors.white : AppColors.rosa,
                       ),
                     ),
                   ),
                   if (tieneReporteNuevoEnAprobadas) ...[
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 4),
                     Container(
-                      width: 8,
-                      height: 8,
+                      width: 7,
+                      height: 7,
                       decoration: BoxDecoration(
                         color: _filtroSeleccionado == 0 ? Colors.white : AppColors.rosa,
                         shape: BoxShape.circle,
@@ -1230,13 +1274,14 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
             ),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 6),
+        // 2. Pendientes
         Expanded(
           child: InkWell(
             borderRadius: BorderRadius.circular(14),
             onTap: () => setState(() => _filtroSeleccionado = 1),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
               decoration: BoxDecoration(
                 color: _filtroSeleccionado == 1
                     ? AppColors.rosa
@@ -1252,19 +1297,63 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    Icons.cancel_rounded,
-                    size: 16,
+                    Icons.hourglass_top_rounded,
+                    size: 15,
                     color: _filtroSeleccionado == 1 ? Colors.white : AppColors.rosa,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 4),
                   Flexible(
                     child: Text(
-                      'Mis rechazadas o canceladas',
+                      'Pendientes',
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
-                        fontSize: 12,
+                        fontSize: 12.5,
                         color: _filtroSeleccionado == 1 ? Colors.white : AppColors.rosa,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        // 3. Rechazadas o canceladas
+        Expanded(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => setState(() => _filtroSeleccionado = 2),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+              decoration: BoxDecoration(
+                color: _filtroSeleccionado == 2
+                    ? AppColors.rosa
+                    : AppColors.rosa.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _filtroSeleccionado == 2
+                      ? AppColors.rosa
+                      : AppColors.rosa.withValues(alpha: 0.25),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.cancel_rounded,
+                    size: 15,
+                    color: _filtroSeleccionado == 2 ? Colors.white : AppColors.rosa,
+                  ),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      'Rechazadas',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                        color: _filtroSeleccionado == 2 ? Colors.white : AppColors.rosa,
                       ),
                     ),
                   ),
@@ -1327,9 +1416,43 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   }
 
   /// Estructura de información visual para el banner y modal
-  _InfoBannerPadrino _calcularInfoBanner(ResumenPadrino? resumen) {
+  _InfoBannerPadrino _calcularInfoBanner(
+    ResumenPadrino? resumen, {
+    List<SolicitudApadrinamiento> todas = const [],
+  }) {
     final total = resumen?.totalSeguimientos ?? 0;
     final prom = resumen?.calificacionPromedio ?? 0.0;
+
+    // Calcular si algún apadrinamiento ya terminó ciclo(s)
+    int maxCicloTerminado = 0;
+    for (final s in todas) {
+      if (s.evaluacionesCiclos.isNotEmpty) {
+        for (final ev in s.evaluacionesCiclos) {
+          if (ev.ciclo > maxCicloTerminado) {
+            maxCicloTerminado = ev.ciclo;
+          }
+        }
+      } else if (s.cicloActual > 1) {
+        final c = s.cicloActual - 1;
+        if (c > maxCicloTerminado) {
+          maxCicloTerminado = c;
+        }
+      }
+    }
+
+    if (maxCicloTerminado >= 1) {
+      final sigCiclo = maxCicloTerminado + 1;
+      return _InfoBannerPadrino(
+        titulo: 'Vas por buen camino',
+        mensaje:
+            'Tu ciclo ya terminó $maxCicloTerminado, vas por buen camino. Comenzaremos con el ciclo $sigCiclo.',
+        icono: Icons.warning_amber_rounded,
+        colorFondo: const Color(0xFFFFF3E0),
+        colorBorde: const Color(0xFFFFB74D),
+        colorTexto: const Color(0xFFE65100),
+        colorIcono: const Color(0xFFEF6C00),
+      );
+    }
 
     if (total == 0) {
       return const _InfoBannerPadrino(
@@ -1379,10 +1502,29 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   }
 
   /// Banner informativo permanente en la cabecera
-  Widget _construirBannerPadrino(ResumenPadrino? resumen) {
-    final info = _calcularInfoBanner(resumen);
+  Widget _construirBannerPadrino(
+    ResumenPadrino? resumen, [
+    List<SolicitudApadrinamiento> todas = const [],
+  ]) {
+    final info = _calcularInfoBanner(resumen, todas: todas);
     final total = resumen?.totalSeguimientos ?? 0;
     final progreso = (total / 3.0).clamp(0.0, 1.0);
+
+    int maxCicloTerminado = 0;
+    for (final s in todas) {
+      if (s.evaluacionesCiclos.isNotEmpty) {
+        for (final ev in s.evaluacionesCiclos) {
+          if (ev.ciclo > maxCicloTerminado) {
+            maxCicloTerminado = ev.ciclo;
+          }
+        }
+      } else if (s.cicloActual > 1) {
+        final c = s.cicloActual - 1;
+        if (c > maxCicloTerminado) {
+          maxCicloTerminado = c;
+        }
+      }
+    }
 
     return Container(
       width: double.infinity,
@@ -1429,7 +1571,32 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
           const SizedBox(height: 14),
           const Divider(height: 1, thickness: 1, color: Colors.black12),
           const SizedBox(height: 12),
-          if (total < 3) ...[
+          if (maxCicloTerminado >= 1) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: info.colorBorde),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline, color: info.colorIcono, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '¡Cuentas con el reporte del Ciclo $maxCicloTerminado disponible! Puedes consultarlo y descargarlo en la tarjeta de cada mascota abajo.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: info.colorTexto,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (total < 3) ...[
             Text(
               'En tu 3er seguimiento podrás ver tu reporte de padrino y la fundación evaluará si puedes seguir siendo padrino. Llevas $total de 3.',
               style: TextStyle(
@@ -1480,9 +1647,28 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   }
 
   /// Diálogo / bottom sheet modal que se muestra la primera vez que entra en la sesión
-  void _mostrarMensajePrimeraVez(ResumenPadrino resumen) {
-    final info = _calcularInfoBanner(resumen);
+  void _mostrarMensajePrimeraVez(
+    ResumenPadrino resumen, {
+    List<SolicitudApadrinamiento> todas = const [],
+  }) {
+    final info = _calcularInfoBanner(resumen, todas: todas);
     final total = resumen.totalSeguimientos;
+
+    int maxCicloTerminado = 0;
+    for (final s in todas) {
+      if (s.evaluacionesCiclos.isNotEmpty) {
+        for (final ev in s.evaluacionesCiclos) {
+          if (ev.ciclo > maxCicloTerminado) {
+            maxCicloTerminado = ev.ciclo;
+          }
+        }
+      } else if (s.cicloActual > 1) {
+        final c = s.cicloActual - 1;
+        if (c > maxCicloTerminado) {
+          maxCicloTerminado = c;
+        }
+      }
+    }
 
     showModalBottomSheet(
       context: context,
@@ -1548,9 +1734,11 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                   border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: Text(
-                  total < 3
-                      ? 'Progreso de evaluación: Llevas $total de 3 seguimientos.'
-                      : '¡Ya cuentas con 3 o más seguimientos! Tu reporte de padrino está disponible.',
+                  maxCicloTerminado >= 1
+                      ? '¡Ciclo $maxCicloTerminado concluido con éxito! Tu reporte de padrino está disponible.'
+                      : (total < 3
+                          ? 'Progreso de evaluación: Llevas $total de 3 seguimientos.'
+                          : '¡Ya cuentas con 3 o más seguimientos! Tu reporte de padrino está disponible.'),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12.5,
@@ -1633,6 +1821,10 @@ class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> 
         });
       }
 
+      final ciclosPrev = widget.solicitud.evaluacionesCiclos
+          .where((e) => e.ciclo < ev.ciclo)
+          .toList();
+
       if (descargar) {
         await ReportePadrinoPdfService.descargarReporte(
           padrinoNombre: widget.solicitud.solicitanteNombreCompleto,
@@ -1644,7 +1836,9 @@ class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> 
           mascotaEdad: widget.solicitud.mascotaEdad != null
               ? '${widget.solicitud.mascotaEdad} años'
               : null,
-          seguimientos: seguimientos,
+          seguimientos: seguimientos.where((s) => s.ciclo == ev.ciclo).toList(),
+          todosLosSeguimientos: seguimientos,
+          ciclosAnteriores: ciclosPrev,
           estadoApadrinamiento: widget.solicitud.estadoApadrinamiento,
           motivoCancelacion: widget.solicitud.motivoCancelacion,
           fechaCancelacion: widget.solicitud.fechaCancelacion,
@@ -1665,7 +1859,9 @@ class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> 
           mascotaEdad: widget.solicitud.mascotaEdad != null
               ? '${widget.solicitud.mascotaEdad} años'
               : null,
-          seguimientos: seguimientos,
+          seguimientos: seguimientos.where((s) => s.ciclo == ev.ciclo).toList(),
+          todosLosSeguimientos: seguimientos,
+          ciclosAnteriores: ciclosPrev,
           estadoApadrinamiento: widget.solicitud.estadoApadrinamiento,
           motivoCancelacion: widget.solicitud.motivoCancelacion,
           fechaCancelacion: widget.solicitud.fechaCancelacion,
@@ -1721,8 +1917,14 @@ class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> 
               ),
               subtitle: Text(
                 lista.isEmpty
-                    ? (cargando ? 'Cargando reportes...' : 'Sin seguimientos registrados')
-                    : '${lista.length} seguimiento(s) · Próximo: ${proximo != null ? "${proximo.day}/${proximo.month}/${proximo.year}" : "Por programar"}',
+                    ? (cargando
+                        ? 'Cargando reportes...'
+                        : (widget.solicitud.cicloActual > 1
+                            ? 'Comenzará el Ciclo ${widget.solicitud.cicloActual} · Sin seguimientos'
+                            : 'Sin seguimientos registrados'))
+                    : (widget.solicitud.seguimientosEnCiclo == 0 && widget.solicitud.cicloActual > 1
+                        ? 'Comenzará el Ciclo ${widget.solicitud.cicloActual} (0/3) · Próximo: ${proximo != null ? "${proximo.day}/${proximo.month}/${proximo.year}" : "Por programar"}'
+                        : 'Ciclo ${widget.solicitud.cicloActual} (${widget.solicitud.seguimientosEnCiclo}/3) · Próximo: ${proximo != null ? "${proximo.day}/${proximo.month}/${proximo.year}" : "Por programar"}'),
                 style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
               ),
               children: [
@@ -1754,6 +1956,34 @@ class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> 
                     ),
                   )
                 else ...[
+                  // Aviso cuando comenzará un nuevo ciclo
+                  if (widget.solicitud.seguimientosEnCiclo == 0 && widget.solicitud.cicloActual > 1)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFFA5D6A7)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.rocket_launch_rounded, color: Color(0xFF2E7D32), size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '¡Comenzará el Ciclo ${widget.solicitud.cicloActual}! El ciclo anterior fue finalizado formalmente.',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1B5E20),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                   // Filas de reportes por ciclo evaluado
                   if (widget.solicitud.evaluacionesCiclos.isNotEmpty) ...[
                     Padding(

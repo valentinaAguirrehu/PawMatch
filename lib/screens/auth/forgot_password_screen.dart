@@ -46,14 +46,36 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   String _mensaje(Object e) => e.toString().replaceFirst('Exception: ', '');
 
-  Future<void> _enviarCodigo() async {
+  Future<void> _enviarCodigo({bool esReenvio = false}) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _cargando = true);
     try {
       await RecuperacionService.solicitarCodigo(_correo.text);
       if (!mounted) return;
       setState(() => _paso = 2);
-      _aviso('Si el correo está registrado, te enviamos un código');
+      _aviso(
+        esReenvio
+            ? 'Hemos reenviado un nuevo código de 4 dígitos a ${_correo.text.trim()}'
+            : 'Te enviamos un código de 4 dígitos a ${_correo.text.trim()}',
+      );
+    } catch (e) {
+      if (mounted) _aviso(_mensaje(e));
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  Future<void> _verificarCodigo() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _cargando = true);
+    try {
+      await RecuperacionService.verificarCodigo(
+        correo: _correo.text,
+        codigo: _codigo.text,
+      );
+      if (!mounted) return;
+      setState(() => _paso = 3);
+      _aviso('Código verificado. Ahora crea tu nueva contraseña');
     } catch (e) {
       if (mounted) _aviso(_mensaje(e));
     } finally {
@@ -71,7 +93,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         nuevaContrasena: _nueva.text,
       );
       if (!mounted) return;
-      _aviso('Contraseña actualizada. Ya puedes iniciar sesión');
+      _aviso('Contraseña actualizada con éxito. Ya puedes iniciar sesión');
       Navigator.pop(context);
     } catch (e) {
       if (mounted) _aviso(_mensaje(e));
@@ -83,8 +105,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final paso1 = _paso == 1;
     final puedeVolver = Navigator.canPop(context);
+
+    String titulo = '¿Olvidaste tu contraseña?';
+    String subtitulo = 'Escribe tu correo y te enviaremos un código de 4 dígitos.';
+
+    if (_paso == 2) {
+      titulo = 'Verifica tu correo';
+      subtitulo = 'Escribe el código de 4 dígitos que llegó a ${_correo.text.trim()} (vence en 15 minutos).';
+    } else if (_paso == 3) {
+      titulo = 'Crea una contraseña nueva';
+      subtitulo = 'Ingresa tu nueva contraseña para acceder a Paw Match.';
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -131,9 +163,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       Text(
-                                        paso1
-                                            ? '¿Olvidaste tu contraseña?'
-                                            : 'Crea una contraseña nueva',
+                                        titulo,
                                         textAlign: TextAlign.center,
                                         style: t.headlineSmall?.copyWith(
                                           color: AppColors.texto,
@@ -143,9 +173,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                       ),
                                       const SizedBox(height: 6),
                                       Text(
-                                        paso1
-                                            ? 'Escribe tu correo y te enviaremos un código de 6 dígitos.'
-                                            : 'Escribe el código que llegó a ${_correo.text.trim()} (vence en 15 minutos).',
+                                        subtitulo,
                                         textAlign: TextAlign.center,
                                         style: t.bodyMedium?.copyWith(
                                           color: AppColors.texto.withValues(alpha: 0.58),
@@ -153,35 +181,99 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 26),
-                                      if (paso1) ...[
+                                      if (_paso == 1) ...[
                                         _CampoRecuperacion(
                                           controller: _correo,
                                           icono: const FeatureIcon.sobre(color: AppColors.rosa),
                                           etiqueta: 'Correo electrónico',
                                           teclado: TextInputType.emailAddress,
                                           accion: TextInputAction.done,
-                                          onEnviar: _enviarCodigo,
-                                          validator: (v) =>
-                                              (v == null || !v.contains('@')) ? 'Correo inválido' : null,
+                                          onEnviar: () => _enviarCodigo(),
+                                          validator: (v) {
+                                            if (v == null || v.trim().isEmpty) return 'Ingresa tu correo';
+                                            if (!v.contains('@') || !v.contains('.')) return 'Correo inválido';
+                                            return null;
+                                          },
                                         ),
                                         const SizedBox(height: 24),
                                         _BotonGradiente(
                                           texto: 'Enviar código',
                                           cargando: _cargando,
-                                          onPressed: _enviarCodigo,
+                                          onPressed: () => _enviarCodigo(),
                                         ),
-                                      ] else ...[
+                                      ] else if (_paso == 2) ...[
                                         _CampoRecuperacion(
                                           controller: _codigo,
                                           icono: const FeatureIcon.pin(color: AppColors.rosa),
-                                          etiqueta: 'Código de 6 dígitos',
+                                          etiqueta: 'Código de 4 dígitos',
                                           teclado: TextInputType.number,
-                                          accion: TextInputAction.next,
-                                          validator: (v) => (v == null || v.trim().length != 6)
-                                              ? 'Ingresa los 6 dígitos'
+                                          accion: TextInputAction.done,
+                                          formatters: [
+                                            FilteringTextInputFormatter.digitsOnly,
+                                            LengthLimitingTextInputFormatter(4),
+                                          ],
+                                          validator: (v) => (v == null || v.trim().length != 4)
+                                              ? 'Ingresa los 4 dígitos'
                                               : null,
+                                          onEnviar: _verificarCodigo,
                                         ),
-                                        const SizedBox(height: 14),
+                                        const SizedBox(height: 24),
+                                        _BotonGradiente(
+                                          texto: 'Verificar código',
+                                          cargando: _cargando,
+                                          onPressed: _verificarCodigo,
+                                        ),
+                                        const SizedBox(height: 18),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            TextButton(
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: AppColors.rosa,
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 4,
+                                                  vertical: 2,
+                                                ),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              onPressed: _cargando ? null : () => _enviarCodigo(esReenvio: true),
+                                              child: const Text(
+                                                'Reenviar código',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 13.5,
+                                                ),
+                                              ),
+                                            ),
+                                            const Text('  •  ', style: TextStyle(color: Colors.black26)),
+                                            TextButton(
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: AppColors.texto.withValues(alpha: 0.7),
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 4,
+                                                  vertical: 2,
+                                                ),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                              onPressed: _cargando
+                                                  ? null
+                                                  : () {
+                                                      _formKey.currentState?.reset();
+                                                      setState(() => _paso = 1);
+                                                    },
+                                              child: const Text(
+                                                'Cambiar correo',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 13.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ] else if (_paso == 3) ...[
                                         _CampoRecuperacion(
                                           controller: _nueva,
                                           icono: const FeatureIcon.cerradura(color: AppColors.rosa),
@@ -207,30 +299,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                           texto: 'Cambiar contraseña',
                                           cargando: _cargando,
                                           onPressed: _cambiarContrasena,
-                                        ),
-                                        const SizedBox(height: 18),
-                                        Center(
-                                          child: TextButton(
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: AppColors.rosa,
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 4,
-                                                vertical: 2,
-                                              ),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                            onPressed: _cargando
-                                                ? null
-                                                : () => setState(() => _paso = 1),
-                                            child: const Text(
-                                              'Pedir otro código',
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 13.5,
-                                              ),
-                                            ),
-                                          ),
                                         ),
                                       ],
                                     ],
@@ -531,6 +599,7 @@ class _CampoRecuperacion extends StatefulWidget {
   final String? Function(String?)? validator;
   final TextInputAction? accion;
   final VoidCallback? onEnviar;
+  final List<TextInputFormatter>? formatters;
 
   const _CampoRecuperacion({
     required this.controller,
@@ -541,6 +610,7 @@ class _CampoRecuperacion extends StatefulWidget {
     this.validator,
     this.accion,
     this.onEnviar,
+    this.formatters,
   });
 
   @override
@@ -565,6 +635,7 @@ class _CampoRecuperacionState extends State<_CampoRecuperacion> {
       obscureText: _oculto,
       keyboardType: widget.teclado,
       textInputAction: widget.accion,
+      inputFormatters: widget.formatters,
       onFieldSubmitted: widget.onEnviar == null ? null : (_) => widget.onEnviar!(),
       validator: widget.validator,
       style: const TextStyle(

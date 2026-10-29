@@ -29,7 +29,7 @@ class _NoticiaFormDialogState extends State<NoticiaFormDialog> {
 
   late final _tituloCtrl = TextEditingController(text: widget.noticia?.titulo);
   late final _lugarCtrl = TextEditingController(
-      text: widget.noticia?.lugar ?? 'Fundación Maritza Arévalo, Cali');
+      text: widget.noticia?.lugar ?? 'Fundación Maritza Arévalo');
   late final _contenidoCtrl =
       TextEditingController(text: widget.noticia?.contenido);
 
@@ -134,7 +134,7 @@ class _NoticiaFormDialogState extends State<NoticiaFormDialog> {
         imagen: rutaImagen,
         lugar: _lugarCtrl.text.trim().isNotEmpty
             ? _lugarCtrl.text.trim()
-            : 'Fundación Maritza Arévalo, Cali',
+            : 'Fundación Maritza Arévalo',
         fecha: fechaIso,
       );
 

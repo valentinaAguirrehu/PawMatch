@@ -899,6 +899,7 @@ router.post('/evaluar', requireAdmin, async (req, res) => {
         decision,
         nota: notaLimpia,
         adminNombre: adminNombreCompleto,
+        ciclo: cicloObjetivo,
       });
     } catch (mailErr) {
       console.error('Error enviando correo de decisión de apadrinamiento:', mailErr);
@@ -906,10 +907,11 @@ router.post('/evaluar', requireAdmin, async (req, res) => {
 
     res.json({
       mensaje: decision === 'continuar'
-        ? `Se ha cerrado el Ciclo ${cicloObjetivo} y continuará el apadrinamiento.`
+        ? `Se ha completado el Ciclo ${cicloObjetivo} y comenzará el Ciclo ${cicloObjetivo + 1}.`
         : `Se ha cancelado el apadrinamiento en el Ciclo ${cicloObjetivo}.`,
       decision,
       ciclo: cicloObjetivo,
+      ciclo_siguiente: decision === 'continuar' ? cicloObjetivo + 1 : null,
       resultado,
     });
   } catch (error) {

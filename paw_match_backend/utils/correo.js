@@ -722,11 +722,19 @@ Fundación Maritza Arévalo – Protección y bienestar animal.
     </div>
   `;
 
-  const correoAdminConfigurado = process.env.ADMIN_EMAIL || process.env.GMAIL_USER;
-  const correosBase = (destinatarios && (!Array.isArray(destinatarios) || destinatarios.length > 0))
+  const listaRaw = Array.isArray(destinatarios)
     ? destinatarios
-    : [correoAdminConfigurado];
-  const lista = Array.isArray(correosBase) ? correosBase : [correosBase];
+    : (destinatarios ? [destinatarios] : []);
+  const lista = listaRaw.filter((c) => typeof c === 'string' && c.includes('@'));
+
+  if (lista.length === 0) {
+    console.warn('[DENUNCIAS CORREO] No se encontró correo de superadministrador registrado para notificar.');
+    return {
+      enviado: false,
+      resultados: [],
+      error: 'No se encontró correo de superadministrador para enviar la notificación',
+    };
+  }
   const resultados = [];
   for (const correo of lista) {
     if (correo && correo.includes('@')) {
@@ -831,20 +839,24 @@ async function enviarCorreoDecisionApadrinamiento({
   decision,
   nota,
   adminNombre,
+  ciclo,
 }) {
   const esContinuar = decision === 'continuar';
+  const cActual = ciclo ? parseInt(ciclo, 10) : 1;
+  const cSiguiente = cActual + 1;
+
   const asunto = esContinuar
-    ? `Evaluación de apadrinamiento de ${nombreMascota}: Continuación aprobada – Fundación Maritza Arévalo`
-    : `Notificación: Cancelación de apadrinamiento de ${nombreMascota} – Fundación Maritza Arévalo`;
+    ? `Evaluación Ciclo ${cActual} de ${nombreMascota}: Aprobada (Comenzará el Ciclo ${cSiguiente}) – Fundación Maritza Arévalo`
+    : `Notificación: Cancelación de apadrinamiento de ${nombreMascota} (Ciclo ${cActual}) – Fundación Maritza Arévalo`;
 
   const textoPlano = `
 Estimado(a) ${nombrePadrino}:
 
-Le comunicamos que la Fundación Maritza Arévalo ha realizado la evaluación oficial de su apadrinamiento con ${nombreMascota}.
+Le comunicamos que la Fundación Maritza Arévalo ha realizado la evaluación oficial del Ciclo ${cActual} de su apadrinamiento con ${nombreMascota}.
 
-Decisión de la fundación: ${esContinuar ? 'CONTINUAR CON EL APADRINAMIENTO' : 'APADRINAMIENTO CANCELADO'}
+Decisión de la fundación: ${esContinuar ? `CONTINUAR CON EL APADRINAMIENTO (Comenzará el Ciclo ${cSiguiente})` : 'APADRINAMIENTO CANCELADO'}
 ${nota ? `Observaciones / Nota del administrador: ${nota}\n` : ''}
-${!esContinuar ? 'Por este motivo, el apadrinamiento ha sido cancelado y su cuenta ha quedado inhabilitada para nuevas solicitudes de apadrinamiento.\n' : ''}
+${esContinuar ? `Se ha cerrado con éxito el Ciclo ${cActual} y comenzará el Ciclo ${cSiguiente}.\n` : 'Por este motivo, el apadrinamiento ha sido cancelado y su cuenta ha quedado inhabilitada para nuevas solicitudes de apadrinamiento.\n'}
 Evaluación realizada por: ${adminNombre || 'Administración Fundación Maritza Arévalo'}
 
 Atentamente,
@@ -882,9 +894,10 @@ Fundación Maritza Arévalo – Protección y bienestar animal.
 
         <div style="background-color: ${colorBadge}; border-left: 4px solid ${colorCabecera}; padding: 14px 16px; border-radius: 8px; margin: 18px 0;">
           <p style="margin: 0; color: ${colorCabecera}; font-size: 14px; line-height: 1.5; font-weight: 800;">
-            ${esContinuar ? '✅ Decisión: Continúa el apadrinamiento' : '❌ Decisión: Apadrinamiento cancelado'}
+            ${esContinuar ? `✅ Decisión: Continúa el apadrinamiento (Cierre Ciclo ${cActual})` : `❌ Decisión: Apadrinamiento cancelado (Ciclo ${cActual})`}
           </p>
-          ${nota ? `<p style="margin: 8px 0 0 0; color: #333; font-size: 13.5px; line-height: 1.4;"><strong>Nota:</strong> ${escaparHtml(nota)}</p>` : ''}
+          ${esContinuar ? `<p style="margin: 6px 0 0 0; color: #1B5E20; font-size: 13.5px; font-weight: 700;">🐾 ¡Comenzará el Ciclo ${cSiguiente} de apadrinamiento!</p>` : ''}
+          ${nota ? `<p style="margin: 8px 0 0 0; color: #333; font-size: 13.5px; line-height: 1.4;"><strong>Nota del administrador:</strong> ${escaparHtml(nota)}</p>` : ''}
         </div>
 
         ${!esContinuar ? `
@@ -895,7 +908,7 @@ Fundación Maritza Arévalo – Protección y bienestar animal.
         </div>
         ` : `
         <p style="font-size: 14px; color: #555; line-height: 1.5;">
-          Agradecemos tu compromiso y apoyo para con el bienestar de nuestras mascotas.
+          Agradecemos tu compromiso y apoyo constante con el bienestar de nuestras mascotas. Podrás consultar el reporte oficial de este ciclo y de los ciclos anteriores en tu panel de apadrinamientos.
         </p>
         `}
       </div>
@@ -915,6 +928,78 @@ Fundación Maritza Arévalo – Protección y bienestar animal.
   });
 }
 
+/**
+ * Envía el código de 4 dígitos para recuperar/restablecer la contraseña.
+ */
+async function enviarCorreoRecuperacionContrasena({ destinatario, nombreUsuario, codigo }) {
+  const nombre = escaparHtml(nombreUsuario || 'Usuario');
+  const codigoLimpio = escaparHtml(codigo);
+  const asunto = `Tu código de recuperación: ${codigoLimpio} - Paw Match`;
+
+  const textoPlano = `
+Hola ${nombreUsuario || 'Usuario'},
+
+Recibimos una solicitud para restablecer la contraseña de tu cuenta en Paw Match.
+
+Tu código de verificación de 4 dígitos es:
+${codigo}
+
+Este código es de uso único y tiene una validez de 15 minutos.
+Si tú no realizaste esta solicitud, puedes ignorar este mensaje; tu cuenta sigue segura.
+
+Atentamente,
+Fundación Maritza Arévalo & Equipo Paw Match
+`;
+
+  const html = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #ffd1dc; border-radius: 16px; background-color: #fffbfa;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; width: 64px; height: 64px; border-radius: 32px; background: #ff4081; text-align: center; line-height: 64px; font-size: 32px; color: #fff;">
+          🐾
+        </div>
+        <h2 style="color: #2b2b2b; margin: 12px 0 4px 0; font-size: 22px; font-weight: 700;">Recuperación de Contraseña</h2>
+        <p style="color: #7a7a7a; font-size: 14px; margin: 0;">Fundación Maritza Arévalo · Paw Match</p>
+      </div>
+
+      <div style="background-color: #ffffff; padding: 26px; border-radius: 14px; border: 1px solid #fae1e6; box-shadow: 0 4px 12px rgba(0,0,0,0.04);">
+        <p style="font-size: 15px; color: #333; margin-top: 0; line-height: 1.5;">
+          Hola <strong>${nombre}</strong>,
+        </p>
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          Recibimos una solicitud para restablecer la contraseña de tu cuenta. Ingresa el siguiente código de 4 dígitos en la aplicación para verificar tu identidad:
+        </p>
+
+        <div style="text-align: center; margin: 26px 0;">
+          <div style="display: inline-block; letter-spacing: 12px; font-size: 36px; font-weight: 800; color: #ff2d75; background: #fff0f5; padding: 14px 28px 14px 40px; border-radius: 12px; border: 2px dashed #ff8da1;">
+            ${codigoLimpio}
+          </div>
+          <p style="color: #888; font-size: 12px; margin-top: 10px;">
+            ⏱ Este código vencerá en <strong>15 minutos</strong>.
+          </p>
+        </div>
+
+        <div style="background-color: #fff9e6; border-left: 4px solid #ffb300; padding: 10px 14px; border-radius: 6px; margin-top: 20px;">
+          <p style="margin: 0; color: #8a6d00; font-size: 13px; line-height: 1.4;">
+            🔒 <strong>Seguridad:</strong> Nunca compartas este código con nadie. Si no fuiste tú quien solicitó el cambio, ignora este mensaje.
+          </p>
+        </div>
+      </div>
+
+      <p style="text-align: center; font-size: 12px; color: #aaa; margin-top: 22px;">
+        Este correo fue enviado automáticamente por Paw Match. Por favor no respondas a este mensaje.
+      </p>
+    </div>
+  `;
+
+  return await enviarEmailGenerico({
+    destinatario,
+    asunto,
+    textoPlano,
+    html,
+    tipoNotificacion: `Recuperación contraseña (${destinatario})`,
+  });
+}
+
 module.exports = {
   enviarCorreoAprobacionApadrinamiento,
   enviarCorreoRechazoApadrinamiento,
@@ -925,8 +1010,10 @@ module.exports = {
   enviarCorreoNuevaDenunciaAdmin,
   enviarCorreoAlertaIncumplimientoApadrinamiento,
   enviarCorreoDecisionApadrinamiento,
+  enviarCorreoRecuperacionContrasena,
   enviarEmailGenerico,
   obtenerTransporter,
 };
+
 
 

@@ -39,6 +39,19 @@ class ReportePadrinoPdfService {
     }
   }
 
+  /// Carga el logo institucional de la Fundación Maritza Arévalo de forma segura.
+  static Future<pw.MemoryImage?> _cargarLogoFundacion() async {
+    try {
+      final ByteData data =
+          await rootBundle.load('assets/images/Logo Fundación.png');
+      final Uint8List bytes = data.buffer.asUint8List();
+      return pw.MemoryImage(bytes);
+    } catch (e) {
+      debugPrint('[PDF] Logo Fundación no encontrado: $e');
+      return null;
+    }
+  }
+
   /// Solo abre la vista previa dentro de la app (sin descargar).
   static Future<void> verReporte({
     required String padrinoNombre,
@@ -49,6 +62,7 @@ class ReportePadrinoPdfService {
     String? mascotaRaza,
     String? mascotaEdad,
     required List<SeguimientoApadrinamientoItem> seguimientos,
+    List<SeguimientoApadrinamientoItem> todosLosSeguimientos = const [],
     int cicloReporte = 1,
     List<CicloEvaluacionItem> ciclosAnteriores = const [],
     String? estadoApadrinamiento,
@@ -68,6 +82,7 @@ class ReportePadrinoPdfService {
       mascotaRaza: mascotaRaza,
       mascotaEdad: mascotaEdad,
       seguimientos: seguimientos,
+      todosLosSeguimientos: todosLosSeguimientos,
       cicloReporte: cicloReporte,
       ciclosAnteriores: ciclosAnteriores,
       estadoApadrinamiento: estadoApadrinamiento,
@@ -98,6 +113,7 @@ class ReportePadrinoPdfService {
     String? mascotaRaza,
     String? mascotaEdad,
     required List<SeguimientoApadrinamientoItem> seguimientos,
+    List<SeguimientoApadrinamientoItem> todosLosSeguimientos = const [],
     int cicloReporte = 1,
     List<CicloEvaluacionItem> ciclosAnteriores = const [],
     String? estadoApadrinamiento,
@@ -117,6 +133,7 @@ class ReportePadrinoPdfService {
       mascotaRaza: mascotaRaza,
       mascotaEdad: mascotaEdad,
       seguimientos: seguimientos,
+      todosLosSeguimientos: todosLosSeguimientos,
       cicloReporte: cicloReporte,
       ciclosAnteriores: ciclosAnteriores,
       estadoApadrinamiento: estadoApadrinamiento,
@@ -147,6 +164,7 @@ class ReportePadrinoPdfService {
     String? mascotaRaza,
     String? mascotaEdad,
     required List<SeguimientoApadrinamientoItem> seguimientos,
+    List<SeguimientoApadrinamientoItem> todosLosSeguimientos = const [],
     int cicloReporte = 1,
     List<CicloEvaluacionItem> ciclosAnteriores = const [],
     String? estadoApadrinamiento,
@@ -170,11 +188,16 @@ class ReportePadrinoPdfService {
     }
 
     final logoImage = await _cargarLogoPawMatch();
+    final logoFundacion = await _cargarLogoFundacion();
     final pdf = pw.Document(theme: tema);
 
+    // Fuente completa de seguimientos para poder adjuntar ciclos anteriores
+    final List<SeguimientoApadrinamientoItem> fuenteCompleta =
+        todosLosSeguimientos.isNotEmpty ? todosLosSeguimientos : seguimientos;
+
     // Filtrar seguimientos pertenecientes al ciclo especificado
-    final List<SeguimientoApadrinamientoItem> segsCiclo = seguimientos
-        .where((s) => s.ciclo == cicloReporte || seguimientos.length <= 3)
+    final List<SeguimientoApadrinamientoItem> segsCiclo = fuenteCompleta
+        .where((s) => s.ciclo == cicloReporte)
         .toList();
 
     final listaSegs = segsCiclo.isNotEmpty ? segsCiclo : seguimientos;
@@ -241,12 +264,24 @@ class ReportePadrinoPdfService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
+              if (logoFundacion != null)
+                pw.Container(
+                  width: 55,
+                  height: 55,
+                  margin: const pw.EdgeInsets.only(right: 10),
+                  child: pw.Image(logoFundacion, fit: pw.BoxFit.contain),
+                ),
               pw.Expanded(
                 child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  crossAxisAlignment: logoFundacion != null
+                      ? pw.CrossAxisAlignment.center
+                      : pw.CrossAxisAlignment.start,
                   children: [
                     pw.Text(
                       FundacionInfo.nombre.toUpperCase(),
+                      textAlign: logoFundacion != null
+                          ? pw.TextAlign.center
+                          : pw.TextAlign.left,
                       style: pw.TextStyle(
                         fontSize: 14,
                         fontWeight: pw.FontWeight.bold,
@@ -256,6 +291,9 @@ class ReportePadrinoPdfService {
                     pw.SizedBox(height: 3),
                     pw.Text(
                       'Reporte Oficial de Seguimiento de Apadrinamiento · Ciclo $cicloReporte',
+                      textAlign: logoFundacion != null
+                          ? pw.TextAlign.center
+                          : pw.TextAlign.left,
                       style: pw.TextStyle(
                         fontSize: 10,
                         color: PdfColors.grey700,
@@ -714,6 +752,181 @@ class ReportePadrinoPdfService {
                 ),
               );
             }(),
+          ],
+
+          // 8. ANEXOS ADJUNTOS: HISTORIAL COMPLETO DE LOS DEMÁS CICLOS (si cicloReporte > 1)
+          if (cicloReporte > 1) ...[
+            pw.SizedBox(height: 18),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 7, horizontal: 10),
+              decoration: pw.BoxDecoration(
+                color: PdfColor.fromHex('#F3E5F5'),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                border: pw.Border.all(color: PdfColor.fromHex('#CE93D8'), width: 1.2),
+              ),
+              child: pw.Row(
+                children: [
+                  pw.Expanded(
+                    child: pw.Column(
+                      crossAxisAlignment: pw.CrossAxisAlignment.start,
+                      children: [
+                        pw.Text(
+                          'ANEXOS ADJUNTOS: HISTORIAL DE CICLOS ANTERIORES',
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColor.fromHex('#6A1B9A'),
+                          ),
+                        ),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          'A continuación se adjunta el detalle oficial de seguimientos y aportes de los ciclos previos finalizados.',
+                          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 10),
+            ...List.generate(cicloReporte - 1, (index) {
+              final c = index + 1;
+              final evPrev = ciclosAnteriores.where((e) => e.ciclo == c).firstOrNull;
+              final segsPrev = fuenteCompleta.where((s) => s.ciclo == c).toList();
+
+              final int sumaNotasPrev = segsPrev.fold(0, (acc, item) => acc + item.calificacion);
+              final double promPrev = segsPrev.isNotEmpty
+                  ? (sumaNotasPrev / segsPrev.length)
+                  : (evPrev?.promedio ?? 0.0);
+
+              return pw.Container(
+                margin: const pw.EdgeInsets.only(bottom: 12),
+                padding: const pw.EdgeInsets.all(10),
+                decoration: pw.BoxDecoration(
+                  color: PdfColor.fromHex('#FAFAFA'),
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  border: pw.Border.all(color: PdfColors.grey300),
+                ),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          'REGISTRO OFICIAL · CICLO $c (Seguimientos ${(c - 1) * 3 + 1} a ${c * 3})',
+                          style: pw.TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColor.fromHex('#880E4F'),
+                          ),
+                        ),
+                        pw.Container(
+                          padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: pw.BoxDecoration(
+                            color: PdfColor.fromHex('#E8F5E9'),
+                            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                          ),
+                          child: pw.Text(
+                            evPrev != null
+                                ? '${evPrev.clasificacionTexto} · ${evPrev.promedio.toStringAsFixed(1)}/5'
+                                : 'Promedio: ${promPrev.toStringAsFixed(1)}/5',
+                            style: pw.TextStyle(
+                              fontSize: 8,
+                              fontWeight: pw.FontWeight.bold,
+                              color: PdfColor.fromHex('#1B5E20'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (evPrev != null) ...[
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Decisión de la fundación: ${evPrev.decision == "continuar" ? "Continúa apadrinamiento" : "Cancelado"}${evPrev.adminNombre.isNotEmpty ? ' · Evaluador: ${evPrev.adminNombre}' : ''} · Fecha: ${_formatearFechaCorta(evPrev.fechaDecision)}',
+                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800),
+                      ),
+                      if (evPrev.nota != null && evPrev.nota!.trim().isNotEmpty) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          'Nota / Observación: ${evPrev.nota}',
+                          style: pw.TextStyle(
+                            fontSize: 8,
+                            fontStyle: pw.FontStyle.italic,
+                            color: PdfColors.grey800,
+                          ),
+                        ),
+                      ],
+                    ],
+                    pw.SizedBox(height: 8),
+                    if (segsPrev.isNotEmpty) ...[
+                      pw.TableHelper.fromTextArray(
+                        border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.8),
+                        headerStyle: pw.TextStyle(
+                          fontSize: 8,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                        headerDecoration: pw.BoxDecoration(
+                          color: PdfColor.fromHex('#7B1FA2'),
+                        ),
+                        cellStyle: const pw.TextStyle(fontSize: 7.5),
+                        cellAlignment: pw.Alignment.centerLeft,
+                        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+                        headers: <String>[
+                          'Seg.',
+                          'Fecha',
+                          'Administrador',
+                          'Calificación',
+                          'Cumplió',
+                          'Observaciones'
+                        ],
+                        data: segsPrev.map((s) {
+                          return [
+                            '#${s.numeroSeguimiento}',
+                            _formatearFechaCorta(s.fechaSeguimiento),
+                            s.adminNombre.isNotEmpty ? s.adminNombre : 'Administrador',
+                            '${s.calificacion} / 5',
+                            s.cumplimiento ? 'Sí' : 'No',
+                            s.observaciones.isEmpty ? '-' : s.observaciones,
+                          ];
+                        }).toList(),
+                        columnWidths: {
+                          0: const pw.FixedColumnWidth(35),
+                          1: const pw.FixedColumnWidth(60),
+                          2: const pw.FixedColumnWidth(85),
+                          3: const pw.FixedColumnWidth(60),
+                          4: const pw.FixedColumnWidth(50),
+                          5: const pw.FlexColumnWidth(),
+                        },
+                      ),
+                      if (segsPrev.any((s) => s.aportes.isNotEmpty)) ...[
+                        pw.SizedBox(height: 4),
+                        ...segsPrev.where((s) => s.aportes.isNotEmpty).map((s) {
+                          final resumenAportes = s.aportes.map((ap) {
+                            final montoStr = ap.montoRecibido != null ? ' (\$${ap.montoRecibido!.toStringAsFixed(0)})' : '';
+                            return '${ap.tipo.toUpperCase()}: ${ap.recibido ? "Recibido" : "No recibido"}$montoStr';
+                          }).join(' · ');
+                          return pw.Padding(
+                            padding: const pw.EdgeInsets.symmetric(vertical: 1.5, horizontal: 2),
+                            child: pw.Text(
+                              'Aportes Seg. #${s.numeroSeguimiento}: $resumenAportes',
+                              style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
+                            ),
+                          );
+                        }),
+                      ],
+                    ] else ...[
+                      pw.Text(
+                        'Sin detalle de seguimientos almacenado para este ciclo.',
+                        style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
           ],
 
           pw.SizedBox(height: 16),
