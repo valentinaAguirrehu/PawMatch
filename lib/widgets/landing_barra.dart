@@ -22,8 +22,9 @@ class LandingBarra extends StatelessWidget {
     final ancho = MediaQuery.sizeOf(context).width;
     final angosto = ancho < 480;
     return Material(
-      color: Colors.white,
-      elevation: 1,
+      color: const Color(0xFFFFA3C8),
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -42,7 +43,7 @@ class LandingBarra extends StatelessWidget {
                     Text(
                       'Paw Match',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.rosa,
+                        color: Colors.white,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -54,41 +55,43 @@ class LandingBarra extends StatelessWidget {
                         child: Text(enlace.texto),
                       ),
                   const Spacer(),
-                  if (angosto) ...[
-                    TextButton(
-                      onPressed: onIniciarSesion,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        visualDensity: VisualDensity.compact,
+                  OutlinedButton(
+                    onPressed: onIniciarSesion,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.white.withValues(alpha: 0.16),
+                      side: const BorderSide(color: Colors.white, width: 1.4),
+                      shape: const StadiumBorder(),
+                      minimumSize: Size(0, angosto ? 36 : 40),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: angosto ? 12 : 18,
                       ),
-                      child: const Text('Iniciar sesión'),
-                    ),
-                    const SizedBox(width: 4),
-                    FilledButton(
-                      onPressed: onRegistrarse,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 38),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shape: const StadiumBorder(),
+                      textStyle: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: angosto ? 13 : 14.5,
                       ),
-                      child: const Text('Registrarse'),
                     ),
-                  ] else ...[
-                    TextButton(
-                      onPressed: onIniciarSesion,
-                      child: const Text('Iniciar sesión'),
-                    ),
-                    const SizedBox(width: 6),
-                    FilledButton(
-                      onPressed: onRegistrarse,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 42),
-                        padding: const EdgeInsets.symmetric(horizontal: 18),
-                        shape: const StadiumBorder(),
+                    child: const Text('Iniciar sesión'),
+                  ),
+                  SizedBox(width: angosto ? 8 : 10),
+                  FilledButton(
+                    onPressed: onRegistrarse,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.rosa,
+                      elevation: 0,
+                      shape: const StadiumBorder(),
+                      minimumSize: Size(0, angosto ? 36 : 40),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: angosto ? 14 : 20,
                       ),
-                      child: const Text('Registrarse'),
+                      textStyle: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: angosto ? 13 : 14.5,
+                      ),
                     ),
-                  ],
+                    child: const Text('Registrarse'),
+                  ),
                 ],
               ),
             ),

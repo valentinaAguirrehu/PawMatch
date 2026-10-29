@@ -154,16 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                           letterSpacing: -0.3,
                                         ),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Ingresa tu correo y contraseña para continuar',
-                                        textAlign: TextAlign.center,
-                                        style: t.bodyMedium?.copyWith(
-                                          color: AppColors.texto.withValues(alpha: 0.58),
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 26),
+                                      const SizedBox(height: 22),
 
                                       // Campo Correo
                                       _CampoLogin(
@@ -189,74 +180,88 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                       const SizedBox(height: 10),
 
-                                      // Fila Recordar contraseña y Olvidaste tu contraseña
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          InkWell(
-                                            onTap: () {
-                                              setState(() => _recordarContrasena = !_recordarContrasena);
-                                            },
-                                            borderRadius: BorderRadius.circular(8),
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                                      // Misma línea: recordar a la izquierda y recuperar a la derecha.
+                                      // Si no caben, la fila se reduce un poco en lugar de partirse.
+                                      LayoutBuilder(
+                                        builder: (context, limites) {
+                                          return FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: ConstrainedBox(
+                                              constraints: BoxConstraints(minWidth: limites.maxWidth),
                                               child: Row(
                                                 mainAxisSize: MainAxisSize.min,
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                 children: [
-                                                  SizedBox(
-                                                    width: 20,
-                                                    height: 20,
-                                                    child: Checkbox(
-                                                      value: _recordarContrasena,
-                                                      activeColor: AppColors.rosa,
-                                                      checkColor: Colors.white,
-                                                      side: const BorderSide(
-                                                        color: Color(0xFFF2BED6),
-                                                        width: 1.8,
+                                                  InkWell(
+                                                    onTap: () {
+                                                      setState(() => _recordarContrasena = !_recordarContrasena);
+                                                    },
+                                                    borderRadius: BorderRadius.circular(8),
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          SizedBox(
+                                                            width: 20,
+                                                            height: 20,
+                                                            child: Checkbox(
+                                                              value: _recordarContrasena,
+                                                              activeColor: AppColors.rosa,
+                                                              checkColor: Colors.white,
+                                                              side: const BorderSide(
+                                                                color: Color(0xFFF2BED6),
+                                                                width: 1.8,
+                                                              ),
+                                                              shape: RoundedRectangleBorder(
+                                                                borderRadius: BorderRadius.circular(6),
+                                                              ),
+                                                              onChanged: (val) {
+                                                                setState(() => _recordarContrasena = val ?? false);
+                                                              },
+                                                            ),
+                                                          ),
+                                                          const SizedBox(width: 8),
+                                                          Text(
+                                                            'Recordar contraseña',
+                                                            style: TextStyle(
+                                                              color: AppColors.texto.withValues(alpha: 0.78),
+                                                              fontSize: 12.5,
+                                                              fontWeight: FontWeight.w600,
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius: BorderRadius.circular(6),
-                                                      ),
-                                                      onChanged: (val) {
-                                                        setState(() => _recordarContrasena = val ?? false);
-                                                      },
                                                     ),
                                                   ),
                                                   const SizedBox(width: 8),
-                                                  Text(
-                                                    'Recordar contraseña',
-                                                    style: TextStyle(
-                                                      color: AppColors.texto.withValues(alpha: 0.78),
-                                                      fontSize: 12.5,
-                                                      fontWeight: FontWeight.w600,
+                                                  TextButton(
+                                                    style: TextButton.styleFrom(
+                                                      foregroundColor: AppColors.rosa,
+                                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                                      minimumSize: Size.zero,
+                                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                    ),
+                                                    onPressed: () => Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (_) => const ForgotPasswordScreen(),
+                                                      ),
+                                                    ),
+                                                    child: const Text(
+                                                      '¿Olvidaste tu contraseña?',
+                                                      style: TextStyle(
+                                                        fontSize: 12.5,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                          ),
-                                          TextButton(
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: AppColors.rosa,
-                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                                              minimumSize: Size.zero,
-                                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                            ),
-                                            onPressed: () => Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => const ForgotPasswordScreen(),
-                                              ),
-                                            ),
-                                            child: const Text(
-                                              '¿Olvidaste tu contraseña?',
-                                              style: TextStyle(
-                                                fontSize: 12.5,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
+                                          );
+                                        },
                                       ),
                                       const SizedBox(height: 24),
 
@@ -335,9 +340,9 @@ class _HeaderOndulado extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alturaTotal = esMovil ? (215.0 + topPadding) : 230.0;
-    final alturaClip = esMovil ? (185.0 + topPadding) : 195.0;
-    final topLogo = esMovil ? (96.0 + topPadding) : 100.0;
+    final alturaTotal = esMovil ? (176.0 + topPadding) : 190.0;
+    final alturaClip = esMovil ? (146.0 + topPadding) : 155.0;
+    final topLogo = esMovil ? (56.0 + topPadding) : 60.0;
 
     return SizedBox(
       height: alturaTotal,

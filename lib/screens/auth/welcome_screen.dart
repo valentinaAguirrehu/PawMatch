@@ -228,12 +228,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     constraints: const BoxConstraints(
                       maxWidth: Layout.anchoMaximo,
                     ),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(pad, 16, pad, 90),
-                      child: Column(
+                    child: Column(
                         children: [
                           _hero(m),
-                          separacion,
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(pad, 16, pad, 90),
+                            child: Column(
+                              children: [
                           if (FundacionInfo.rescatistaNombre.isNotEmpty ||
                               FundacionInfo.rescatistaTexto.isNotEmpty ||
                               FundacionInfo.fotoRescatista.isNotEmpty) ...[
@@ -253,9 +254,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             textAlign: TextAlign.center,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ),
                   ),
                 ),
               ),
@@ -269,105 +272,142 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   // ───────────── 1. Presentación ─────────────
   Widget _hero(_Medidas m) {
-    final t = Theme.of(context).textTheme;
-    final esMovil = m.ancho < 700;
+    final enFila = m.ancho >= 800;
+    final lado = enFila
+        ? (m.escritorio ? 280.0 : 220.0)
+        : math.min(230.0, math.max(170.0, m.ancho * 0.52));
+    final pad = m.escritorio ? 36.0 : 22.0;
+    final compacto = !enFila;
 
-    final textos = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+    final detalle = _heroDetalle(compacto: compacto);
+    final retrato = _RetratoHero(lado: lado);
+    final cuerpo = enFila
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: detalle),
+              const SizedBox(width: 28),
+              retrato,
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              detalle,
+              const SizedBox(height: 18),
+              Center(child: retrato),
+            ],
+          );
+
+    return Column(
       children: [
-        TituloLanding(
-          texto: 'Conoce nuestra',
-          acento: FundacionInfo.nombre,
-          color: AppColors.texto,
-          colorAcento: AppColors.rosa,
-          tamano: esMovil ? 20.0 : m.tTitulo + 2,
+        Stack(
+          children: [
+            const Positioned.fill(
+              child: CustomPaint(painter: _FondoHeroPainter()),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(pad, 6, pad, 52),
+              child: _heroTitulo(compacto: compacto),
+            ),
+          ],
         ),
-        SizedBox(height: esMovil ? 10 : 16),
-        Text(
-          'Nos encontramos ubicados en ${FundacionInfo.ciudad}.\n\n'
-          '${FundacionInfo.historia}',
-          style: (esMovil ? t.bodyMedium : t.bodyLarge)?.copyWith(
-            height: esMovil ? 1.45 : 1.55,
-            fontSize: esMovil ? 13.5 : null,
-          ),
+        Padding(
+          padding: EdgeInsets.fromLTRB(pad, 6, pad, 8),
+          child: cuerpo,
         ),
       ],
     );
+  }
 
-    final double tamanoFoto = esMovil
-        ? math.min(150.0, math.max(105.0, m.ancho * 0.30))
-        : (m.escritorio ? 340.0 : 230.0);
+  /// Nombre de la fundación, centrado y sobre el degradado corto.
+  Widget _heroTitulo({required bool compacto}) {
+    final nombre = FundacionInfo.nombre.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final tamTitulo = compacto ? 34.0 : 46.0;
 
-    return BloqueLanding(
-      color: Colors.white,
-      padding: EdgeInsets.all(esMovil ? 16.0 : m.interior),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            flex: esMovil ? 6 : 6,
-            child: textos,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'CONOCE NUESTRA',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.92),
+            fontFamily: 'Nunito',
+            fontSize: compacto ? 12 : 14,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 2.8,
+            height: 1.1,
           ),
-          SizedBox(width: esMovil ? 14 : 32),
-          SizedBox(
-            width: tamanoFoto,
-            height: tamanoFoto,
-            child: _heroImagen(tamanoFoto),
+        ),
+        if (nombre.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            nombre.toUpperCase().split(' ').join('\n'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Nunito',
+              color: Colors.white,
+              fontSize: tamTitulo,
+              fontWeight: FontWeight.w800,
+              height: 1.05,
+              letterSpacing: 0.4,
+            ),
           ),
         ],
-      ),
+      ],
     );
   }
 
-  /// Imagen de presentación de la Fundación, sin fotos de mascotas de la base de datos.
-  Widget _heroImagen(double alto) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final disponible = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : alto;
-        final lado = math.min(alto, math.max(0.0, disponible));
-        return Center(
-          child: SizedBox(
-            height: lado,
-            width: lado,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Container(
-                  width: lado * 0.96,
-                  height: lado * 0.96,
-                  decoration: BoxDecoration(
-                    color: AppColors.rosa.withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+  /// Ciudad, descripción e imagen siguen saliendo de la base de datos.
+  Widget _heroDetalle({required bool compacto}) {
+    final ciudad = FundacionInfo.ciudad.trim();
+    final historia = FundacionInfo.historia.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (ciudad.isNotEmpty)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(
+                  Icons.location_on,
+                  color: AppColors.rosa,
+                  size: compacto ? 18 : 22,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'En ${ciudad.endsWith('.') ? ciudad.substring(0, ciudad.length - 1) : ciudad}.',
+                  style: TextStyle(
+                    color: AppColors.texto,
+                    fontWeight: FontWeight.w700,
+                    fontSize: compacto ? 14.5 : 16.5,
+                    height: 1.3,
                   ),
                 ),
-                Container(
-                  width: lado * 0.86,
-                  height: lado * 0.86,
-                  decoration: const BoxDecoration(
-                    color: AppColors.rosa,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                SizedBox(
-                  width: lado * 0.76,
-                  height: lado * 0.76,
-                  child: ClipOval(
-                    child: FundacionImagen(
-                      ruta: FundacionInfo.imagenPrincipal,
-                      fit: BoxFit.cover,
-                      icono: Icons.volunteer_activism,
-                      tamanoIcono: lado * 0.45,
-                    ),
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+        if (historia.isNotEmpty) ...[
+          if (ciudad.isNotEmpty) SizedBox(height: compacto ? 8 : 10),
+          Text(
+            historia,
+            style: TextStyle(
+              color: const Color(0xFF6E676A),
+              fontSize: compacto ? 14.5 : 16,
+              height: 1.45,
+              fontWeight: FontWeight.w500,
             ),
           ),
-        );
-      },
+        ],
+      ],
     );
   }
 
@@ -1025,6 +1065,229 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             children: [ubicacion, const SizedBox(height: 24), donar],
           );
   }
+}
+
+/// Degradado rosado con burbujas y onda blanca, como la pantalla de inicio.
+class _FondoHeroPainter extends CustomPainter {
+  const _FondoHeroPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final w = size.width;
+    final base = size.height;
+    final rosa = Path()
+      ..moveTo(0, 0)
+      ..lineTo(w, 0)
+      ..lineTo(w, base - 36)
+      ..cubicTo(w * 0.78, base - 8, w * 0.58, base - 58, w * 0.40, base - 34)
+      ..cubicTo(w * 0.22, base - 10, w * 0.10, base - 48, 0, base - 22)
+      ..close();
+    final borde = Path()
+      ..moveTo(w, base - 36)
+      ..cubicTo(w * 0.78, base - 8, w * 0.58, base - 58, w * 0.40, base - 34)
+      ..cubicTo(w * 0.22, base - 10, w * 0.10, base - 48, 0, base - 22);
+
+    canvas.drawRect(rect, Paint()..color = Colors.white);
+    canvas.save();
+    canvas.clipPath(rosa);
+    final shader = const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Color(0xFFFFA3C8),
+        Color(0xFFF98BB8),
+        Color(0xFFFDE4EF),
+      ],
+    ).createShader(rect);
+    canvas.drawRect(rect, Paint()..shader = shader);
+
+    void burbuja(double x, double y, double radio, double alpha) {
+      canvas.drawCircle(
+        Offset(x, y),
+        radio,
+        Paint()..color = Colors.white.withValues(alpha: alpha),
+      );
+    }
+
+    final escala = math.min(size.width, 420);
+    burbuja(size.width * 0.12, size.height * 0.18, escala * 0.14, 0.20);
+    burbuja(size.width * 0.92, size.height * 0.12, escala * 0.16, 0.16);
+    burbuja(size.width * 0.62, size.height * 0.08, escala * 0.07, 0.14);
+    canvas.restore();
+
+    canvas.drawPath(
+      borde,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 16
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+        ..color = Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Retrato circular de la imagen principal, con aro, corazón y hojas.
+class _RetratoHero extends StatelessWidget {
+  final double lado;
+  const _RetratoHero({required this.lado});
+
+  @override
+  Widget build(BuildContext context) {
+    final anillo = lado * 0.05;
+    final ancho = lado * 1.36;
+    final alto = lado * 1.26;
+    return SizedBox(
+      width: ancho,
+      height: alto,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            bottom: lado * 0.04,
+            child: CustomPaint(
+              size: Size(lado * 0.40, lado * 0.34),
+              painter: const _RamoHojas(haciaDerecha: false),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: CustomPaint(
+              size: Size(lado * 0.38, lado * 0.32),
+              painter: const _RamoHojas(haciaDerecha: true),
+            ),
+          ),
+          Positioned(
+            left: lado * 0.15,
+            top: lado * 0.07,
+            child: Container(
+              width: lado,
+              height: lado,
+              padding: EdgeInsets.all(anillo),
+              decoration: const BoxDecoration(
+                color: AppColors.rosa,
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: FundacionImagen(
+                  ruta: FundacionInfo.imagenPrincipal,
+                  fit: BoxFit.cover,
+                  icono: Icons.volunteer_activism,
+                  tamanoIcono: lado * 0.42,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: lado * 0.02,
+            top: 0,
+            child: CustomPaint(
+              size: Size(lado * 0.24, lado * 0.22),
+              painter: const _CorazonContorno(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CorazonContorno extends CustomPainter {
+  const _CorazonContorno();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final path = Path()
+      ..moveTo(w * 0.50, h * 0.90)
+      ..cubicTo(w * -0.02, h * 0.46, w * 0.18, h * 0.02, w * 0.50, h * 0.34)
+      ..cubicTo(w * 0.82, h * 0.02, w * 1.02, h * 0.46, w * 0.50, h * 0.90)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(2.4, w * 0.075)
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = AppColors.rosa,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _RamoHojas extends CustomPainter {
+  final bool haciaDerecha;
+  const _RamoHojas({required this.haciaDerecha});
+
+  void _hoja(
+    Canvas canvas,
+    double angulo,
+    double largo,
+    double grosor,
+    Color color,
+  ) {
+    canvas.save();
+    canvas.rotate(angulo);
+    final hoja = Path()
+      ..moveTo(0, 0)
+      ..quadraticBezierTo(grosor, -largo * 0.45, 0, -largo)
+      ..quadraticBezierTo(-grosor * 0.72, -largo * 0.38, 0, 0)
+      ..close();
+    canvas.drawPath(hoja, Paint()..color = color);
+    canvas.drawLine(
+      Offset(0, -largo * 0.12),
+      Offset(0, -largo * 0.78),
+      Paint()
+        ..color = const Color(0x66FFFFFF)
+        ..strokeWidth = 1.2
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.restore();
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.translate(
+      haciaDerecha ? size.width * 0.30 : size.width * 0.70,
+      size.height * 0.28,
+    );
+    final base = haciaDerecha ? 0.42 : math.pi - 0.42;
+    final dir = haciaDerecha ? 1.0 : -1.0;
+    _hoja(
+      canvas,
+      base - dir * 0.58,
+      size.height * 0.70,
+      size.width * 0.16,
+      const Color(0xFFF48FB1),
+    );
+    _hoja(
+      canvas,
+      base,
+      size.height * 0.92,
+      size.width * 0.18,
+      AppColors.rosa,
+    );
+    _hoja(
+      canvas,
+      base + dir * 0.52,
+      size.height * 0.58,
+      size.width * 0.13,
+      const Color(0xFFD81B60),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RamoHojas oldDelegate) =>
+      oldDelegate.haciaDerecha != haciaDerecha;
 }
 
 /// Columna de la sección de misión: título en mayúsculas y texto.
