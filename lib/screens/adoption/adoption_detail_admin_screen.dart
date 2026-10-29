@@ -622,7 +622,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               children: [
                 _Seccion(
-                  titulo: 'Mascota a adoptar',
+                  titulo: 'Mascota',
                   icono: Icons.pets,
                   child: Center(
                     child: Column(
@@ -681,11 +681,10 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                     children: [
                       _Dato('Nombre completo', s.applicantFullName),
                       _Dato('Correo electrónico', _vacio(s.applicantEmail)),
-                      _Dato('Confirmación de correo', s.emailStatusLabel),
                       _Dato('Teléfono de contacto', _vacio(s.applicantPhone)),
                       _Dato('Dirección', _vacio(s.applicantAddress)),
                       if (s.applicantIdNumber.trim().isNotEmpty)
-                        _Dato('Número de cédula (perfil)', s.applicantIdNumber),
+                        _Dato('Número de cédula', s.applicantIdNumber),
                     ],
                   ),
                 ),

@@ -3,7 +3,6 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
 import 'package:paw_match/screens/admin/adoption_follow_up_admin.dart';
 import 'package:paw_match/screens/admin/apadrinacion_follow_up_admin.dart';
-import 'package:paw_match/screens/admin/denuncias_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
@@ -23,7 +22,6 @@ import 'package:paw_match/widgets/nav_flotante.dart';
 
 /// Opciones del menú de hamburguesa del administrador (centro de la barra).
 enum _Gestion {
-  denuncias('Denuncias de maltrato', Icons.campaign_rounded),
   usuarios('Usuarios del programa', Icons.people_outline),
   administradores(
     'Administradores de la fundación',
@@ -219,13 +217,9 @@ class _MenuScreenState extends State<MenuScreen> {
 
   /// Pantalla que se abre desde el menú de hamburguesa del administrador.
   Widget _paginaGestion(_Gestion g) => switch (g) {
-    _Gestion.denuncias => const DenunciasAdminScreen(),
     _Gestion.usuarios => const UsersAdminScreen(),
     _Gestion.administradores => const AdminsAdminScreen(),
-    _Gestion.fundacion => const _PantallaAdmin(
-      titulo: 'Información de la fundación',
-      child: FundacionAdminScreen(),
-    ),
+    _Gestion.fundacion => const FundacionAdminScreen(),
     _Gestion.adopciones => const AdoptionFollowUpAdminScreen(),
     _Gestion.apadrinamientos => const ApadrinacionFollowUpAdminScreen(),
   };
@@ -459,22 +453,6 @@ class _PestanasVivasState extends State<_PestanasVivas> {
       index: widget.indice.value,
       sizing: StackFit.expand,
       children: widget.paginas,
-    );
-  }
-}
-
-/// Barra de regreso para las pantallas de administración que no traen la suya.
-class _PantallaAdmin extends StatelessWidget {
-  final String titulo;
-  final Widget child;
-
-  const _PantallaAdmin({required this.titulo, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(titulo)),
-      body: child,
     );
   }
 }

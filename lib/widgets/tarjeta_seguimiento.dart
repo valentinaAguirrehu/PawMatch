@@ -264,19 +264,25 @@ class TarjetaSeguimiento extends StatelessWidget {
           if (seguimiento.proximoSeguimiento != null) ...[
             const SizedBox(height: 8),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.alarm,
-                  size: 14,
-                  color: Colors.purple.shade400,
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Icon(
+                    Icons.alarm,
+                    size: 14,
+                    color: Colors.purple.shade400,
+                  ),
                 ),
                 const SizedBox(width: 5),
-                Text(
-                  'Próximo seguimiento programado: ${_formatearFecha(seguimiento.proximoSeguimiento!)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.purple.shade700,
+                Expanded(
+                  child: Text(
+                    'Próximo seguimiento programado: ${_formatearFecha(seguimiento.proximoSeguimiento!)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.purple.shade700,
+                    ),
                   ),
                 ),
               ],

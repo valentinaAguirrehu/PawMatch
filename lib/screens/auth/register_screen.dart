@@ -11,6 +11,9 @@ import 'login_screen.dart';
 /// Verde solo para el check de un campo válido. El resto usa [AppColors].
 const _verdeOk = Color(0xFF2F9B6A);
 
+/// Misma separación del borde derecho para el visto y el ojo de la contraseña.
+const _margenFilo = 12.0;
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -167,7 +170,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       Text(
-                                        'Crea tu cuenta',
+                                        '¡Únete a la familia!',
                                         textAlign: TextAlign.center,
                                         style: t.headlineSmall?.copyWith(
                                           color: AppColors.texto,
@@ -175,24 +178,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           letterSpacing: -0.3,
                                         ),
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Un hogar nuevo empieza con tu registro',
-                                        textAlign: TextAlign.center,
-                                        style: t.bodyMedium?.copyWith(
-                                          color: AppColors.texto.withValues(alpha: 0.58),
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 10),
-                                      Text(
-                                        'Cuéntanos un poco de ti para encontrar a tu peludito ideal.',
-                                        textAlign: TextAlign.center,
-                                        style: t.bodySmall?.copyWith(
-                                          color: AppColors.texto.withValues(alpha: 0.48),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 24),
+                                      const SizedBox(height: 22),
 
                                       // Nombres
                                       _CampoRegistro(
@@ -204,6 +190,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         capitalizacion: TextCapitalization.words,
                                         accion: TextInputAction.next,
                                         validator: _requerido,
+                                        mostrarVisto: false,
                                       ),
                                       const SizedBox(height: 16),
 
@@ -217,6 +204,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         capitalizacion: TextCapitalization.words,
                                         accion: TextInputAction.next,
                                         validator: _requerido,
+                                        mostrarVisto: false,
                                       ),
                                       const SizedBox(height: 16),
 
@@ -352,9 +340,9 @@ class _HeaderOndulado extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final alturaTotal = esMovil ? (215.0 + topPadding) : 230.0;
-    final alturaClip = esMovil ? (185.0 + topPadding) : 195.0;
-    final topLogo = esMovil ? (96.0 + topPadding) : 100.0;
+    final alturaTotal = esMovil ? (176.0 + topPadding) : 190.0;
+    final alturaClip = esMovil ? (146.0 + topPadding) : 155.0;
+    final topLogo = esMovil ? (56.0 + topPadding) : 60.0;
 
     return SizedBox(
       height: alturaTotal,
@@ -559,6 +547,7 @@ class _CampoRegistro extends StatefulWidget {
   final TextInputAction? accion;
   final String? Function(String?)? validator;
   final VoidCallback? onEnviar;
+  final bool mostrarVisto;
 
   const _CampoRegistro({
     required this.controller,
@@ -571,6 +560,7 @@ class _CampoRegistro extends StatefulWidget {
     this.accion,
     this.validator,
     this.onEnviar,
+    this.mostrarVisto = true,
   });
 
   @override
@@ -698,35 +688,41 @@ class _CampoRegistroState extends State<_CampoRegistro> {
     );
   }
 
-  Widget _sufijo() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          switchInCurve: Curves.easeOutBack,
-          child: _valido
-              ? const FeatureIcon.correcto(
-                  key: ValueKey('ok'),
-                  color: _verdeOk,
-                )
-              : const SizedBox(key: ValueKey('vacio'), width: 22, height: 22),
-        ),
-        if (widget.esContrasena)
-          IconButton(
-            tooltip: _oculto ? 'Mostrar contraseña' : 'Ocultar contraseña',
-            onPressed: () => setState(() => _oculto = !_oculto),
-            style: IconButton.styleFrom(
-              padding: const EdgeInsets.only(left: 4, right: 14),
-              minimumSize: const Size(24, 40),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  Widget? _sufijo() {
+    if (!widget.mostrarVisto && !widget.esContrasena) return null;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: _margenFilo),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (widget.mostrarVisto)
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeOutBack,
+              child: _valido
+                  ? const FeatureIcon.correcto(
+                      key: ValueKey('ok'),
+                      color: _verdeOk,
+                    )
+                  : const SizedBox(key: ValueKey('vacio'), width: 22, height: 22),
             ),
-            icon: _oculto
-                ? const FeatureIcon.ocultarContrasena(color: AppColors.rosa)
-                : const FeatureIcon.mostrarContrasena(color: AppColors.rosa),
-          ),
-      ],
+          if (widget.esContrasena)
+            IconButton(
+              tooltip: _oculto ? 'Mostrar contraseña' : 'Ocultar contraseña',
+              onPressed: () => setState(() => _oculto = !_oculto),
+              style: IconButton.styleFrom(
+                padding: const EdgeInsets.only(left: 4),
+                minimumSize: const Size(24, 40),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: _oculto
+                  ? const FeatureIcon.ocultarContrasena(color: AppColors.rosa)
+                  : const FeatureIcon.mostrarContrasena(color: AppColors.rosa),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -805,10 +801,7 @@ class _FechaNacimiento extends StatelessWidget {
                 ),
               ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
-                ),
+                padding: const EdgeInsets.fromLTRB(14, 14, _margenFilo, 14),
                 child: Row(
                   children: [
                     const Padding(
@@ -847,7 +840,6 @@ class _FechaNacimiento extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       const FeatureIcon.correcto(color: _verdeOk),
-                      const SizedBox(width: 4),
                     ],
                   ],
                 ),

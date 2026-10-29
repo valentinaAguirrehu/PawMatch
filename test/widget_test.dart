@@ -54,7 +54,8 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
     await tester.pump();
 
-    expect(find.text('Ingresa tu correo y contraseña'), findsOneWidget);
+    expect(find.text('Iniciar sesión'), findsWidgets);
+    expect(find.text('Ingresa tu correo y contraseña para continuar'), findsNothing);
     expect(find.text('Recordar contraseña'), findsOneWidget);
     expect(find.text('¿Olvidaste tu contraseña?'), findsOneWidget);
     expect(tester.takeException(), isNull);

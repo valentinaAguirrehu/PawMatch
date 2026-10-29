@@ -678,12 +678,26 @@ class _ApadrinacionFollowUpAdminScreenState
             child: TabBar(
               controller: _tabController,
               indicatorColor: AppColors.rosa,
+              indicatorSize: TabBarIndicatorSize.tab,
               labelColor: AppColors.rosa,
               unselectedLabelColor: Colors.grey.shade600,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 4),
               tabs: const [
-                Tab(icon: Icon(Icons.list_alt_rounded), text: 'Apadrinamientos Activos'),
-                Tab(icon: Icon(Icons.calendar_month_rounded), text: 'Próximos Seguimientos'),
+                Tab(
+                  height: 88,
+                  child: _EtiquetaPestana(
+                    icono: Icons.list_alt_rounded,
+                    texto: 'Apadrinamientos\nactivos',
+                  ),
+                ),
+                Tab(
+                  height: 88,
+                  child: _EtiquetaPestana(
+                    icono: Icons.calendar_month_rounded,
+                    texto: 'Próximos\nseguimientos',
+                  ),
+                ),
               ],
             ),
           ),
@@ -828,6 +842,30 @@ class _ApadrinacionFollowUpAdminScreenState
           onRecargar: _recargar,
         );
       },
+    );
+  }
+}
+
+/// Icono y título de pestaña, con una palabra en cada línea.
+class _EtiquetaPestana extends StatelessWidget {
+  final IconData icono;
+  final String texto;
+
+  const _EtiquetaPestana({required this.icono, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icono),
+        const SizedBox(height: 6),
+        Text(
+          texto,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+        ),
+      ],
     );
   }
 }

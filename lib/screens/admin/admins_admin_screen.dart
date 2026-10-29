@@ -11,6 +11,8 @@ import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart' show urlFoto;
 
+bool _esRolSuperAdmin(String rol) => rol.trim().toLowerCase() == 'superadmin';
+
 class AdminsAdminScreen extends StatefulWidget {
   const AdminsAdminScreen({super.key});
 
@@ -29,7 +31,9 @@ class _AdminsAdminScreenState extends State<AdminsAdminScreen> {
 
   Future<void> _recargar() async {
     final future = ApiService.listarUsuariosAdmin(rol: 'administrador');
-    setState(() => _future = future);
+    setState(() {
+      _future = future;
+    });
     await future;
   }
 
@@ -217,14 +221,21 @@ class _AdminsAdminScreenState extends State<AdminsAdminScreen> {
                   }
 
                   final consulta = _busqueda.trim().toLowerCase();
+                  final yo = Session.idUsuario?.trim() ?? '';
                   final administradores = snap.data!
+                      .where((admin) => yo.isEmpty || admin.id.trim() != yo)
                       .where(
                         (admin) =>
                             admin.nombreCompleto.toLowerCase().contains(consulta) ||
                             admin.correo.toLowerCase().contains(consulta) ||
                             admin.telefono.toLowerCase().contains(consulta),
                       )
-                      .toList();
+                      .toList()
+                    ..sort((a, b) {
+                      final prioridadA = _esRolSuperAdmin(a.rol) ? 0 : 1;
+                      final prioridadB = _esRolSuperAdmin(b.rol) ? 0 : 1;
+                      return prioridadA.compareTo(prioridadB);
+                    });
 
                   return Column(
                     children: [
@@ -250,6 +261,8 @@ class _AdminsAdminScreenState extends State<AdminsAdminScreen> {
                                       child: Text(
                                         snap.data!.isEmpty
                                             ? 'Aún no hay administradores'
+                                            : consulta.isEmpty
+                                            ? 'No hay otros administradores'
                                             : 'No hay administradores que coincidan con la búsqueda',
                                       ),
                                     ),
@@ -263,7 +276,9 @@ class _AdminsAdminScreenState extends State<AdminsAdminScreen> {
                                   itemBuilder: (context, index) {
                                     return _TarjetaAdministrador(
                                       admin: administradores[index],
-                                      puedeGestionar: _esSuperAdmin,
+                                      puedeGestionar:
+                                          _esSuperAdmin &&
+                                          !_esRolSuperAdmin(administradores[index].rol),
                                       ocupado: _gestionando.contains(
                                         administradores[index].id,
                                       ),
@@ -339,6 +354,17 @@ class _TarjetaAdministrador extends StatelessWidget {
                           color: AppColors.texto,
                         ),
                       ),
+                      if (_esRolSuperAdmin(admin.rol)) ...[
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Super Administrador',
+                          style: TextStyle(
+                            color: AppColors.rosa,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 2),
                       Text(
                         'Celular: $celular',
