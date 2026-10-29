@@ -151,11 +151,21 @@ function generarRadicado() {
   return `DEN-${anio}-${codigo}`;
 }
 
-// Obtiene ÚNICAMENTE el correo administrativo configurado en .env (sin agregar destinatarios innecesarios)
-function obtenerCorreosAdministradores() {
-  const correoAdmin = (process.env.ADMIN_EMAIL || process.env.GMAIL_USER || '').trim();
-  if (correoAdmin && correoAdmin.includes('@')) {
-    return [correoAdmin];
+// Obtiene ÚNICAMENTE el correo del superadministrador registrado en la base de datos (rol = 'superadmin')
+async function obtenerCorreosSuperAdmin() {
+  try {
+    const res = await pool.query(
+      "SELECT correo FROM Usuario WHERE rol::text = 'superadmin' AND (estado_cuenta IS NULL OR estado_cuenta = 'activo') ORDER BY fecha_registro ASC"
+    );
+    const correos = res.rows
+      .map((r) => (r.correo || '').trim())
+      .filter((c) => c && c.includes('@'));
+    if (correos.length > 0) {
+      return correos;
+    }
+    console.warn('[DENUNCIAS] No se encontraron cuentas activas con rol superadmin en la base de datos');
+  } catch (error) {
+    console.error('[DENUNCIAS] Error consultando correo del superadministrador:', error.message);
   }
   return [];
 }
@@ -352,12 +362,12 @@ router.post('/', (req, res, next) => {
     // Despacho asíncrono y seguro de correo electrónico al administrador
     (async () => {
       try {
-        const correosAdmin = await obtenerCorreosAdministradores();
+        const correosSuperAdmin = await obtenerCorreosSuperAdmin();
         const backendHost = process.env.APP_URL || process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
         const urlPanel = `${backendHost}/#denuncia-${nuevaDenuncia.radicado}`;
 
         const resultadoEnvio = await enviarCorreoNuevaDenunciaAdmin({
-          destinatarios: correosAdmin,
+          destinatarios: correosSuperAdmin,
           denuncia: {
             radicado: nuevaDenuncia.radicado,
             tipo_reporte,

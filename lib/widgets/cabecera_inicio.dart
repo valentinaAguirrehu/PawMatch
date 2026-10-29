@@ -12,13 +12,6 @@ class CabeceraInicio extends StatelessWidget {
     required this.onCerrarSesion,
   });
 
-  String get _saludo {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Buenos días';
-    if (h < 19) return 'Buenas tardes';
-    return 'Buenas noches';
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -58,7 +51,7 @@ class CabeceraInicio extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$_saludo 👋',
+                    'Hola, bienvenido',
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey.shade700,

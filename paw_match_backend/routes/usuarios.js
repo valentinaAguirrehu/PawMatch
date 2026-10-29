@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const { enviarCorreoRecuperacionContrasena } = require('../utils/correo');
 
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'usuarios');
 fs.mkdirSync(uploadDirectory, { recursive: true });
@@ -109,6 +110,183 @@ router.post('/login', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Error al iniciar sesión' });
+  }
+});
+
+// POST /api/usuarios/olvide-contrasena
+router.post('/olvide-contrasena', async (req, res) => {
+  const { correo } = req.body;
+  if (!correo || !correo.trim() || !correo.includes('@')) {
+    return res.status(400).json({ error: 'Ingresa un correo electrónico válido.' });
+  }
+
+  const correoLimpio = correo.trim().toLowerCase();
+
+  try {
+    const resultado = await pool.query(
+      'SELECT id_usuario, nombres, apellidos, correo, estado_cuenta FROM usuario WHERE LOWER(TRIM(correo)) = $1',
+      [correoLimpio]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({
+        error: 'El correo electrónico no se encuentra registrado en el sistema.',
+      });
+    }
+
+    const usuario = resultado.rows[0];
+
+    if (usuario.estado_cuenta && usuario.estado_cuenta !== 'activo') {
+      return res.status(403).json({
+        error: 'Tu cuenta se encuentra inactiva. Comunícate con la fundación.',
+      });
+    }
+
+    // Generar código numérico de 4 dígitos (1000 - 9999)
+    const codigo = Math.floor(1000 + Math.random() * 9000).toString();
+
+    // Guardar código y expiración (15 minutos) en la BD
+    await pool.query(
+      `UPDATE usuario
+       SET token_recuperacion = $1,
+           token_recuperacion_expira = NOW() + INTERVAL '15 minutes'
+       WHERE id_usuario = $2`,
+      [codigo, usuario.id_usuario]
+    );
+
+    // Enviar código por correo Gmail
+    const envio = await enviarCorreoRecuperacionContrasena({
+      destinatario: usuario.correo,
+      nombreUsuario: usuario.nombres,
+      codigo,
+    });
+
+    if (!envio.enviado && !envio.simulado) {
+      console.error('Error al enviar correo de recuperación:', envio.error);
+      return res.status(500).json({
+        error: 'No se pudo enviar el correo de verificación. Intenta nuevamente.',
+      });
+    }
+
+    res.json({
+      mensaje: 'Te enviamos un código de verificación de 4 dígitos a tu correo.',
+    });
+  } catch (error) {
+    console.error('Error en /olvide-contrasena:', error);
+    res.status(500).json({ error: 'Error interno al procesar la solicitud.' });
+  }
+});
+
+// POST /api/usuarios/verificar-codigo-recuperacion
+router.post('/verificar-codigo-recuperacion', async (req, res) => {
+  const { correo, codigo } = req.body;
+  if (!correo || !codigo) {
+    return res.status(400).json({ error: 'Correo y código son obligatorios.' });
+  }
+
+  const correoLimpio = correo.trim().toLowerCase();
+  const codigoLimpio = codigo.trim();
+
+  if (codigoLimpio.length !== 4) {
+    return res.status(400).json({ error: 'El código debe tener 4 dígitos.' });
+  }
+
+  try {
+    const resultado = await pool.query(
+      `SELECT id_usuario, token_recuperacion, token_recuperacion_expira
+       FROM usuario
+       WHERE LOWER(TRIM(correo)) = $1`,
+      [correoLimpio]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    const usuario = resultado.rows[0];
+
+    if (!usuario.token_recuperacion) {
+      return res.status(400).json({
+        error: 'No hay ninguna solicitud de recuperación activa para este correo.',
+      });
+    }
+
+    if (usuario.token_recuperacion !== codigoLimpio) {
+      return res.status(400).json({ error: 'El código ingresado es incorrecto.' });
+    }
+
+    if (new Date() > new Date(usuario.token_recuperacion_expira)) {
+      return res.status(400).json({
+        error: 'El código ha expirado. Por favor solicita uno nuevo.',
+      });
+    }
+
+    res.json({
+      valido: true,
+      mensaje: 'Código verificado con éxito.',
+    });
+  } catch (error) {
+    console.error('Error en /verificar-codigo-recuperacion:', error);
+    res.status(500).json({ error: 'Error al verificar el código.' });
+  }
+});
+
+// POST /api/usuarios/restablecer-contrasena
+router.post('/restablecer-contrasena', async (req, res) => {
+  const { correo, codigo, contrasena } = req.body;
+
+  if (!correo || !codigo || !contrasena) {
+    return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+  }
+
+  if (contrasena.length < 6) {
+    return res.status(400).json({
+      error: 'La nueva contraseña debe tener al menos 6 caracteres.',
+    });
+  }
+
+  const correoLimpio = correo.trim().toLowerCase();
+  const codigoLimpio = codigo.trim();
+
+  try {
+    const resultado = await pool.query(
+      `SELECT id_usuario, token_recuperacion, token_recuperacion_expira
+       FROM usuario
+       WHERE LOWER(TRIM(correo)) = $1`,
+      [correoLimpio]
+    );
+
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    const usuario = resultado.rows[0];
+
+    if (!usuario.token_recuperacion || usuario.token_recuperacion !== codigoLimpio) {
+      return res.status(400).json({ error: 'El código es inválido o ya fue utilizado.' });
+    }
+
+    if (new Date() > new Date(usuario.token_recuperacion_expira)) {
+      return res.status(400).json({
+        error: 'El código ha expirado. Solicita un nuevo código.',
+      });
+    }
+
+    const contrasena_hash = await bcrypt.hash(contrasena, 10);
+
+    await pool.query(
+      `UPDATE usuario
+       SET contrasena_hash = $1,
+           token_recuperacion = NULL,
+           token_recuperacion_expira = NULL
+       WHERE id_usuario = $2`,
+      [contrasena_hash, usuario.id_usuario]
+    );
+
+    res.json({ mensaje: 'Tu contraseña ha sido restablecida con éxito.' });
+  } catch (error) {
+    console.error('Error en /restablecer-contrasena:', error);
+    res.status(500).json({ error: 'Error al restablecer la contraseña.' });
   }
 });
 

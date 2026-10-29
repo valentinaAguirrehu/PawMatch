@@ -118,7 +118,7 @@ router.post('/', requireAdmin, async (req, res) => {
         contenido.trim(),
         imagen || null,
         fecha || null,
-        lugar ? lugar.trim() : 'Fundación Maritza Arévalo, Cali',
+        lugar ? lugar.trim() : 'Fundación Maritza Arévalo',
         req.adminId,
       ],
     );

@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/noticia.dart';
@@ -67,104 +66,50 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
     }
   }
 
-  void _compartir(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.rosaSuave,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.share_rounded, color: AppColors.rosa),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Compartir Noticia',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _noticia.titulo,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFE8F5E9),
-                  child: Icon(Icons.chat_bubble_rounded, color: Color(0xFF25D366)),
-                ),
-                title: const Text('Compartir por WhatsApp', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Enviar a un contacto o grupo'),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final texto =
-                      '🐾 *${_noticia.titulo}*\n📍 *Lugar:* ${_noticia.lugar}\n📅 *Fecha:* ${_noticia.fechaFormateada}\n\n${_noticia.contenido}\n\nConoce más noticias en la app Paw Match - ${FundacionInfo.nombre}.';
-                  final url = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(texto)}');
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  }
-                },
-              ),
-              const SizedBox(height: 10),
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(color: Colors.grey.shade200),
-                ),
-                leading: const CircleAvatar(
-                  backgroundColor: AppColors.rosaSuave,
-                  child: Icon(Icons.copy_rounded, color: AppColors.rosa),
-                ),
-                title: const Text('Copiar noticia', style: TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Copiar texto y detalles al portapapeles'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Clipboard.setData(
-                    ClipboardData(
-                      text:
-                          '${_noticia.titulo}\nLugar: ${_noticia.lugar}\nFecha: ${_noticia.fechaFormateada}\n\n${_noticia.contenido}',
-                    ),
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Noticia copiada al portapapeles'),
-                      backgroundColor: AppColors.rosa,
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  String get _lugarLimpio {
+    final l = _noticia.lugar.replaceAll(RegExp(r',?\s*Cali', caseSensitive: false), '').trim();
+    return l.isEmpty ? 'Fundación Maritza Arévalo' : l;
+  }
+
+  Future<void> _compartirPorWhatsApp() async {
+    final buffer = StringBuffer();
+    buffer.writeln('🐾 *${_noticia.titulo}*');
+    buffer.writeln('📅 *Fecha:* ${_noticia.fechaFormateada}');
+    if (_lugarLimpio.isNotEmpty) {
+      buffer.writeln('📍 *Lugar:* $_lugarLimpio');
+    }
+    buffer.writeln();
+    buffer.writeln(_noticia.contenido);
+    buffer.writeln();
+    if (_noticia.imagen != null && _noticia.imagen!.isNotEmpty) {
+      final foto = urlFoto(_noticia.imagen!);
+      buffer.writeln('📸 *Foto de la noticia:* $foto');
+      buffer.writeln();
+    }
+    buffer.writeln('👉 *Para ver bien la noticia y más detalles, ingresa a nuestra plataforma y regístrate:*');
+    buffer.writeln('🐾 *${FundacionInfo.nombre}*');
+
+    final texto = buffer.toString().trim();
+    final uriApp = Uri.parse('whatsapp://send?text=${Uri.encodeComponent(texto)}');
+    final uriWeb = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(texto)}');
+
+    try {
+      if (await canLaunchUrl(uriApp)) {
+        await launchUrl(uriApp, mode: LaunchMode.externalApplication);
+        return;
+      }
+      if (await canLaunchUrl(uriWeb)) {
+        await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
+        return;
+      }
+      await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+        );
+      }
+    }
   }
 
   Future<void> _editar() async {
@@ -286,18 +231,7 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
                             onTap: () => Navigator.pop(context),
                           ),
                           const Spacer(),
-                          _botonFrosted(
-                            icon: Icons.share_rounded,
-                            onTap: () => _compartir(context),
-                          ),
-                          const SizedBox(width: 10),
-                          _botonFrosted(
-                            icon: _noticia.dioLike ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                            colorIcono: _noticia.dioLike ? AppColors.rosa : Colors.white,
-                            onTap: _toggleLike,
-                          ),
                           if (widget.esAdmin) ...[
-                            const SizedBox(width: 10),
                             PopupMenuButton<String>(
                               icon: Container(
                                 width: 42,
@@ -392,7 +326,7 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
                                         const SizedBox(width: 5),
                                         Expanded(
                                           child: Text(
-                                            _noticia.lugar,
+                                            _lugarLimpio,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
@@ -497,7 +431,7 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
                         const SizedBox(width: 10),
                         _chipInfo(
                           icono: Icons.place_rounded,
-                          texto: _noticia.lugar,
+                          texto: _lugarLimpio,
                         ),
                         const SizedBox(width: 10),
                         _chipInfo(
@@ -544,7 +478,7 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
                             size: 20,
                           ),
                           label: Text(
-                            _noticia.dioLike ? 'Te gusta (${_noticia.totalLikes})' : 'Me gusta (${_noticia.totalLikes})',
+                            _noticia.dioLike ? 'Te gusta' : 'Me gusta',
                             style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                           ),
                         ),
@@ -560,10 +494,10 @@ class _NoticiaDetalleScreenState extends State<NoticiaDetalleScreen> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 0,
                           ),
-                          onPressed: () => _compartir(context),
+                          onPressed: _compartirPorWhatsApp,
                           icon: const Icon(Icons.share_rounded, size: 20),
                           label: const Text(
-                            'Compartir',
+                            'Compartir por WhatsApp',
                             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                           ),
                         ),
