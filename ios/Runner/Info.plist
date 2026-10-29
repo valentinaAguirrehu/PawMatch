@@ -49,6 +49,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Paw Match usa la cámara para tomar tu foto de perfil.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Paw Match accede a tus fotos para que elijas tu foto de perfil.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

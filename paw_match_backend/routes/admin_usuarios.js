@@ -83,11 +83,16 @@ router.get('/', async (req, res) => {
     return res.status(400).json({ error: 'Rol no válido' });
   }
 
-  const params = [rol];
+  const params = [];
+  // El panel de administradores también muestra al superadministrador.
+  const condicionRol =
+    rol === 'administrador'
+      ? `u.rol IN ('administrador', 'superadmin')`
+      : `u.rol = $${params.push(rol)}`;
   let filtro = '';
   if (req.query.q) {
-    params.push(`%${req.query.q}%`);
-    filtro = `AND (u.nombres ILIKE $2 OR u.apellidos ILIKE $2 OR u.correo ILIKE $2)`;
+    const indice = params.push(`%${req.query.q}%`);
+    filtro = `AND (u.nombres ILIKE $${indice} OR u.apellidos ILIKE $${indice} OR u.correo ILIKE $${indice})`;
   }
 
   const columnas = COLUMNAS.split(',')
@@ -110,7 +115,7 @@ router.get('/', async (req, res) => {
          LIMIT 1
        ) v ON TRUE
        LEFT JOIN Usuario admin ON admin.id_usuario = v.id_administrador
-       WHERE u.rol = $1 ${filtro}
+       WHERE ${condicionRol} ${filtro}
        ORDER BY u.fecha_registro DESC`,
       params
     );

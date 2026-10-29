@@ -46,6 +46,9 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   intl: ^0.20.3
+  camera: ^0.12.2
+  image_picker_platform_interface: ^2.11.2
+  camera_windows: ^0.3.0+1
 
 dependency_overrides:
   image: 4.10.0

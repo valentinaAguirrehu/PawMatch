@@ -3,7 +3,6 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/admin/admins_admin_screen.dart';
 import 'package:paw_match/screens/admin/adoption_follow_up_admin.dart';
 import 'package:paw_match/screens/admin/apadrinacion_follow_up_admin.dart';
-import 'package:paw_match/screens/admin/denuncias_admin_screen.dart';
 import 'package:paw_match/screens/admin/fundacion_admin_screen.dart';
 import 'package:paw_match/screens/admin/users_admin_screen.dart';
 import 'package:paw_match/screens/home/home_tab.dart';
@@ -23,7 +22,6 @@ import 'package:paw_match/widgets/nav_flotante.dart';
 
 /// Opciones del menú de hamburguesa del administrador (centro de la barra).
 enum _Gestion {
-  denuncias('Denuncias de maltrato', Icons.campaign_rounded),
   usuarios('Usuarios del programa', Icons.people_outline),
   administradores(
     'Administradores de la fundación',
@@ -219,7 +217,6 @@ class _MenuScreenState extends State<MenuScreen> {
 
   /// Pantalla que se abre desde el menú de hamburguesa del administrador.
   Widget _paginaGestion(_Gestion g) => switch (g) {
-    _Gestion.denuncias => const DenunciasAdminScreen(),
     _Gestion.usuarios => const UsersAdminScreen(),
     _Gestion.administradores => const AdminsAdminScreen(),
     _Gestion.fundacion => const _PantallaAdmin(

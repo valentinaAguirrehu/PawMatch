@@ -190,14 +190,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (elegida != null && mounted) setState(() => _nacimiento = elegida);
   }
 
-  Future<void> _elegirFoto() async {
+  void _mostrarOpcionesFoto() {
+    if (_usuario == null || _guardandoFoto || !mounted) return;
+    final esAdmin = Session.isAdmin;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: AppColors.blanco,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 8, 12, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: esAdmin
+                      ? Text(
+                          'Elegir mi foto de perfil',
+                          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                        )
+                      : const Text(
+                          'Por favor, carga una foto donde se vea claramente tu rostro. '
+                          'Esta fotografía es requerida para los fines pertinentes que se '
+                          'llevan a cabo en los procesos de adopción y apadrinación de la '
+                          'fundación. Esta foto solo la verás tú y los administradores de '
+                          'la Fundación Maritza Arévalo.',
+                          style: TextStyle(height: 1.45, fontSize: 14.5),
+                        ),
+                ),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _elegirFoto(ImageSource.camera);
+                    },
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Tomar foto'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.rosa,
+                      foregroundColor: AppColors.blanco,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _elegirFoto(ImageSource.gallery);
+                    },
+                    icon: const Icon(Icons.photo_outlined),
+                    label: const Text('Elegir foto'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.rosa,
+                      side: const BorderSide(color: AppColors.rosa),
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _elegirFoto(ImageSource origen) async {
     final usuario = _usuario;
     if (usuario == null || _guardandoFoto) return;
     try {
       final archivo = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: origen,
         maxWidth: 1200,
         imageQuality: 85,
+        preferredCameraDevice: CameraDevice.front,
       );
       if (archivo == null) return;
       final bytes = await archivo.readAsBytes();
@@ -236,7 +328,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _guardandoFoto = false);
-      _aviso(e.toString().replaceFirst('Exception: ', ''));
+      final crudo = e.toString();
+      final sinCamara = origen == ImageSource.camera &&
+          (e is UnimplementedError ||
+              crudo.contains('camera') ||
+              crudo.contains('Camera') ||
+              crudo.contains('not supported'));
+      _aviso(
+        sinCamara
+            ? 'No se pudo abrir la cámara. Revisa el permiso o elige la foto desde la galería.'
+            : crudo.replaceFirst('Exception: ', ''),
+      );
     }
   }
 
@@ -375,7 +477,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             cargando: _cargando || _guardandoFoto,
             calificacionPadrino: _calificacionPadrino,
             totalSeguimientosPadrino: _totalSeguimientosPadrino,
-            onFoto: _elegirFoto,
+            onFoto: _mostrarOpcionesFoto,
           ),
           if (!Session.isAdmin && !_editando) ...[
             const SizedBox(height: 18),
@@ -780,50 +882,94 @@ class _EncabezadoPerfil extends StatelessWidget {
 
     return Column(
       children: [
-        GestureDetector(
-          onTap: () => _abrirFoto(context),
-          child: Container(
-            width: 128,
-            height: 128,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.rosaSuave,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.rosa.withValues(alpha: 0.55),
-                  blurRadius: 22,
-                  spreadRadius: 2,
-                  offset: const Offset(0, 8),
+        SizedBox(
+          width: 128,
+          height: 128,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (pendiente) {
+                    onFoto();
+                  } else {
+                    _abrirFoto(context);
+                  }
+                },
+                child: Container(
+                  width: 128,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.rosaSuave,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.rosa.withValues(alpha: 0.55),
+                        blurRadius: 22,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _construirFoto(),
+                        if (cargando)
+                          const ColoredBox(
+                            color: Color(0x66FFFFFF),
+                            child: Center(
+                              child: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.6,
+                                  color: AppColors.rosa,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.22),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: ClipOval(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _construirFoto(),
-                  if (cargando)
-                    const ColoredBox(
-                      color: Color(0x66FFFFFF),
-                      child: Center(
-                        child: SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.6,
-                            color: AppColors.rosa,
+              ),
+              if (pendiente)
+                Positioned(
+                  right: 8,
+                  bottom: 0,
+                  child: Tooltip(
+                    message: 'Agregar foto de perfil',
+                    child: Material(
+                      color: AppColors.rosa,
+                      elevation: 4,
+                      shadowColor: AppColors.rosa.withValues(alpha: 0.45),
+                      shape: const CircleBorder(
+                        side: BorderSide(color: AppColors.blanco, width: 3),
+                      ),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: cargando ? null : onFoto,
+                        child: const SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: AppColors.blanco,
+                            size: 22,
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
-            ),
+                  ),
+                ),
+            ],
           ),
         ),
         const SizedBox(height: 14),
