@@ -5,6 +5,7 @@ import 'package:paw_match/screens/match/user_personality.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
+import 'package:paw_match/widgets/selector_genero.dart';
 
 import 'login_screen.dart';
 
@@ -30,7 +31,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _contrasenaCtrl = TextEditingController();
 
   DateTime? _nacimiento;
+  String? _genero;
   bool _fechaTocada = false;
+  bool _generoTocado = false;
   bool _intentoEnviar = false;
   bool _cargando = false;
 
@@ -80,10 +83,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
+  String? get _errorGenero {
+    if (_genero == 'Hombre' || _genero == 'Mujer') return null;
+    if (_generoTocado || _intentoEnviar) return 'Selecciona Hombre o Mujer';
+    return null;
+  }
+
   Future<void> _registrar() async {
     final formularioOk = _formKey.currentState!.validate();
     setState(() => _intentoEnviar = true);
-    if (!formularioOk || _nacimiento == null) return;
+    if (!formularioOk || _nacimiento == null || _errorGenero != null) return;
 
     setState(() => _cargando = true);
 
@@ -95,6 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         telefono: _telefonoCtrl.text.trim(),
         contrasena: _contrasenaCtrl.text,
         fechaNacimiento: _nacimiento!,
+        genero: _genero!,
       );
 
       if (!mounted) return;
@@ -236,6 +246,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                           if (digitos.length < 10) return 'Mínimo 10 dígitos';
                                           return null;
                                         },
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      SelectorGenero(
+                                        valor: _genero,
+                                        error: _errorGenero,
+                                        onChanged: _cargando
+                                            ? null
+                                            : (opcion) => setState(() {
+                                                  _generoTocado = true;
+                                                  _genero = opcion;
+                                                }),
                                       ),
                                       const SizedBox(height: 16),
 

@@ -6,7 +6,9 @@ import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/user.dart';
 import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/api_service.dart';
@@ -15,6 +17,7 @@ import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/pet_card.dart';
+import 'package:paw_match/widgets/selector_genero.dart';
 import 'package:paw_match/widgets/star_rating_selector.dart';
 
 const _pendiente = 'Sin completar';
@@ -51,6 +54,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   User? _usuario;
   DateTime? _nacimiento;
+  String _genero = '';
   Uint8List? _fotoNueva;
   String _fotoNombre = 'perfil.jpg';
   bool _editando = false;
@@ -59,6 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _ocultarConfirmar = true;
   bool _guardandoClave = false;
   bool _guardandoFoto = false;
+  bool _eliminando = false;
   bool _cargando = true;
   String? _error;
   double? _calificacionPadrino;
@@ -142,6 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Session.correo = usuario.correo;
     Session.telefono = usuario.telefono;
     Session.documentoIdentidad = usuario.documentoIdentidad;
+    Session.fijarGenero(usuario.genero);
   }
 
   void _llenar(User usuario) {
@@ -152,6 +158,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _documentoCtrl.text = usuario.documentoIdentidad;
     _direccionCtrl.text = usuario.direccion;
     _nacimiento = usuario.fechaNacimiento;
+    _genero = usuario.genero;
   }
 
   void _aviso(String texto, {bool exito = false}) {
@@ -316,6 +323,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           documentoIdentidad: usuario.documentoIdentidad,
           fechaNacimiento: usuario.fechaNacimiento,
           fotoPerfil: ruta,
+          genero: usuario.genero,
         ),
       );
       if (!mounted) return;
@@ -369,6 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           documentoIdentidad: _documentoCtrl.text.trim(),
           fechaNacimiento: _nacimiento,
           fotoPerfil: foto,
+          genero: _genero,
         ),
       );
       if (!mounted) return;
@@ -420,6 +429,91 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _fecha(DateTime fecha) =>
       '${fecha.day} ${_meses[fecha.month - 1]} ${fecha.year}';
+
+  Future<void> _alertaNoPuedeEliminar(String motivo) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('No se puede eliminar la cuenta'),
+        content: Text(motivo),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.rosa,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _eliminarCuenta() async {
+    final usuario = _usuario;
+    if (usuario == null || _eliminando || Session.isAdmin) return;
+
+    setState(() => _eliminando = true);
+    try {
+      final revision = await ApiService.consultarEliminacionCuenta(usuario.id);
+      if (!mounted) return;
+      if (!revision.puede) {
+        setState(() => _eliminando = false);
+        await _alertaNoPuedeEliminar(
+          revision.motivo.isEmpty
+              ? 'No puedes eliminar tu cuenta porque tienes una adopción o un apadrinamiento asociado.'
+              : revision.motivo,
+        );
+        return;
+      }
+
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Eliminar cuenta'),
+          content: const Text(
+            'Se borrará tu perfil y no podrás volver a entrar con este correo. '
+            'Esta acción no se puede deshacer.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sí, eliminar cuenta'),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true || !mounted) {
+        if (mounted) setState(() => _eliminando = false);
+        return;
+      }
+
+      await ApiService.eliminarCuenta(usuario.id);
+      if (!mounted) return;
+      ApadrinamientoService.detenerMonitoreo();
+      AdoptionService.detenerMonitoreo();
+      Session.cerrar();
+      Navegacion.ir(context, const WelcomeScreen());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _eliminando = false);
+      final mensaje = e.toString().replaceFirst('Exception: ', '');
+      if (mensaje.contains('No puedes eliminar')) {
+        await _alertaNoPuedeEliminar(mensaje);
+      } else {
+        _aviso(mensaje);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -548,6 +642,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               validator: _requerido,
               capitalizacion: TextCapitalization.words,
             ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SelectorGenero(
+                valor: _genero.isEmpty ? null : _genero,
+                onChanged: _cargando
+                    ? null
+                    : (opcion) => setState(() => _genero = opcion),
+              ),
+            ),
             _campo(
               controller: _correoCtrl,
               etiqueta: 'Correo electrónico',
@@ -585,6 +688,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               capitalizacion: TextCapitalization.sentences,
             ),
           ] else ...[
+            _Dato(
+              icono: const FeatureIcon.persona(color: AppColors.rosa),
+              etiqueta: 'Género',
+              valor: usuario.genero.isEmpty ? 'Sin seleccionar' : usuario.genero,
+            ),
             _Dato(
               icono: const FeatureIcon.documento(color: AppColors.rosa),
               etiqueta: 'Documento de identidad',
@@ -714,6 +822,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+        if (!Session.isAdmin) ...[
+          const SizedBox(height: 28),
+          Text(
+            'Cuenta',
+            style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Puedes eliminar tu cuenta si no tienes adopciones ni apadrinamientos realizados, ni solicitudes en proceso.',
+            style: texto.bodyMedium?.copyWith(color: Colors.black54),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _eliminando ? null : _eliminarCuenta,
+            icon: _eliminando
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  )
+                : const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+            label: const Text('Eliminar cuenta'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(54),
+              foregroundColor: Colors.redAccent,
+              side: const BorderSide(color: Colors.redAccent),
+            ),
+          ),
+        ],
     ],
     );
   }

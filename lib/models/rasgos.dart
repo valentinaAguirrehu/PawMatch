@@ -45,8 +45,35 @@ class Rasgo {
   /// Texto del extremo alto (5) concordando con el sexo de la mascota.
   String maximoPara(String? sexo) =>
       _esMacho(sexo) ? (maximoMasc ?? maximo) : maximo;
+
+  /// Pregunta del adoptante en masculino o femenino, según [genero]
+  /// (`Hombre` o `Mujer`). Sin género, conserva la forma inclusiva.
+  String preguntaPara(String? genero) => concordarGenero(preguntaUsuario, genero);
+
+  String minimoUsuarioPara(String? genero) =>
+      concordarGenero(minimoUsuario, genero);
+
+  String maximoUsuarioPara(String? genero) =>
+      concordarGenero(maximoUsuario, genero);
+
+  /// "activo/a" pasa a "activo" o "activa"; "protector/a" a "protector" o "protectora".
+  static String concordarGenero(String texto, String? genero) {
+    final cual = genero?.trim().toLowerCase() ?? '';
+    if (cual != 'mujer' && cual != 'hombre') return texto;
+    return texto.replaceAllMapped(RegExp(r'([\p{L}]+)/a', unicode: true), (m) {
+      final base = m.group(1)!;
+      if (cual == 'hombre') return base;
+      if (base.length > 1 && (base.endsWith('o') || base.endsWith('O'))) {
+        return base.substring(0, base.length - 1) +
+            (base.endsWith('O') ? 'A' : 'a');
+      }
+      return '${base}a';
+    });
+  }
 }
 
+/// Si cambias la pregunta o los extremos del adoptante, actualiza también
+/// `paw_match_backend/utils/entrevista_personalidad.js`.
 const rasgosMascota = <Rasgo>[
   Rasgo(
     clave: 'nivel_energia',

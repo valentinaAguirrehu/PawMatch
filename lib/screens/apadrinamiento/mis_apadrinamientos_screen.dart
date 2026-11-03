@@ -57,27 +57,14 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     super.initState();
     ApadrinamientoService.marcarLeidasUsuario();
     _resumenFuture = _cargarResumen()..then((resumen) {
-      if (!mounted) return;
-      if (!_mensajeSesionMostrado) {
-        _mensajeSesionMostrado = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _mostrarMensajePrimeraVez(
-              resumen ??
-                  ResumenPadrino(
-                    idUsuario: Session.idUsuario ?? '',
-                    nombres: Session.nombre,
-                    apellidos: Session.apellidos,
-                    bloqueadoApadrinar: false,
-                    totalSeguimientos: 0,
-                    calificacionPromedio: 0.0,
-                    tieneAlerta: false,
-                    solicitudesConAlerta: const [],
-                  ),
-            );
-          }
-        });
-      }
+      if (!mounted || _mensajeSesionMostrado) return;
+      // Sin seguimientos no hay evaluación que mostrar. El aviso de bienvenida
+      // solo aparecía la primera vez, también si la persona no apadrina a nadie.
+      if (resumen == null || resumen.totalSeguimientos == 0) return;
+      _mensajeSesionMostrado = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _mostrarMensajePrimeraVez(resumen);
+      });
     });
   }
 

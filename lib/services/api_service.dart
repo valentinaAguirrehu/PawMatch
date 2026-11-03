@@ -29,6 +29,7 @@ class ApiService {
     required String telefono,
     required String contrasena,
     required DateTime fechaNacimiento,
+    required String genero,
   }) async {
     final fecha =
         '${fechaNacimiento.year.toString().padLeft(4, '0')}-'
@@ -44,6 +45,7 @@ class ApiService {
         'telefono': telefono,
         'contrasena': contrasena,
         'fecha_nacimiento': fecha,
+        'genero': genero,
       }),
     );
 
@@ -95,6 +97,43 @@ class ApiService {
       return User.fromJson(data as Map<String, dynamic>);
     }
     throw Exception(data['error'] ?? 'No se pudo guardar el perfil');
+  }
+
+  /// `puede` es falso cuando hay una adopción o un apadrinamiento realizado,
+  /// o una solicitud todavía en proceso. `motivo` explica por qué.
+  static Future<({bool puede, String motivo})> consultarEliminacionCuenta(
+    String id,
+  ) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/usuarios/$id/puede-eliminar'),
+      headers: {'x-usuario-id': Session.idUsuario ?? ''},
+    );
+    final data = jsonDecode(response.body);
+    if (data is Map && response.statusCode == 200) {
+      return (
+        puede: data['puede'] == true,
+        motivo: (data['error'] ?? '').toString(),
+      );
+    }
+    throw Exception(
+      data is Map
+          ? (data['error'] ?? 'No se pudo revisar la cuenta')
+          : 'No se pudo revisar la cuenta',
+    );
+  }
+
+  static Future<void> eliminarCuenta(String id) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/usuarios/$id'),
+      headers: {'x-usuario-id': Session.idUsuario ?? ''},
+    );
+    if (response.statusCode == 200) return;
+    final data = jsonDecode(response.body);
+    throw Exception(
+      data is Map
+          ? (data['error'] ?? 'No se pudo eliminar la cuenta')
+          : 'No se pudo eliminar la cuenta',
+    );
   }
 
   static Future<void> cambiarContrasena({

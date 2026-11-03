@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const usuariosRoutes = require('./routes/usuarios');
+const personalidadEntrevistaRoutes = require('./routes/personalidad_entrevista');
 const adminUsuariosRoutes = require('./routes/admin_usuarios');
 const mascotasRoutes = require('./routes/mascotas');
 const fundacionRoutes = require('./routes/fundacion');
@@ -10,6 +11,7 @@ const adoptionRequestsRoutes = require('./routes/adoption_requests');
 const noticiasRoutes = require('./routes/noticias');
 const pool = require('./db');
 const { asegurarRolSuperAdmin } = require('./utils/roles');
+const { asegurarGeneroUsuario } = require('./utils/genero_usuario');
 const denunciasRoutes = require('./routes/denuncias');
 const seguimientoApadrinamientoRoutes = require('./routes/seguimiento_apadrinamiento');
 const seguimientoAdopcionRoutes = require('./routes/seguimiento_adopcion');
@@ -18,6 +20,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.use('/api/usuarios', personalidadEntrevistaRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/admin/usuarios', adminUsuariosRoutes);
 app.use('/api/mascotas', mascotasRoutes);
@@ -35,6 +38,9 @@ app.get('/', (req, res) => res.send('API Paw Match funcionando'));
 const PORT = process.env.PORT || 3000;
 asegurarRolSuperAdmin(pool).catch((error) => {
   console.error('No se pudo preparar el rol superadmin:', error.message);
+});
+asegurarGeneroUsuario(pool).catch((error) => {
+  console.error('No se pudo preparar el género del usuario:', error.message);
 });
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
