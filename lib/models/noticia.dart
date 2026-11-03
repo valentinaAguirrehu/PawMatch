@@ -16,7 +16,7 @@ class Noticia {
     required this.titulo,
     required this.contenido,
     this.imagen,
-    this.lugar = 'Fundación Maritza Arévalo, Cali',
+    this.lugar = 'Fundación Maritza Arévalo',
     required this.fecha,
     this.fechaCreacion,
     this.idAdministrador,
@@ -25,14 +25,20 @@ class Noticia {
   });
 
   factory Noticia.fromJson(Map<String, dynamic> j) {
+    String rawLugar = (j['lugar'] as String?)?.trim() ?? '';
+    if (rawLugar.isEmpty) {
+      rawLugar = 'Fundación Maritza Arévalo';
+    } else {
+      rawLugar = rawLugar.replaceAll(RegExp(r',?\s*Cali', caseSensitive: false), '').trim();
+      if (rawLugar.isEmpty) rawLugar = 'Fundación Maritza Arévalo';
+    }
+
     return Noticia(
       id: j['id_noticia'] as String,
       titulo: (j['titulo'] ?? '') as String,
       contenido: (j['contenido'] ?? '') as String,
       imagen: j['imagen'] as String?,
-      lugar: (j['lugar'] as String?)?.trim().isNotEmpty == true
-          ? j['lugar'] as String
-          : 'Fundación Maritza Arévalo, Cali',
+      lugar: rawLugar,
       fecha: (j['fecha'] ?? '') as String,
       fechaCreacion: j['fecha_creacion'] as String?,
       idAdministrador: j['id_administrador'] as String?,

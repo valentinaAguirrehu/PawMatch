@@ -356,6 +356,7 @@ class _ApadrinacionFollowUpAdminScreenState
                                             mascotaRaza: item.mascotaRaza,
                                             mascotaEdad: '${item.mascotaEdad} ${item.mascotaUnidadEdad}',
                                             seguimientos: segsDelCiclo,
+                                            todosLosSeguimientos: lista,
                                             cicloReporte: c,
                                             ciclosAnteriores: item.evaluacionesCiclos.where((e) => e.ciclo < c).toList(),
                                             estadoApadrinamiento: item.estadoApadrinamiento,
@@ -390,6 +391,7 @@ class _ApadrinacionFollowUpAdminScreenState
                                             mascotaRaza: item.mascotaRaza,
                                             mascotaEdad: '${item.mascotaEdad} ${item.mascotaUnidadEdad}',
                                             seguimientos: segsDelCiclo,
+                                            todosLosSeguimientos: lista,
                                             cicloReporte: c,
                                             ciclosAnteriores: item.evaluacionesCiclos.where((e) => e.ciclo < c).toList(),
                                             estadoApadrinamiento: item.estadoApadrinamiento,
@@ -1002,7 +1004,7 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '3/3 seguimientos completados en este ciclo',
+                            '3/3 completados. Evalúa para dar paso al Ciclo ${item.cicloActual + 1}',
                             style: const TextStyle(
                               color: Color(0xFFBF360C),
                               fontSize: 11.5,
@@ -1023,6 +1025,47 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                       child: const Text(
                         'Evaluar padrino',
                         style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // BANNER CICLO NUEVO POR COMENZAR (0/3 en un ciclo nuevo)
+            if (!item.evaluacionPendiente && item.seguimientosEnCiclo == 0 && item.cicloActual > 1) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFA5D6A7), width: 1.3),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.rocket_launch_rounded, color: Color(0xFF2E7D32), size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '¡Comenzará el Ciclo ${item.cicloActual}!',
+                            style: const TextStyle(
+                              color: Color(0xFF1B5E20),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            'Ciclo anterior completado. Registra el primer seguimiento de este ciclo.',
+                            style: TextStyle(
+                              color: Colors.green.shade900,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -1102,7 +1145,9 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Ciclo ${item.cicloActual} · ${item.seguimientosEnCiclo}/3 seguimientos',
+                        item.seguimientosEnCiclo == 0 && item.cicloActual > 1
+                            ? 'Comenzará el Ciclo ${item.cicloActual} · 0/3 seguimientos'
+                            : 'Ciclo ${item.cicloActual} · ${item.seguimientosEnCiclo}/3 seguimientos',
                         style: const TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 12,
@@ -1226,7 +1271,11 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                     ),
                     onPressed: item.evaluacionPendiente ? onEvaluarPadrino : onSeguimiento,
                     child: Text(
-                      item.evaluacionPendiente ? 'Evaluar Ciclo ${item.cicloActual}' : 'Realizar Seguimiento',
+                      item.evaluacionPendiente
+                          ? 'Evaluar Ciclo ${item.cicloActual}'
+                          : (item.seguimientosEnCiclo == 0 && item.cicloActual > 1
+                              ? 'Comenzar Ciclo ${item.cicloActual}'
+                              : 'Realizar Seguimiento'),
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                     ),
@@ -1358,7 +1407,11 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           backgroundColor: decision == 'continuar' ? AppColors.rosa : Colors.red.shade700,
-          content: Text(res['mensaje']?.toString() ?? 'Evaluación registrada exitosamente.'),
+          content: Text(
+            decision == 'continuar'
+                ? '¡Ciclo ${widget.item.cicloActual} concluido! Comenzará el Ciclo ${widget.item.cicloActual + 1}.'
+                : (res['mensaje']?.toString() ?? 'Evaluación registrada exitosamente.'),
+          ),
         ),
       );
 
@@ -1786,8 +1839,8 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
                         },
                         icon: const Icon(Icons.check_circle_outline_rounded),
                         label: Text(
-                          'Seguir con el apadrinamiento (Cerrar Ciclo ${item.cicloActual})',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          'Seguir con el apadrinamiento (Cerrar Ciclo ${item.cicloActual} y comenzar Ciclo ${item.cicloActual + 1})',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                         ),
                       ),
                     ),

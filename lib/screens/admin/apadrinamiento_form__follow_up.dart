@@ -381,13 +381,48 @@ class _ApadrinamientoFormFollowUpState
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: AppColors.rosa,
-            content: Text('Seguimiento de ${widget.mascota.nombre} registrado con éxito'),
-          ),
-        );
+        if (widget.solicitud.seguimientosEnCiclo + 1 >= 3) {
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: AppColors.rosa, size: 28),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '¡Ciclo Completado!',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+                    ),
+                  ),
+                ],
+              ),
+              content: Text(
+                'Has completado los 3 seguimientos del Ciclo ${widget.solicitud.cicloActual}.\n\n'
+                'El ciclo ha terminado. Ahora debes evaluar al padrino para formalizar el cierre '
+                'y que comenzará el Ciclo ${widget.solicitud.cicloActual + 1}.',
+                style: const TextStyle(fontSize: 14),
+              ),
+              actions: [
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Entendido'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: AppColors.rosa,
+              content: Text('Seguimiento de ${widget.mascota.nombre} registrado con éxito (${widget.solicitud.seguimientosEnCiclo + 1}/3 del Ciclo ${widget.solicitud.cicloActual})'),
+            ),
+          );
+        }
       }
 
       widget.onGuardadoExitoso?.call();
@@ -768,6 +803,64 @@ class _ApadrinamientoFormFollowUpState
                                     color: Colors.red.shade900,
                                     height: 1.35,
                                   ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // Banner de estado del ciclo (si comenzará o está en curso)
+                  if (!_bloqueadoPorEvaluacionPendiente)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: widget.solicitud.seguimientosEnCiclo == 0
+                            ? const Color(0xFFE8F5E9)
+                            : const Color(0xFFF3E5F5),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: widget.solicitud.seguimientosEnCiclo == 0
+                              ? const Color(0xFFA5D6A7)
+                              : const Color(0xFFCE93D8),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            widget.solicitud.seguimientosEnCiclo == 0
+                                ? Icons.rocket_launch_rounded
+                                : Icons.repeat_rounded,
+                            color: widget.solicitud.seguimientosEnCiclo == 0
+                                ? const Color(0xFF2E7D32)
+                                : const Color(0xFF7B1FA2),
+                            size: 24,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.solicitud.seguimientosEnCiclo == 0
+                                      ? '¡Comenzará el Ciclo ${widget.solicitud.cicloActual}!'
+                                      : 'Ciclo ${widget.solicitud.cicloActual} en curso',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                    color: widget.solicitud.seguimientosEnCiclo == 0
+                                        ? const Color(0xFF1B5E20)
+                                        : const Color(0xFF6A1B9A),
+                                  ),
+                                ),
+                                Text(
+                                  widget.solicitud.seguimientosEnCiclo == 0
+                                      ? 'Registrando el primer seguimiento (1 de 3) de este nuevo ciclo.'
+                                      : 'Registrando el seguimiento ${widget.solicitud.seguimientosEnCiclo + 1} de 3 de este ciclo.',
+                                  style: const TextStyle(fontSize: 11.5, color: Colors.black87),
                                 ),
                               ],
                             ),
