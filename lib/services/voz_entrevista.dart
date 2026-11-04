@@ -60,12 +60,29 @@ class VozEntrevista {
     } catch (_) {}
   }
 
-  /// El dispositivo se traba en formas como «activo/a». En voz se leen de corrido.
+  static bool _esCaracterLegible(int r) {
+    // Solo letras, números, espacios y signos de puntuación del español (Latin-1).
+    // Esto excluye el 100% de los emojis y símbolos Unicode (> 0x00FF).
+    if (r >= 0x0020 && r <= 0x00FF) return true;
+    return r == 0x2013 || r == 0x2014 || r == 0x201C || r == 0x201D || r == 0x2026;
+  }
+
+  /// El dispositivo se traba en formas como «activo/a» y solo debe leer hasta el punto final sin emojis.
   String _paraHablar(String texto) {
-    return texto
-        .trim()
+    var limpio = String.fromCharCodes(
+      texto.runes.where(_esCaracterLegible),
+    )
         .replaceAll(RegExp('o/a'), 'a')
-        .replaceAll(RegExp('O/A'), 'A');
+        .replaceAll(RegExp('O/A'), 'A')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    // Cortar exactamente hasta el último signo de cierre (., !, ?)
+    final ultimoPunto = limpio.lastIndexOf(RegExp(r'[.!?]'));
+    if (ultimoPunto != -1) {
+      limpio = limpio.substring(0, ultimoPunto + 1).trim();
+    }
+    return limpio;
   }
 
   Future<void> _elegirVozMasNatural() async {

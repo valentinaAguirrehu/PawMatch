@@ -31,7 +31,15 @@ function sesionPropia(req) {
 }
 
 function apiKey() {
-  const key = process.env.OPENAI_API_KEY;
+  let key = process.env.OPENAI_API_KEY;
+  if (!key || !String(key).trim()) {
+    const path = require('path');
+    require('dotenv').config({
+      path: path.join(__dirname, '..', '.env'),
+      override: true,
+    });
+    key = process.env.OPENAI_API_KEY;
+  }
   if (!key || !String(key).trim()) return null;
   return String(key).trim();
 }

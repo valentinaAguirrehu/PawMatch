@@ -48,6 +48,19 @@ router.post('/registro', async (req, res) => {
   if (!nombres || !apellidos || !correo || !contrasena) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
+  const passStr = String(contrasena);
+  if (
+    passStr.length < 8 ||
+    !/[A-Z]/.test(passStr) ||
+    !/[a-z]/.test(passStr) ||
+    !/[0-9]/.test(passStr) ||
+    !/[@#$%&*]/.test(passStr)
+  ) {
+    return res.status(400).json({
+      error:
+        'La contraseña debe tener mínimo 8 caracteres, al menos una mayúscula (A-Z), una minúscula (a-z), un número (0-9) y un carácter especial (@, #, $, %, &, *).',
+    });
+  }
   if (!generoValido(genero)) {
     return res.status(400).json({ error: 'Selecciona si eres Hombre o Mujer' });
   }

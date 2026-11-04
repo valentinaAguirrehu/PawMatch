@@ -274,13 +274,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         controller: _contrasenaCtrl,
                                         icono: const FeatureIcon.cerradura(color: AppColors.rosa),
                                         etiqueta: 'Contraseña',
-                                        pista: 'Mínimo 6 caracteres',
+                                        pista: 'Mínimo 8 caracteres',
                                         esContrasena: true,
                                         accion: TextInputAction.done,
                                         onEnviar: _registrar,
-                                        validator: (v) => (v == null || v.length < 6)
-                                            ? 'Mínimo 6 caracteres'
-                                            : null,
+                                        validator: _validarContrasena,
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ValueListenableBuilder<TextEditingValue>(
+                                        valueListenable: _contrasenaCtrl,
+                                        builder: (context, value, _) {
+                                          return _RequisitosContrasena(
+                                            contrasena: value.text,
+                                          );
+                                        },
                                       ),
                                       const SizedBox(height: 28),
 
@@ -347,6 +354,116 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String? _requerido(String? valor) =>
       (valor == null || valor.trim().isEmpty) ? 'Requerido' : null;
+
+  String? _validarContrasena(String? v) {
+    if (v == null || v.isEmpty) return 'Requerido';
+    if (v.length < 8) return 'Tener mínimo 8 caracteres.';
+    if (!RegExp(r'[A-Z]').hasMatch(v)) {
+      return 'Contener al menos una letra mayúscula (A-Z).';
+    }
+    if (!RegExp(r'[a-z]').hasMatch(v)) {
+      return 'Contener al menos una letra minúscula (a-z).';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(v)) {
+      return 'Contener al menos un número (0-9).';
+    }
+    if (!RegExp(r'[@#$%&*]').hasMatch(v)) {
+      return 'Contener al menos un carácter especial (@, #, \$, %, &, *).';
+    }
+    return null;
+  }
+}
+
+class _RequisitosContrasena extends StatelessWidget {
+  final String contrasena;
+
+  const _RequisitosContrasena({required this.contrasena});
+
+  @override
+  Widget build(BuildContext context) {
+    final cumpleMinimo = contrasena.length >= 8;
+    final cumpleMayuscula = RegExp(r'[A-Z]').hasMatch(contrasena);
+    final cumpleMinuscula = RegExp(r'[a-z]').hasMatch(contrasena);
+    final cumpleNumero = RegExp(r'[0-9]').hasMatch(contrasena);
+    final cumpleEspecial = RegExp(r'[@#$%&*]').hasMatch(contrasena);
+
+    final items = <(String, bool)>[
+      ('Tener mínimo 8 caracteres.', cumpleMinimo),
+      ('Contener al menos una letra mayúscula (A-Z).', cumpleMayuscula),
+      ('Contener al menos una letra minúscula (a-z).', cumpleMinuscula),
+      ('Contener al menos un número (0-9).', cumpleNumero),
+      (
+        'Contener al menos un carácter especial (@, #, \$, %, &, *).',
+        cumpleEspecial,
+      ),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCF9FA),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFF2BED6).withValues(alpha: 0.7),
+          width: 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Requisitos de contraseña',
+            style: TextStyle(
+              color: AppColors.texto,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'La contraseña debe cumplir con estas condiciones:',
+            style: TextStyle(
+              color: AppColors.texto.withValues(alpha: 0.7),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    item.$2
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 16,
+                    color: item.$2
+                        ? _verdeOk
+                        : AppColors.rosa.withValues(alpha: 0.55),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item.$1,
+                      style: TextStyle(
+                        color: item.$2
+                            ? _verdeOk
+                            : AppColors.texto.withValues(alpha: 0.75),
+                        fontSize: 12,
+                        fontWeight: item.$2 ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _HeaderOndulado extends StatelessWidget {
