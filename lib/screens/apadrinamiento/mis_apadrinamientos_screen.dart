@@ -1427,10 +1427,13 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
 
     if (maxCicloTerminado >= 1) {
       final sigCiclo = maxCicloTerminado + 1;
+      final cicloTexto = maxCicloTerminado == 1
+          ? 'Tu primer ciclo de seguimiento ya terminó'
+          : 'Tu ciclo de seguimiento $maxCicloTerminado ya terminó';
       return _InfoBannerPadrino(
         titulo: 'Vas por buen camino',
         mensaje:
-            'Tu ciclo ya terminó $maxCicloTerminado, vas por buen camino. Comenzaremos con el ciclo $sigCiclo.',
+            '$cicloTexto, vas por buen camino. Comenzaremos con el ciclo $sigCiclo.',
         icono: Icons.warning_amber_rounded,
         colorFondo: const Color(0xFFFFF3E0),
         colorBorde: const Color(0xFFFFB74D),

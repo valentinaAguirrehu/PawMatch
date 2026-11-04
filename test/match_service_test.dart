@@ -28,6 +28,13 @@ void main() {
     expect(MatchService.calcular(todos(3), const {}), isNull);
   });
 
+  test('no calcula si la personalidad del cachorro viene en null', () {
+    final mascota = {
+      for (final rasgo in rasgosMascota) rasgo.clave: null,
+    };
+    expect(MatchService.calcular(todos(4), mascota), isNull);
+  });
+
   test('el guardado deja las respuestas para recalcular el match', () {
     MatchEstado.instancia.reiniciar();
     addTearDown(MatchEstado.instancia.reiniciar);

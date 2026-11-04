@@ -22,16 +22,14 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
   late final _nombre = TextEditingController(text: widget.pet?.nombre);
   late final _raza = TextEditingController(text: widget.pet?.raza);
-  late final _edad = TextEditingController(text: widget.pet?.edad?.toString());
   late final _descripcion = TextEditingController(
     text: widget.pet?.descripcion,
   );
 
   late String _especie = widget.pet?.especie ?? 'Perro';
-  late String _unidadEdad =
-      (widget.pet?.unidadEdad == 'meses' || widget.pet?.unidadEdad == 'mes')
-          ? 'meses'
-          : 'anos';
+  late DateTime? _fechaNacimiento = widget.pet?.fechaNacimientoParaEditar;
+  late bool _fechaEstimada = widget.pet?.fechaNacimientoEsEstimada ?? false;
+  String? _errorFecha;
   late String? _sexo = widget.pet?.sexo;
   late String? _tamano = widget.pet?.tamano;
   late final String _estadoAdopcion =
@@ -39,7 +37,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   late final String _estadoApadrinamiento =
       widget.pet?.estadoApadrinamiento ?? 'disponible';
   late final List<String> _estadosSalud = List<String>.from(
-    widget.pet?.estadosSalud ?? const [opcionSinNecesidades],
+    widget.pet?.estadosSalud ?? const <String>[],
   );
   late final _detalleSalud = TextEditingController(
     text: widget.pet?.detalleSalud,
@@ -51,9 +49,15 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   String _fotoNombre = 'foto.jpg';
 
   final _personalidad = DogPersonalityController();
+  late bool _personalidadEnDesarrollo =
+      widget.pet?.personalidadDefinida == false;
 
   bool _guardando = false;
   bool get _esEdicion => widget.pet != null;
+
+  /// El detalle escrito solo aplica si hay una necesidad veterinaria pendiente.
+  bool get _muestraDetalleSalud =>
+      _estadosSalud.any(opcionesNecesidadesPendientes.contains);
 
   static const _especies = ['Perro', 'Gato', 'Otro'];
   static const _sexos = ['Macho', 'Hembra'];
@@ -66,6 +70,16 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
     _nombre.addListener(_refrescarPersonalidad);
   }
 
+  /// Menos de 8 meses cumplidos: todavía puede marcarse la personalidad en desarrollo.
+  bool get _esMenorDeOchoMeses {
+    final nacimiento = _fechaNacimiento;
+    if (nacimiento == null) return false;
+    return Pet.mesesEntre(nacimiento, DateTime.now()) < 8;
+  }
+
+  bool get _ocultaEvaluacion =>
+      _esMenorDeOchoMeses && _personalidadEnDesarrollo;
+
   void _refrescarPersonalidad() {
     if (mounted) setState(() {});
   }
@@ -77,7 +91,6 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
     _personalidad.dispose();
     _nombre.dispose();
     _raza.dispose();
-    _edad.dispose();
     _descripcion.dispose();
     _detalleSalud.dispose();
     super.dispose();
@@ -164,8 +177,53 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
   // ---------------- Guardar ----------------
 
+  Future<void> _elegirFechaNacimiento() async {
+    final hoy = DateTime.now();
+    final hoyDia = DateTime(hoy.year, hoy.month, hoy.day);
+    final elegida = await showDatePicker(
+      context: context,
+      initialDate: _inicialCalendario(hoyDia),
+      firstDate: DateTime(hoyDia.year - 35, hoyDia.month, hoyDia.day),
+      lastDate: hoyDia,
+      helpText: 'Fecha de nacimiento',
+      cancelText: 'Cancelar',
+      confirmText: 'Listo',
+    );
+    if (!mounted || elegida == null) return;
+    setState(() {
+      _fechaNacimiento = DateTime(elegida.year, elegida.month, elegida.day);
+      _fechaEstimada = false;
+      _errorFecha = null;
+      if (!_esMenorDeOchoMeses) _personalidadEnDesarrollo = false;
+    });
+  }
+
+  DateTime _inicialCalendario(DateTime hoy) {
+    final minimo = DateTime(hoy.year - 35, hoy.month, hoy.day);
+    final elegida = _fechaNacimiento;
+    if (elegida != null) {
+      if (elegida.isBefore(minimo)) return minimo;
+      if (elegida.isAfter(hoy)) return hoy;
+      return elegida;
+    }
+    final pet = widget.pet;
+    final edad = pet?.edad;
+    if (edad == null) return hoy;
+    final enMeses = pet!.unidadEdad == 'meses' || pet.unidadEdad == 'mes';
+    final estimada = enMeses
+        ? DateTime(hoy.year, hoy.month - edad, hoy.day)
+        : DateTime(hoy.year - edad, hoy.month, hoy.day);
+    if (estimada.isBefore(minimo)) return minimo;
+    if (estimada.isAfter(hoy)) return hoy;
+    return estimada;
+  }
+
   Future<void> _guardar() async {
-    if (!_formKey.currentState!.validate()) return;
+    final fechaValida = _fechaNacimiento != null;
+    if (!fechaValida) {
+      setState(() => _errorFecha = 'Elige la fecha de nacimiento');
+    }
+    if (!_formKey.currentState!.validate() || !fechaValida) return;
     _formKey.currentState!.save();
     setState(() => _guardando = true);
 
@@ -177,13 +235,17 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
       }
 
       // 2) se guarda la mascota con su personalidad
+      final nacimiento = _fechaNacimiento!;
+      final meses = Pet.mesesEntre(nacimiento, DateTime.now());
+      final anos = meses ~/ 12;
       final pet = Pet(
         id: widget.pet?.id ?? '',
         nombre: _nombre.text.trim(),
         especie: _especie,
         raza: _raza.text.trim(),
-        edad: int.tryParse(_edad.text.trim()),
-        unidadEdad: _unidadEdad,
+        fechaNacimiento: nacimiento,
+        edad: anos >= 1 ? anos : meses,
+        unidadEdad: anos >= 1 ? 'anos' : 'meses',
         sexo: _sexo,
         tamano: _tamano,
         descripcion: _descripcion.text.trim(),
@@ -193,10 +255,14 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
         estadoAdopcion: _estadoAdopcion,
         estadoApadrinamiento: _estadoApadrinamiento,
         estadosSalud: _estadosSalud,
-        detalleSalud: _detalleSalud.text.trim().isEmpty
-            ? null
-            : _detalleSalud.text.trim(),
-        personalidad: _personalidad.personalidad,
+        detalleSalud:
+            _muestraDetalleSalud && _detalleSalud.text.trim().isNotEmpty
+            ? _detalleSalud.text.trim()
+            : null,
+        personalidadDefinida: !_ocultaEvaluacion,
+        personalidad: _ocultaEvaluacion
+            ? const {}
+            : _personalidad.personalidad,
       );
 
       final guardada = _esEdicion
@@ -232,6 +298,101 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
       borderSide: const BorderSide(color: AppColors.rosa, width: 2),
     ),
   );
+
+  static const _meses = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+
+  Widget _selectorFechaNacimiento() {
+    final elegida = _fechaNacimiento;
+    final texto = elegida == null
+        ? 'Selecciona la fecha en el calendario'
+        : '${elegida.day} ${_meses[elegida.month - 1]} ${elegida.year}';
+    final edadAnterior = widget.pet?.edadTexto;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Material(
+          color: AppColors.rosaSuave,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: _elegirFechaNacimiento,
+            borderRadius: BorderRadius.circular(12),
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _errorFecha == null
+                      ? AppColors.bordeRosa
+                      : const Color(0xFFE53935),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_month_rounded, color: AppColors.rosa),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        texto,
+                        style: TextStyle(
+                          color: elegida == null
+                              ? AppColors.texto.withValues(alpha: 0.45)
+                              : AppColors.texto,
+                          fontWeight: elegida == null
+                              ? FontWeight.w400
+                              : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (elegida != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Edad: ${Pet.textoEdad(elegida, DateTime.now())}',
+            style: const TextStyle(
+              color: AppColors.rosa,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (_fechaEstimada &&
+              edadAnterior != null &&
+              edadAnterior != 'Edad no registrada') ...[
+            const SizedBox(height: 4),
+            Text(
+              'Fecha calculada con la edad que ya estaba registrada ($edadAnterior). '
+              'Puedes corregir el día si lo conoces.',
+              style: const TextStyle(fontSize: 12, color: Colors.black54),
+            ),
+          ],
+        ],
+        if (_errorFecha != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            _errorFecha!,
+            style: const TextStyle(color: Color(0xFFE53935), fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
 
   Widget _campo(String etiqueta, Widget child) => Padding(
     padding: const EdgeInsets.only(bottom: 14),
@@ -749,67 +910,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                         ),
                       ],
                     ),
-                    _campo(
-                      'Edad',
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 5,
-                            child: TextFormField(
-                              controller: _edad,
-                              decoration: _deco('Cantidad (ej: 2)'),
-                              keyboardType: TextInputType.number,
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) return null;
-                                final n = int.tryParse(v.trim());
-                                if (n == null || n < 0) {
-                                  return 'Número inválido';
-                                }
-                                if (_unidadEdad == 'meses' && n > 24) {
-                                  return 'Máx. 24 meses';
-                                }
-                                if (_unidadEdad == 'anos' && n > 35) {
-                                  return 'Máx. 35 años';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 4,
-                            child: DropdownButtonFormField<String>(
-                              initialValue:
-                                  _unidadEdad == 'meses' ? 'Meses' : 'Años',
-                              decoration: _deco('Unidad'),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'Meses',
-                                  child: Text('Meses'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'Años',
-                                  child: Text('Años'),
-                                ),
-                              ],
-                              onChanged: (v) {
-                                setState(() {
-                                  _unidadEdad =
-                                      (v == 'Meses') ? 'meses' : 'anos';
-                                });
-                              },
-                              onSaved: (v) {
-                                if (v != null) {
-                                  _unidadEdad =
-                                      (v == 'Meses') ? 'meses' : 'anos';
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    _campo('Fecha de nacimiento', _selectorFechaNacimiento()),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -850,21 +951,55 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                       'Estado de salud de la mascota *',
                       _selectorEstadoSaludMulti(),
                     ),
-                    _campo(
-                      'Condición de salud y recomendaciones veterinarias',
-                      TextFormField(
-                        controller: _detalleSalud,
-                        decoration: _deco(
-                          'Describe con mayor detalle la condición de salud de la mascota, sus necesidades actuales y las recomendaciones veterinarias si corresponde...',
+                    if (_muestraDetalleSalud)
+                      _campo(
+                        'Condición de salud y recomendaciones veterinarias',
+                        TextFormField(
+                          controller: _detalleSalud,
+                          decoration: _deco(
+                            'Describe con mayor detalle la condición de salud de la mascota, sus necesidades actuales y las recomendaciones veterinarias si corresponde...',
+                          ),
+                          maxLines: 3,
                         ),
-                        maxLines: 3,
                       ),
-                    ),
                     const SizedBox(height: 6),
-                    DogPersonality(
-                      controller: _personalidad,
-                      mascotaId: _esEdicion ? widget.pet!.id : null,
-                    ),
+                    if (_esMenorDeOchoMeses) ...[
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.rosaSuave,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.bordeRosa),
+                        ),
+                        child: SwitchListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          title: const Text(
+                            'Personalidad en desarrollo',
+                            style: TextStyle(
+                              color: AppColors.texto,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Este cachorro aún no tiene un temperamento definido. '
+                            'Las preguntas de 1 a 5 se pueden asignar más adelante.',
+                          ),
+                          value: _personalidadEnDesarrollo,
+                          activeThumbColor: AppColors.rosa,
+                          onChanged: (valor) => setState(
+                            () => _personalidadEnDesarrollo = valor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (!_ocultaEvaluacion)
+                      DogPersonality(
+                        controller: _personalidad,
+                        mascotaId: _esEdicion ? widget.pet!.id : null,
+                        sexo: _sexo,
+                      ),
 
                     const SizedBox(height: 12),
                     FilledButton(
@@ -874,7 +1009,9 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      onPressed: (_guardando || _personalidad.cargando)
+                      onPressed:
+                          (_guardando ||
+                              (!_ocultaEvaluacion && _personalidad.cargando))
                           ? null
                           : _guardar,
                       child: Padding(

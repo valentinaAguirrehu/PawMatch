@@ -10,6 +10,7 @@ import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/admin/pets_form_screen.dart';
+import 'package:paw_match/screens/match/dog_personality.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/adoption/pasos_adopcion_screen.dart';
 import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
@@ -47,10 +48,15 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   SolicitudApadrinamiento? _miSolicitud;
   AdoptionRequest? _miAdopcion;
   bool _descargandoActa = false;
+  bool _datosModificados = false;
 
   @override
   void initState() {
     super.initState();
+    _completa.then((actualizada) {
+      if (!mounted) return;
+      setState(() => _pet = actualizada);
+    }).catchError((_) {});
     _consultarMiSolicitud();
     _consultarMiAdopcion();
   }
@@ -899,10 +905,43 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     return f.contains('.png') || f.contains('.webp');
   }
 
+  Future<void> _asignarPersonalidad() async {
+    final valores = await pedirPersonalidadMascota(context, sexo: _pet.sexo);
+    if (valores == null || !mounted) return;
+    try {
+      final base = await PetsService.obtener(_pet.id);
+      final actualizada = await PetsService.actualizar(
+        _pet.id,
+        base.copiar(
+          personalidadDefinida: true,
+          personalidad: Map<String, dynamic>.from(valores),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _pet = actualizada;
+        _completa = Future.value(actualizada);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Personalidad de ${_pet.nombre} asignada')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
   Future<void> _editarMascotaAdmin() async {
+    var origen = _pet;
+    try {
+      origen = await PetsService.obtener(_pet.id);
+    } catch (_) {}
+    if (!mounted) return;
     final guardado = await Navigator.push<Pet>(
       context,
-      MaterialPageRoute(builder: (_) => PetsFormScreen(pet: _pet)),
+      MaterialPageRoute(builder: (_) => PetsFormScreen(pet: origen)),
     );
     if (guardado != null && mounted) {
       try {
@@ -911,6 +950,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           setState(() {
             _pet = actualizada;
             _completa = Future.value(actualizada);
+            _datosModificados = true;
           });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Datos de la mascota actualizados exitosamente')),
@@ -919,7 +959,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       } catch (_) {
         if (mounted) {
           setState(() {
-            _completa = PetsService.obtener(_pet.id);
+            _pet = guardado;
+            _completa = Future.value(guardado);
+            _datosModificados = true;
           });
         }
       }
@@ -1751,7 +1793,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => Navigator.pop(context),
+                        onTap: () => Navigator.pop(context, _datosModificados),
                         child: Container(
                           width: 44,
                           height: 44,
@@ -2166,7 +2208,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         );
       }
 
-      final valores = snap.data!.personalidad;
+      final mascota = snap.data!;
+      if (!mascota.personalidadDefinida) {
+        return _avisoPersonalidadEnDesarrollo();
+      }
+
+      final valores = mascota.personalidad;
       if (valores.isEmpty) {
         return const Text('Aún no hay datos de personalidad registrados.');
       }
@@ -2187,6 +2234,62 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       return Wrap(spacing: 8, runSpacing: 8, children: chips);
     },
   );
+
+  static const _textoCachorro =
+      'Por su corta edad, el temperamento de este cachorro se encuentra en pleno desarrollo. '
+      'Su personalidad definitiva se moldeará según el entorno, la educación y la socialización '
+      'que reciba en su nuevo hogar.';
+
+  Widget _avisoPersonalidadEnDesarrollo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.rosaSuave,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.bordeRosa),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.pets, color: AppColors.rosa, size: 22),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _textoCachorro,
+                  style: TextStyle(
+                    color: AppColors.texto,
+                    fontSize: 13.5,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (Session.esAdmin) ...[
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.rosa,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            onPressed: _asignarPersonalidad,
+            icon: const Icon(Icons.psychology_alt_outlined),
+            label: const Text(
+              'Asignar personalidad',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 
   Widget _chipRasgo(IconData icono, String texto) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),

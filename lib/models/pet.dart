@@ -8,6 +8,9 @@ class Pet {
   final String? raza;
   final int? edad;
   final String unidadEdad; // 'meses' o 'anos'
+
+  /// Día de nacimiento. La edad que se muestra sale de aquí y cambia con el tiempo.
+  final DateTime? fechaNacimiento;
   final String? sexo;
   final String? tamano;
   final String? descripcion;
@@ -23,7 +26,10 @@ class Pet {
   /// Usuario con la solicitud de adopción aprobada. Vacío si nadie la adoptó.
   final String? idAdoptante;
 
-  // Personalidad: valores de 1 a 5 por cada rasgo.
+  /// False cuando es un cachorro y su temperamento todavía no se evaluó.
+  final bool personalidadDefinida;
+
+  // Personalidad: valores de 1 a 5 por cada rasgo. Null si aún no está definida.
   final Map<String, dynamic> personalidad;
 
   const Pet({
@@ -33,6 +39,7 @@ class Pet {
     this.raza,
     this.edad,
     this.unidadEdad = 'anos',
+    this.fechaNacimiento,
     this.sexo,
     this.tamano,
     this.descripcion,
@@ -45,8 +52,38 @@ class Pet {
     this.detalleSalud,
     this.fechaActualizacion,
     this.idAdoptante,
+    this.personalidadDefinida = true,
     this.personalidad = const {},
   });
+
+  Pet copiar({
+    bool? personalidadDefinida,
+    Map<String, dynamic>? personalidad,
+  }) {
+    return Pet(
+      id: id,
+      nombre: nombre,
+      especie: especie,
+      raza: raza,
+      edad: edad,
+      unidadEdad: unidadEdad,
+      fechaNacimiento: fechaNacimiento,
+      sexo: sexo,
+      tamano: tamano,
+      descripcion: descripcion,
+      esterilizado: esterilizado,
+      vacunas: vacunas,
+      foto: foto,
+      estadoAdopcion: estadoAdopcion,
+      estadoApadrinamiento: estadoApadrinamiento,
+      estadosSalud: estadosSalud,
+      detalleSalud: detalleSalud,
+      fechaActualizacion: fechaActualizacion,
+      idAdoptante: idAdoptante,
+      personalidadDefinida: personalidadDefinida ?? this.personalidadDefinida,
+      personalidad: personalidad ?? this.personalidad,
+    );
+  }
 
   String get estadoSalud =>
       estadosSalud.isNotEmpty ? estadosSalud.join(' • ') : 'No presenta necesidades veterinarias pendientes.';
@@ -56,8 +93,9 @@ class Pet {
     nombre: j['nombre'] as String,
     especie: j['especie'] as String,
     raza: j['raza'] as String?,
-    edad: j['edad'] as int?,
+    edad: _entero(j['edad']),
     unidadEdad: (j['unidad_edad'] ?? 'anos') as String,
+    fechaNacimiento: _fecha(j['fecha_nacimiento']),
     sexo: j['sexo'] as String?,
     tamano: j['tamano'] as String?,
     descripcion: j['descripcion'] as String?,
@@ -71,6 +109,7 @@ class Pet {
     detalleSalud: j['detalle_salud'] as String?,
     fechaActualizacion: j['fecha_actualizacion'] as String?,
     idAdoptante: _id(j['id_usuario_adoptante']),
+    personalidadDefinida: j['personalidad_definida'] != false,
 
     // Si el backend devuelve personalidad, la cargamos.
     personalidad: j['personalidad'] is Map
@@ -85,6 +124,9 @@ class Pet {
     'raza': raza,
     'edad': edad,
     'unidad_edad': unidadEdad,
+    'fecha_nacimiento': fechaNacimiento == null
+        ? null
+        : _isoFecha(fechaNacimiento!),
     'sexo': sexo,
     'tamano': tamano,
     'descripcion': descripcion,
@@ -95,10 +137,13 @@ class Pet {
     'estado_apadrinamiento': estadoApadrinamiento,
     'estado_salud': estadosSalud,
     'detalle_salud': detalleSalud,
+    'personalidad_definida': personalidadDefinida,
     'personalidad': personalidad,
   };
 
   String get edadTexto {
+    final nacimiento = fechaNacimiento;
+    if (nacimiento != null) return Pet.textoEdad(nacimiento, DateTime.now());
     if (edad == null) return 'Edad no registrada';
     if (unidadEdad == 'meses' || unidadEdad == 'mes') {
       return edad == 1 ? '1 mes' : '$edad meses';
@@ -106,8 +151,89 @@ class Pet {
     return edad == 1 ? '1 año' : '$edad años';
   }
 
-  /// La unidad decide el grupo: meses es cachorro y años es adulto.
-  bool get esCachorro => unidadEdad == 'meses' || unidadEdad == 'mes';
+  /// Fecha guardada, o una calculada con la edad cuando el registro antiguo no tiene día.
+  DateTime? get fechaNacimientoParaEditar {
+    final conocida = fechaNacimiento;
+    if (conocida != null) {
+      return DateTime(conocida.year, conocida.month, conocida.day);
+    }
+    final cantidad = edad;
+    if (cantidad == null || cantidad < 0) return null;
+    final hoy = DateTime.now();
+    if (unidadEdad == 'meses' || unidadEdad == 'mes') {
+      return DateTime(hoy.year, hoy.month - cantidad, hoy.day);
+    }
+    return DateTime(hoy.year - cantidad, hoy.month, hoy.day);
+  }
+
+  /// True cuando [fechaNacimientoParaEditar] sale de la edad y no de un día guardado.
+  bool get fechaNacimientoEsEstimada =>
+      fechaNacimiento == null && fechaNacimientoParaEditar != null;
+
+  /// Meses ya cumplidos a partir de la fecha de nacimiento.
+  int? get mesesCumplidos {
+    final nacimiento = fechaNacimiento;
+    if (nacimiento != null) return Pet.mesesEntre(nacimiento, DateTime.now());
+    if (edad == null) return null;
+    if (unidadEdad == 'meses' || unidadEdad == 'mes') return edad;
+    return edad! * 12;
+  }
+
+  /// Cumplió 8 meses y la personalidad sigue sin registrarse.
+  bool get pendienteLlenarPersonalidad {
+    if (personalidadDefinida) return false;
+    final meses = mesesCumplidos;
+    return meses != null && meses >= 8;
+  }
+
+  /// Menos de un año. Con fecha de nacimiento se recalcula; si no hay fecha,
+  /// se conserva el grupo que quedó guardado en meses o años.
+  bool get esCachorro {
+    final meses = mesesCumplidos;
+    if (fechaNacimiento != null && meses != null) return meses < 12;
+    return unidadEdad == 'meses' || unidadEdad == 'mes';
+  }
+
+  /// Años, meses y días cumplidos entre [nacimiento] y [hoy].
+  static ({int anos, int meses, int dias}) partesEdad(
+    DateTime nacimiento,
+    DateTime hoy,
+  ) {
+    final n = DateTime(nacimiento.year, nacimiento.month, nacimiento.day);
+    final h = DateTime(hoy.year, hoy.month, hoy.day);
+    if (h.isBefore(n)) return (anos: 0, meses: 0, dias: 0);
+    var anos = h.year - n.year;
+    var meses = h.month - n.month;
+    var dias = h.day - n.day;
+    if (dias < 0) {
+      meses--;
+      dias += DateTime(h.year, h.month, 0).day;
+    }
+    if (meses < 0) {
+      anos--;
+      meses += 12;
+    }
+    return (anos: anos, meses: meses, dias: dias);
+  }
+
+  static int mesesEntre(DateTime nacimiento, DateTime hoy) {
+    final partes = partesEdad(nacimiento, hoy);
+    return partes.anos * 12 + partes.meses;
+  }
+
+  static String textoEdad(DateTime nacimiento, DateTime hoy) {
+    final partes = partesEdad(nacimiento, hoy);
+    if (partes.anos == 0 && partes.meses == 0) {
+      if (partes.dias <= 0) return 'Menos de 1 día';
+      return partes.dias == 1 ? '1 día' : '${partes.dias} días';
+    }
+    final textos = <String>[
+      if (partes.anos > 0) partes.anos == 1 ? '1 año' : '${partes.anos} años',
+      if (partes.meses > 0)
+        partes.meses == 1 ? '1 mes' : '${partes.meses} meses',
+    ];
+    return textos.join(' y ');
+  }
 
   String get estadoAdopcionTexto => etiquetaEstadoAdopcion(estadoAdopcion);
 
@@ -179,6 +305,7 @@ class Pet {
 
 /// Las 10 opciones oficiales para el estado de salud de la mascota
 const List<String> opcionesEstadoSalud = [
+  'No presenta necesidades veterinarias pendientes.',
   'Requiere vacunación.',
   'Vacunación al día.',
   'Requiere esterilización.',
@@ -188,7 +315,6 @@ const List<String> opcionesEstadoSalud = [
   'Necesita medicamentos.',
   'Se encuentra en tratamiento veterinario.',
   'Requiere cuidados especiales.',
-  'No presenta necesidades veterinarias pendientes.',
 ];
 
 const List<String> opcionesNecesidadesPendientes = [
@@ -261,6 +387,30 @@ List<String> _parseEstadosSalud(dynamic raw, dynamic vacunas, dynamic esteriliza
   }
 
   return result;
+}
+
+int? _entero(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.round();
+  if (value is String) return int.tryParse(value);
+  return null;
+}
+
+DateTime? _fecha(dynamic value) {
+  final texto = value?.toString() ?? '';
+  final coincidencia = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(texto);
+  if (coincidencia == null) return null;
+  return DateTime(
+    int.parse(coincidencia.group(1)!),
+    int.parse(coincidencia.group(2)!),
+    int.parse(coincidencia.group(3)!),
+  );
+}
+
+String _isoFecha(DateTime fecha) {
+  final mes = fecha.month.toString().padLeft(2, '0');
+  final dia = fecha.day.toString().padLeft(2, '0');
+  return '${fecha.year}-$mes-$dia';
 }
 
 String? _id(dynamic value) {

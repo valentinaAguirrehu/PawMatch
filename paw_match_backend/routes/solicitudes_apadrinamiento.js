@@ -5,6 +5,7 @@ const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
 const { esAdministrador } = require('../utils/roles');
+const { sqlEdad } = require('../utils/edad_mascota');
 const {
   enviarCorreoAprobacionApadrinamiento,
   enviarCorreoRechazoApadrinamiento,
@@ -617,7 +618,7 @@ router.get('/', async (req, res) => {
         m.nombre AS mascota_nombre,
         m.especie AS mascota_especie,
         m.raza AS mascota_raza,
-        m.edad AS mascota_edad,
+        ${sqlEdad('m')} AS mascota_edad,
         m.fotos AS mascota_fotos,
         m.estado_apadrinamiento AS mascota_estado_apadrinamiento,
         ev.evaluaciones_ciclos,

@@ -6,6 +6,7 @@ const { randomUUID } = require('crypto');
 const pool = require('../db');
 const { esAdministrador } = require('../utils/roles');
 const { quitarFondo } = require('../utils/quitarFondo');
+const { sqlEdad, sqlUnidadEdad, leerFechaNacimiento } = require('../utils/edad_mascota');
 
 const router = express.Router();
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'mascotas');
@@ -27,13 +28,31 @@ const personalityColumns = [
 ];
 
 // La edad puede estar en meses o años. Sin esta columna, el listado falla.
-const esquemaListo = pool.query(`
-  ALTER TABLE mascota
-    ADD COLUMN IF NOT EXISTS unidad_edad VARCHAR(10) NOT NULL DEFAULT 'anos',
-    ADD COLUMN IF NOT EXISTS estado_salud TEXT NOT NULL DEFAULT '["No presenta necesidades veterinarias pendientes."]',
-    ADD COLUMN IF NOT EXISTS detalle_salud TEXT,
-    ADD COLUMN IF NOT EXISTS fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-`).catch((err) => {
+// personalidad_definida queda en true para las mascotas que ya tenían evaluación.
+// Los rasgos de un cachorro en desarrollo se guardan en NULL.
+const esquemaListo = (async () => {
+  await pool.query(`
+    ALTER TABLE mascota
+      ADD COLUMN IF NOT EXISTS unidad_edad VARCHAR(10) NOT NULL DEFAULT 'anos',
+      ADD COLUMN IF NOT EXISTS estado_salud TEXT NOT NULL DEFAULT '["No presenta necesidades veterinarias pendientes."]',
+      ADD COLUMN IF NOT EXISTS detalle_salud TEXT,
+      ADD COLUMN IF NOT EXISTS fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS personalidad_definida BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE;
+  `);
+  await pool.query(`
+    ALTER TABLE personalidadmascota
+      ALTER COLUMN nivel_energia DROP NOT NULL,
+      ALTER COLUMN sociabilidad_personas DROP NOT NULL,
+      ALTER COLUMN sociabilidad_mascotas DROP NOT NULL,
+      ALTER COLUMN independencia DROP NOT NULL,
+      ALTER COLUMN nivel_juego DROP NOT NULL,
+      ALTER COLUMN carino DROP NOT NULL,
+      ALTER COLUMN proteccion DROP NOT NULL,
+      ALTER COLUMN tolerancia_soledad DROP NOT NULL,
+      ALTER COLUMN adaptabilidad DROP NOT NULL;
+  `);
+})().catch((err) => {
   console.error('No se pudo preparar la tabla mascota:', err.message);
   throw err;
 });
@@ -66,11 +85,23 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-function personalityValues(personality = {}) {
-  return personalityColumns.map((column) => {
-    const value = Number(personality[column]);
-    return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 3;
-  });
+function leerPersonalidad(body) {
+  const definida = body.personalidad_definida !== false;
+  if (!definida) {
+    return { definida: false, valores: personalityColumns.map(() => null) };
+  }
+  const personalidad = body.personalidad && typeof body.personalidad === 'object'
+    ? body.personalidad
+    : {};
+  const valores = [];
+  for (const column of personalityColumns) {
+    const value = Number(personalidad[column]);
+    if (!Number.isInteger(value) || value < 1 || value > 5) {
+      return { error: 'Completa la evaluación de personalidad (1 a 5).' };
+    }
+    valores.push(value);
+  }
+  return { definida: true, valores };
 }
 
 function procesarEstadoSaludYProcedimientos(estadoSaludInput, vacunasInput, esterilizadoInput) {
@@ -114,12 +145,14 @@ function procesarEstadoSaludYProcedimientos(estadoSaludInput, vacunasInput, este
 
 // fecha_ingreso va como texto 'YYYY-MM-DD' para evitar desfases de zona horaria
 const petSelect = `
-  SELECT m.id_mascota, m.nombre, m.especie, m.raza, m.edad, m.unidad_edad, m.sexo,
+  SELECT m.id_mascota, m.nombre, m.especie, m.raza,
+         ${sqlEdad('m')} AS edad, ${sqlUnidadEdad('m')} AS unidad_edad, m.sexo,
          m.tamano, m.descripcion, m.esterilizado, m.vacunas, m.fotos,
-         m.estado_adopcion, m.estado_apadrinamiento,
+         m.estado_adopcion, m.estado_apadrinamiento, m.personalidad_definida,
          COALESCE(m.estado_salud, '["No presenta necesidades veterinarias pendientes."]') AS estado_salud,
          m.detalle_salud,
          to_char(m.fecha_ingreso, 'YYYY-MM-DD') AS fecha_ingreso,
+         to_char(m.fecha_nacimiento, 'YYYY-MM-DD') AS fecha_nacimiento,
          to_char(m.fecha_actualizacion, 'YYYY-MM-DD HH24:MI') AS fecha_actualizacion,
          (SELECT s.id_usuario
             FROM solicitudadopcion s
@@ -180,14 +213,19 @@ router.post('/foto', requireAdmin, upload.single('foto'), async (req, res) => {
 
 router.post('/', requireAdmin, async (req, res) => {
   const {
-    nombre, especie, raza, edad, unidad_edad: unidadEdad = 'anos', sexo, tamano, descripcion, esterilizado,
+    nombre, especie, raza, sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion = 'disponible',
     estado_apadrinamiento: estadoApadrinamiento = 'disponible',
     estado_salud: estadoSalud,
     detalle_salud: detalleSalud = null,
-    personalidad,
   } = req.body;
   if (!nombre || !especie) return res.status(400).json({ error: 'Nombre y especie son obligatorios' });
+  const fechaLeida = leerFechaNacimiento(req.body.fecha_nacimiento);
+  if (fechaLeida.error) return res.status(400).json({ error: fechaLeida.error });
+  const personalidadLeida = leerPersonalidad(req.body);
+  if (personalidadLeida.error) {
+    return res.status(400).json({ error: personalidadLeida.error });
+  }
 
   const { estadoSaludDb, vacunas: vacunasFinal, esterilizado: esterilizadoFinal } =
     procesarEstadoSaludYProcedimientos(estadoSalud, vacunas, esterilizado);
@@ -199,20 +237,22 @@ router.post('/', requireAdmin, async (req, res) => {
       `INSERT INTO mascota
        (id_mascota, nombre, especie, raza, edad, unidad_edad, sexo, tamano, descripcion,
         esterilizado, vacunas, fotos, fecha_ingreso, fecha_actualizacion, estado_adopcion,
-        estado_apadrinamiento, estado_salud, detalle_salud, id_administrador)
+        estado_apadrinamiento, estado_salud, detalle_salud, id_administrador,
+        personalidad_definida, fecha_nacimiento)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_DATE, CURRENT_TIMESTAMP,
-               $13, $14, $15, $16, $17) RETURNING id_mascota`,
-      [randomUUID(), nombre, especie, raza || null, edad || null, unidadEdad || 'anos', sexo || null,
+               $13, $14, $15, $16, $17, $18, $19) RETURNING id_mascota`,
+      [randomUUID(), nombre, especie, raza || null, fechaLeida.edad, fechaLeida.unidad, sexo || null,
         tamano || null, descripcion || null, esterilizadoFinal, vacunasFinal,
         fotos || null, estadoAdopcion, estadoApadrinamiento,
-        estadoSaludDb, detalleSalud || null, req.adminId],
+        estadoSaludDb, detalleSalud || null, req.adminId, personalidadLeida.definida,
+        fechaLeida.fecha],
     );
     const idMascota = pet.rows[0].id_mascota;
     await client.query(
       `INSERT INTO personalidadmascota
        (id_perfil_mascota, id_mascota, ${personalityColumns.join(', ')}, fecha_actualizacion)
        VALUES ($1, $2, ${personalityColumns.map((_, i) => `$${i + 3}`).join(', ')}, CURRENT_TIMESTAMP)`,
-      [randomUUID(), idMascota, ...personalityValues(personalidad)],
+      [randomUUID(), idMascota, ...personalidadLeida.valores],
     );
     const result = await client.query(`${petSelect} WHERE m.id_mascota = $1`, [idMascota]);
     await client.query('COMMIT');
@@ -228,12 +268,17 @@ router.post('/', requireAdmin, async (req, res) => {
 
 router.put('/:id', requireAdmin, async (req, res) => {
   const {
-    nombre, especie, raza, edad, unidad_edad: unidadEdad = 'anos', sexo, tamano, descripcion, esterilizado,
+    nombre, especie, raza, sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion, estado_apadrinamiento: estadoApadrinamiento,
     estado_salud: estadoSalud,
     detalle_salud: detalleSalud = null,
-    personalidad,
   } = req.body;
+  const fechaLeida = leerFechaNacimiento(req.body.fecha_nacimiento, { obligatoria: false });
+  if (fechaLeida.error) return res.status(400).json({ error: fechaLeida.error });
+  const personalidadLeida = leerPersonalidad(req.body);
+  if (personalidadLeida.error) {
+    return res.status(400).json({ error: personalidadLeida.error });
+  }
 
   const { estadoSaludDb, vacunas: vacunasFinal, esterilizado: esterilizadoFinal } =
     procesarEstadoSaludYProcedimientos(estadoSalud, vacunas, esterilizado);
@@ -242,25 +287,37 @@ router.put('/:id', requireAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
     const pet = await client.query(
-      `UPDATE mascota SET nombre = $1, especie = $2, raza = $3, edad = $4, unidad_edad = $5, sexo = $6,
+      `UPDATE mascota SET nombre = $1, especie = $2, raza = $3,
+       edad = COALESCE($4, edad), unidad_edad = COALESCE($5, unidad_edad), sexo = $6,
        tamano = $7, descripcion = $8, esterilizado = $9, vacunas = $10, fotos = $11,
        estado_adopcion = $12, estado_apadrinamiento = $13,
-       estado_salud = $14, detalle_salud = $15, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id_mascota = $16
+       estado_salud = $14, detalle_salud = $15, personalidad_definida = $16,
+       fecha_nacimiento = COALESCE($17::date, fecha_nacimiento),
+       fecha_actualizacion = CURRENT_TIMESTAMP WHERE id_mascota = $18
        RETURNING id_mascota`,
-      [nombre, especie, raza || null, edad || null, unidadEdad || 'anos', sexo || null, tamano || null,
+      [nombre, especie, raza || null, fechaLeida.edad, fechaLeida.unidad, sexo || null, tamano || null,
         descripcion || null, esterilizadoFinal, vacunasFinal, fotos || null,
         estadoAdopcion, estadoApadrinamiento,
-        estadoSaludDb, detalleSalud || null, req.params.id],
+        estadoSaludDb, detalleSalud || null, personalidadLeida.definida, fechaLeida.fecha,
+        req.params.id],
     );
     if (pet.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Mascota no encontrada' });
     }
-    await client.query(
+    const personalidadActualizada = await client.query(
       `UPDATE personalidadmascota SET ${personalityColumns.map((column, i) => `${column} = $${i + 1}`).join(', ')},
        fecha_actualizacion = CURRENT_TIMESTAMP WHERE id_mascota = $${personalityColumns.length + 1}`,
-      [...personalityValues(personalidad), req.params.id],
+      [...personalidadLeida.valores, req.params.id],
     );
+    if (personalidadActualizada.rowCount === 0) {
+      await client.query(
+        `INSERT INTO personalidadmascota
+         (id_perfil_mascota, id_mascota, ${personalityColumns.join(', ')}, fecha_actualizacion)
+         VALUES ($1, $2, ${personalityColumns.map((_, i) => `$${i + 3}`).join(', ')}, CURRENT_TIMESTAMP)`,
+        [randomUUID(), req.params.id, ...personalidadLeida.valores],
+      );
+    }
     const result = await client.query(`${petSelect} WHERE m.id_mascota = $1`, [req.params.id]);
     await client.query('COMMIT');
     res.json(result.rows[0]);

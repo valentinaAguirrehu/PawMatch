@@ -6,6 +6,7 @@ const { randomUUID } = require('crypto');
 const router = express.Router();
 const pool = require('../db');
 const { esAdministrador } = require('../utils/roles');
+const { sqlEdad, sqlUnidadEdad } = require('../utils/edad_mascota');
 
 const fotosDir = path.join(__dirname, '..', 'uploads', 'seguimientos_adopcion');
 const fotosCancelacionDir = path.join(__dirname, '..', 'uploads', 'cancelaciones_adopcion');
@@ -254,8 +255,8 @@ router.get('/activos', requireAdmin, async (_req, res) => {
         m.fotos AS mascota_fotos,
         m.especie AS mascota_especie,
         m.raza AS mascota_raza,
-        m.edad AS mascota_edad,
-        m.unidad_edad AS mascota_unidad_edad,
+        ${sqlEdad('m')} AS mascota_edad,
+        ${sqlUnidadEdad('m')} AS mascota_unidad_edad,
         u.id_usuario,
         u.nombres AS usuario_nombres,
         u.apellidos AS usuario_apellidos,
@@ -553,8 +554,8 @@ router.get('/calendario', requireAdmin, async (_req, res) => {
         m.fotos AS mascota_fotos,
         m.especie AS mascota_especie,
         m.raza AS mascota_raza,
-        m.edad AS mascota_edad,
-        m.unidad_edad AS mascota_unidad_edad,
+        ${sqlEdad('m')} AS mascota_edad,
+        ${sqlUnidadEdad('m')} AS mascota_unidad_edad,
         u.id_usuario,
         u.nombres AS usuario_nombres,
         u.apellidos AS usuario_apellidos,

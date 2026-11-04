@@ -25,6 +25,7 @@ class CompatibilidadMatch {
 
 /// Las tres mascotas más compatibles que aún buscan hogar.
 /// Las adoptadas no entran: ya tienen familia.
+/// Los cachorros con personalidad en desarrollo tampoco: no hay rasgos que comparar.
 class RankingMatch {
   final bool tienePersonalidad;
 
@@ -69,7 +70,7 @@ class MatchService {
     final mascotas = await mascotasFuture;
     final resultados = <CompatibilidadMatch>[];
     for (final mascota in mascotas) {
-      if (mascota.estaAdoptada) continue;
+      if (mascota.estaAdoptada || !mascota.personalidadDefinida) continue;
       final calculo = calcular(usuario, mascota.personalidad);
       if (calculo == null) continue;
       resultados.add(
@@ -126,7 +127,7 @@ class MatchService {
     for (final rasgo in rasgosMascota) {
       final valorUsuario = usuario[rasgo.clave];
       final valorMascota = _entero(mascota[rasgo.clave]);
-      if (valorUsuario == null || valorMascota == null) continue;
+      if (valorUsuario == null || valorMascota == null) return null;
       final distancia = (valorUsuario - valorMascota).abs().clamp(0, 4);
       suma += 1 - (distancia / 4);
       cercanos.add((clave: rasgo.clave, distancia: distancia));
