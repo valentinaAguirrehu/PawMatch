@@ -26,9 +26,9 @@ class TarjetaAyuda extends StatelessWidget {
 
         final pad = muyCompacto ? 12.0 : (compacto ? 15.0 : 20.0);
         final radioBorde = compacto ? 22.0 : 28.0;
-        final radioAvatar = muyCompacto ? 18.0 : (compacto ? 21.0 : 26.0);
-        final tamIcono = muyCompacto ? 19.0 : (compacto ? 22.0 : 28.0);
-        final tamTitulo = muyCompacto ? 12.5 : (compacto ? 14.0 : 16.0);
+        final radioAvatar = muyCompacto ? 16.0 : (compacto ? 18.0 : 24.0);
+        final tamIcono = muyCompacto ? 16.0 : (compacto ? 18.0 : 24.0);
+        final tamTitulo = muyCompacto ? 11.5 : (compacto ? 12.5 : 15.0);
         final tamTexto = muyCompacto ? 11.5 : (compacto ? 12.5 : 14.0);
 
         return Container(
@@ -65,13 +65,12 @@ class TarjetaAyuda extends StatelessWidget {
                       children: [
                         Text(
                           titulo.toUpperCase(),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          softWrap: true,
                           style: t.titleMedium?.copyWith(
                             fontFamily: 'Nunito',
                             fontWeight: FontWeight.w800,
                             fontSize: tamTitulo,
-                            letterSpacing: muyCompacto ? 0.6 : 1.2,
+                            letterSpacing: 0.15,
                             color: AppColors.texto,
                             height: 1.15,
                           ),

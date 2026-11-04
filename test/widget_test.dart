@@ -15,8 +15,8 @@ void main() {
   ) async {
     await tester.pumpWidget(const PawMatchApp());
 
-    // Verifica que se muestre el título de la pantalla de bienvenida.
-    expect(find.text('Paw Match'), findsOneWidget);
+    // Verifica que se muestre la pantalla de bienvenida.
+    expect(find.text('CONOCE NUESTRA'), findsOneWidget);
 
     // Verifica que estén los dos botones principales.
     expect(find.text('Iniciar sesión'), findsOneWidget);
