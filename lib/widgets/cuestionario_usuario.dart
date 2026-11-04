@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
 /// Encabezado del cuestionario de personalidad del adoptante.
@@ -121,7 +122,7 @@ class TarjetaRasgoUsuario extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 2),
-          Text(rasgo.preguntaUsuario, style: t.bodyMedium),
+          Text(rasgo.preguntaPara(Session.genero), style: t.bodyMedium),
           Slider(
             value: valor,
             min: 1,
@@ -135,14 +136,14 @@ class TarjetaRasgoUsuario extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  '1 · ${rasgo.minimoUsuario}',
+                  '1 · ${rasgo.minimoUsuarioPara(Session.genero)}',
                   style: t.bodySmall?.copyWith(color: Colors.black54),
                 ),
               ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  '5 · ${rasgo.maximoUsuario}',
+                  '5 · ${rasgo.maximoUsuarioPara(Session.genero)}',
                   textAlign: TextAlign.right,
                   style: t.bodySmall?.copyWith(color: Colors.black54),
                 ),

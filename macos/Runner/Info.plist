@@ -26,6 +26,10 @@
 	<string>Paw Match usa la cámara para tomar tu foto de perfil.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Paw Match accede a tus fotos para que elijas tu foto de perfil.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Paw Match usa el micrófono para que respondas el formulario de personalidad con tu voz.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Paw Match convierte tu voz en texto para el formulario de personalidad.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>$(PRODUCT_COPYRIGHT)</string>
 	<key>NSMainNibFile</key>

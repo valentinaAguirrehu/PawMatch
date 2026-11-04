@@ -5,6 +5,16 @@ const path = require('path');
 const multer = require('multer');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const {
+  personalityColumns,
+  validarRespuestasGuardado,
+  listarBorradores,
+  insertarRespuestas,
+  borrarBorradoresUsuario,
+  coincidenConBorradores,
+} = require('../utils/entrevista_personalidad');
+const { generoValido } = require('../utils/genero_usuario');
+const { esAdministrador } = require('../utils/roles');
 const { enviarCorreoRecuperacionContrasena } = require('../utils/correo');
 
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'usuarios');
@@ -21,12 +31,6 @@ const upload = multer({
 
 const router = express.Router();
 
-const personalityColumns = [
-  'nivel_energia', 'sociabilidad_personas', 'sociabilidad_mascotas',
-  'independencia', 'nivel_juego', 'carino', 'proteccion',
-  'tolerancia_soledad', 'adaptabilidad',
-];
-
 function personalityValues(personality = {}) {
   const values = [];
   for (const column of personalityColumns) {
@@ -39,10 +43,26 @@ function personalityValues(personality = {}) {
 
 // POST /api/usuarios/registro
 router.post('/registro', async (req, res) => {
-  const { nombres, apellidos, correo, telefono, contrasena, fecha_nacimiento } = req.body;
+  const { nombres, apellidos, correo, telefono, contrasena, fecha_nacimiento, genero } = req.body;
 
   if (!nombres || !apellidos || !correo || !contrasena) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  }
+  const passStr = String(contrasena);
+  if (
+    passStr.length < 8 ||
+    !/[A-Z]/.test(passStr) ||
+    !/[a-z]/.test(passStr) ||
+    !/[0-9]/.test(passStr) ||
+    !/[@#$%&*]/.test(passStr)
+  ) {
+    return res.status(400).json({
+      error:
+        'La contraseña debe tener mínimo 8 caracteres, al menos una mayúscula (A-Z), una minúscula (a-z), un número (0-9) y un carácter especial (@, #, $, %, &, *).',
+    });
+  }
+  if (!generoValido(genero)) {
+    return res.status(400).json({ error: 'Selecciona si eres Hombre o Mujer' });
   }
 
   try {
@@ -58,10 +78,10 @@ router.post('/registro', async (req, res) => {
     const contrasena_hash = await bcrypt.hash(contrasena, 10);
 
     const resultado = await pool.query(
-      `INSERT INTO Usuario (nombres, apellidos, correo, telefono, fecha_nacimiento, contrasena_hash, rol)
-       VALUES ($1, $2, $3, $4, $5, $6, 'usuario')
-       RETURNING id_usuario, nombres, apellidos, correo, telefono, fecha_nacimiento, rol, fecha_registro`,
-      [nombres, apellidos, correo, telefono, fecha_nacimiento || null, contrasena_hash]
+      `INSERT INTO Usuario (nombres, apellidos, correo, telefono, fecha_nacimiento, genero, contrasena_hash, rol)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'usuario')
+       RETURNING id_usuario, nombres, apellidos, correo, telefono, fecha_nacimiento, genero, rol, fecha_registro`,
+      [nombres, apellidos, correo, telefono, fecha_nacimiento || null, genero, contrasena_hash]
     );
 
     res.status(201).json(resultado.rows[0]);
@@ -81,7 +101,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const resultado = await pool.query(
-      `SELECT id_usuario, nombres, apellidos, correo, telefono, documento_identidad, rol, estado_cuenta, contrasena_hash
+      `SELECT id_usuario, nombres, apellidos, correo, telefono, documento_identidad, genero, rol, estado_cuenta, contrasena_hash
        FROM Usuario WHERE correo = $1`,
       [correo]
     );
@@ -292,7 +312,7 @@ router.post('/restablecer-contrasena', async (req, res) => {
 
 const perfilSelect = `
   SELECT id_usuario, nombres, apellidos, correo, telefono, direccion,
-         documento_identidad, fecha_nacimiento, foto_perfil
+         documento_identidad, fecha_nacimiento, foto_perfil, genero
   FROM usuario
 `;
 
@@ -323,36 +343,76 @@ router.get('/:id/personalidad', async (req, res) => {
   }
 });
 
-// POST /api/usuarios/:id/personalidad — un registro por usuario
+function responderErrorPersonalidad(res, error) {
+  if (error.code === '23505') {
+    return res.status(409).json({ error: 'Ya registraste tu personalidad' });
+  }
+  if (error.code === '23503') {
+    return res.status(404).json({ error: 'Usuario no encontrado' });
+  }
+  console.error(error);
+  return res.status(500).json({ error: 'No se pudo guardar la personalidad' });
+}
+
+// POST /api/usuarios/:id/personalidad — un registro por usuario.
+// Con `respuestas`, solo confirma lo que el asistente ya interpretó.
 router.post('/:id/personalidad', async (req, res) => {
   const sesion = req.header('x-usuario-id');
   if (!sesion || sesion !== req.params.id) {
     return res.status(401).json({ error: 'Debes iniciar sesión' });
   }
 
-  const valores = personalityValues(req.body);
+  const cuerpo = req.body && typeof req.body === 'object' ? req.body : {};
+  const valores = personalityValues(cuerpo);
   if (!valores) {
     return res.status(400).json({ error: 'Cada rasgo debe ser un número del 1 al 5' });
   }
 
-  try {
-    const resultado = await pool.query(
-      `INSERT INTO personalidadusuario
+  const entrevista = validarRespuestasGuardado(cuerpo);
+  if (entrevista.error) {
+    return res.status(400).json({ error: entrevista.error });
+  }
+
+  const sqlInsert = `INSERT INTO personalidadusuario
        (id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion)
        VALUES ($1, ${personalityColumns.map((_, i) => `$${i + 2}`).join(', ')}, CURRENT_TIMESTAMP)
-       RETURNING id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion`,
-      [req.params.id, ...valores],
+       RETURNING id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion`;
+  const params = [req.params.id, ...valores];
+
+  if (!entrevista.filas) {
+    try {
+      const resultado = await pool.query(sqlInsert, params);
+      return res.status(201).json(resultado.rows[0]);
+    } catch (error) {
+      return responderErrorPersonalidad(res, error);
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const borradores = await listarBorradores(client, req.params.id);
+    if (!coincidenConBorradores(entrevista.filas, borradores)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: 'Las respuestas no coinciden con la entrevista. Vuelve a enviar la pregunta que cambió.',
+      });
+    }
+    const resultado = await client.query(sqlInsert, params);
+    await insertarRespuestas(
+      client,
+      resultado.rows[0].id_perfil_usuario,
+      req.params.id,
+      borradores,
     );
-    res.status(201).json(resultado.rows[0]);
+    await borrarBorradoresUsuario(client, req.params.id);
+    await client.query('COMMIT');
+    return res.status(201).json(resultado.rows[0]);
   } catch (error) {
-    if (error.code === '23505') {
-      return res.status(409).json({ error: 'Ya registraste tu personalidad' });
-    }
-    if (error.code === '23503') {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-    console.error(error);
-    res.status(500).json({ error: 'No se pudo guardar la personalidad' });
+    try { await client.query('ROLLBACK'); } catch (_) { /* la transacción ya estaba cerrada */ }
+    return responderErrorPersonalidad(res, error);
+  } finally {
+    client.release();
   }
 });
 
@@ -456,10 +516,16 @@ router.patch('/:id/correo', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-  const { nombres, apellidos, correo, telefono, direccion, documento_identidad, fecha_nacimiento, foto_perfil } = req.body;
+  const {
+    nombres, apellidos, correo, telefono, direccion,
+    documento_identidad, fecha_nacimiento, foto_perfil, genero,
+  } = req.body;
 
   if (!nombres || !apellidos || !correo) {
     return res.status(400).json({ error: 'Nombres, apellidos y correo son obligatorios' });
+  }
+  if (genero != null && String(genero).trim() !== '' && !generoValido(genero)) {
+    return res.status(400).json({ error: 'Selecciona si eres Hombre o Mujer' });
   }
 
   try {
@@ -471,13 +537,15 @@ router.put('/:id', async (req, res) => {
       return res.status(409).json({ error: 'Ese correo ya está registrado' });
     }
 
+    const guardaGenero = generoValido(genero);
     const resultado = await pool.query(
       `UPDATE usuario
        SET nombres = $1, apellidos = $2, correo = $3, telefono = $4,
-           direccion = $5, documento_identidad = $6, fecha_nacimiento = $7, foto_perfil = $8
-       WHERE id_usuario = $9
+           direccion = $5, documento_identidad = $6, fecha_nacimiento = $7, foto_perfil = $8,
+           genero = CASE WHEN $9::boolean THEN $10 ELSE genero END
+       WHERE id_usuario = $11
        RETURNING id_usuario, nombres, apellidos, correo, telefono, direccion,
-                 documento_identidad, fecha_nacimiento, foto_perfil`,
+                 documento_identidad, fecha_nacimiento, foto_perfil, genero`,
       [
         nombres,
         apellidos,
@@ -487,6 +555,8 @@ router.put('/:id', async (req, res) => {
         documento_identidad || null,
         fecha_nacimiento || null,
         foto_perfil || null,
+        guardaGenero,
+        guardaGenero ? genero : null,
         req.params.id,
       ]
     );
@@ -498,6 +568,191 @@ router.put('/:id', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'No se pudo guardar el perfil' });
+  }
+});
+
+const consultaAsociaciones = `
+  SELECT 'adopción' AS tipo, lower(btrim(estado::text)) AS estado, COUNT(*)::int AS total
+    FROM solicitudadopcion
+   WHERE id_usuario = $1
+     AND lower(btrim(estado::text)) <> 'rechazada'
+   GROUP BY 2
+  UNION ALL
+  SELECT 'apadrinamiento', lower(btrim(estado::text)), COUNT(*)::int
+    FROM solicitudapadrinamiento
+   WHERE id_usuario = $1
+     AND lower(btrim(estado::text)) <> 'rechazada'
+   GROUP BY 2`;
+
+function fraseAsociacion(fila) {
+  const varias = fila.total > 1;
+  const n = fila.total;
+  if (fila.tipo === 'adopción') {
+    if (fila.estado === 'pendiente') {
+      return varias
+        ? `${n} solicitudes de adopción en proceso`
+        : 'una solicitud de adopción en proceso';
+    }
+    if (fila.estado === 'aprobada') {
+      return varias ? `${n} adopciones realizadas` : 'una adopción realizada';
+    }
+    if (fila.estado === 'cancelada') {
+      return varias ? `${n} adopciones canceladas` : 'una adopción cancelada';
+    }
+    return varias
+      ? `${n} solicitudes de adopción asociadas a tu cuenta`
+      : 'una solicitud de adopción asociada a tu cuenta';
+  }
+  if (fila.estado === 'pendiente') {
+    return varias
+      ? `${n} solicitudes de apadrinamiento en proceso`
+      : 'una solicitud de apadrinamiento en proceso';
+  }
+  if (fila.estado === 'aprobada') {
+    return varias ? `${n} apadrinamientos realizados` : 'un apadrinamiento realizado';
+  }
+  if (fila.estado === 'cancelada') {
+    return varias ? `${n} apadrinamientos cancelados` : 'un apadrinamiento cancelado';
+  }
+  return varias
+    ? `${n} solicitudes de apadrinamiento asociadas a tu cuenta`
+    : 'una solicitud de apadrinamiento asociada a tu cuenta';
+}
+
+function mensajeBloqueoCuenta(filas) {
+  const frases = filas.map(fraseAsociacion);
+  const lista = frases.length === 1
+    ? frases[0]
+    : `${frases.slice(0, -1).join(', ')} y ${frases[frases.length - 1]}`;
+  return `No puedes eliminar tu cuenta porque tienes ${lista}. `
+    + 'La cuenta debe permanecer mientras exista una adopción o un apadrinamiento realizado, '
+    + 'o una solicitud que todavía está en proceso.';
+}
+
+async function revisarEliminacionCuenta(idSesion, idCuenta) {
+  if (!idSesion) {
+    return { status: 401, body: { error: 'Debes iniciar sesión' } };
+  }
+  if (idSesion !== idCuenta) {
+    return { status: 403, body: { error: 'Solo puedes eliminar tu propia cuenta' } };
+  }
+
+  const actual = await pool.query(
+    'SELECT id_usuario, rol FROM usuario WHERE id_usuario = $1',
+    [idCuenta]
+  );
+  if (actual.rows.length === 0) {
+    return { status: 404, body: { error: 'Usuario no encontrado' } };
+  }
+  if (esAdministrador(actual.rows[0].rol)) {
+    return {
+      status: 403,
+      body: {
+        error: 'Los administradores y el superadministrador no pueden eliminar su cuenta desde el perfil',
+      },
+    };
+  }
+
+  const asociadas = await pool.query(consultaAsociaciones, [idCuenta]);
+  if (asociadas.rows.length > 0) {
+    return {
+      status: 409,
+      body: { puede: false, error: mensajeBloqueoCuenta(asociadas.rows) },
+    };
+  }
+  return { status: 200, body: { puede: true } };
+}
+
+// GET /api/usuarios/:id/puede-eliminar
+router.get('/:id/puede-eliminar', async (req, res) => {
+  try {
+    const revision = await revisarEliminacionCuenta(req.header('x-usuario-id'), req.params.id);
+    if (revision.status === 409) {
+      return res.json(revision.body);
+    }
+    if (revision.status !== 200) {
+      return res.status(revision.status).json(revision.body);
+    }
+    res.json(revision.body);
+  } catch (error) {
+    if (error.code === '22P02') return res.status(404).json({ error: 'Usuario no encontrado' });
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo revisar si la cuenta se puede eliminar' });
+  }
+});
+
+// DELETE /api/usuarios/:id
+// Solo una persona con rol usuario, y solo si no tiene adopciones ni
+// apadrinamientos realizados o solicitudes en proceso.
+router.delete('/:id', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const revision = await revisarEliminacionCuenta(req.header('x-usuario-id'), req.params.id);
+    if (revision.status !== 200) {
+      return res.status(revision.status).json({ error: revision.body.error });
+    }
+
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM seguimientoadopcion
+        WHERE id_solicitud_adopcion IN (
+          SELECT id_solicitud_adopcion FROM solicitudadopcion
+           WHERE id_usuario = $1 AND lower(btrim(estado::text)) = 'rechazada'
+        )`,
+      [req.params.id]
+    );
+    await client.query(
+      `DELETE FROM seguimientoapadrinamiento
+        WHERE id_solicitud_apadrinamiento IN (
+          SELECT id_solicitud_apadrinamiento FROM solicitudapadrinamiento
+           WHERE id_usuario = $1 AND lower(btrim(estado::text)) = 'rechazada'
+        )`,
+      [req.params.id]
+    );
+    await client.query(
+      `DELETE FROM solicitudadopcion
+        WHERE id_usuario = $1 AND lower(btrim(estado::text)) = 'rechazada'`,
+      [req.params.id]
+    );
+    await client.query(
+      `DELETE FROM solicitudapadrinamiento
+        WHERE id_usuario = $1 AND lower(btrim(estado::text)) = 'rechazada'`,
+      [req.params.id]
+    );
+    await client.query(
+      `DELETE FROM match
+        WHERE id_perfil_usuario IN (
+          SELECT id_perfil_usuario FROM personalidadusuario WHERE id_usuario = $1
+        )`,
+      [req.params.id]
+    );
+    await client.query('DELETE FROM respuestausuario WHERE id_usuario = $1', [req.params.id]);
+    await client.query('DELETE FROM valoracion_usuario WHERE id_usuario = $1', [req.params.id]);
+    await client.query('DELETE FROM personalidadusuario WHERE id_usuario = $1', [req.params.id]);
+    const borrado = await client.query(
+      `DELETE FROM usuario
+        WHERE id_usuario = $1 AND lower(btrim(rol::text)) = 'usuario'
+        RETURNING id_usuario`,
+      [req.params.id]
+    );
+    if (borrado.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error.code === '22P02') return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (error.code === '23503') {
+      return res.status(409).json({
+        error: 'No puedes eliminar tu cuenta porque todavía tiene información asociada a una adopción o un apadrinamiento.',
+      });
+    }
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo eliminar la cuenta' });
+  } finally {
+    client.release();
   }
 });
 

@@ -218,9 +218,10 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                   )
                 else if (ranking.mejores.isEmpty)
                   _vacio(
-                    'Todavía no hay mascotas registradas para hacer una linda conexión contigo',
-                    'Cuando la fundación ingrese a nuevas mascotas, aquí '
-                        'verás tu match perfecto.',
+                    'Por ahora no hay mascotas buscando un hogar',
+                    'Los perritos que ya tienen familia no aparecen en tu match. '
+                        'Cuando la fundación ingrese nuevas mascotas, aquí '
+                        'verás tu conexión.',
                   )
                 else
                   _ranking(ranking),

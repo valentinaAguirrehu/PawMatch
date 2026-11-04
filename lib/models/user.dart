@@ -8,6 +8,7 @@ class User {
   final String documentoIdentidad;
   final DateTime? fechaNacimiento;
   final String? fotoPerfil;
+  final String genero;
 
   const User({
     required this.id,
@@ -19,6 +20,7 @@ class User {
     this.documentoIdentidad = '',
     this.fechaNacimiento,
     this.fotoPerfil,
+    this.genero = '',
   });
 
   String get nombreCompleto {
@@ -66,6 +68,7 @@ class User {
           ? null
           : DateTime.tryParse(nacimiento.toString()),
       fotoPerfil: json['foto_perfil']?.toString(),
+      genero: (json['genero'] ?? '').toString(),
     );
   }
 
@@ -82,5 +85,6 @@ class User {
               '${fechaNacimiento!.month.toString().padLeft(2, '0')}-'
               '${fechaNacimiento!.day.toString().padLeft(2, '0')}',
     'foto_perfil': fotoPerfil,
+    'genero': genero,
   };
 }

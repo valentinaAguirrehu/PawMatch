@@ -23,7 +23,8 @@ class CompatibilidadMatch {
   int get porcentajeEntero => porcentaje.round().clamp(0, 100);
 }
 
-/// Las tres mascotas más compatibles con la persona en sesión.
+/// Las tres mascotas más compatibles que aún buscan hogar.
+/// Las adoptadas no entran: ya tienen familia.
 class RankingMatch {
   final bool tienePersonalidad;
 
@@ -68,6 +69,7 @@ class MatchService {
     final mascotas = await mascotasFuture;
     final resultados = <CompatibilidadMatch>[];
     for (final mascota in mascotas) {
+      if (mascota.estaAdoptada) continue;
       final calculo = calcular(usuario, mascota.personalidad);
       if (calculo == null) continue;
       resultados.add(

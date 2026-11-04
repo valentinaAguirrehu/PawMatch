@@ -10,6 +10,7 @@ class Session {
   static String correo = '';
   static String telefono = '';
   static String documentoIdentidad = '';
+  static String genero = '';
   static String rol = 'usuario';
 
   static bool get estaLogueado => idUsuario != null && idUsuario!.isNotEmpty;
@@ -36,6 +37,7 @@ class Session {
             usuario['cedula'] ??
             '')
         .toString();
+    genero = (usuario['genero'] ?? '').toString();
     rol = (usuario['rol'] ?? 'usuario').toString();
 
     // Guardar en almacenamiento local para no tener que iniciar sesión a cada rato
@@ -78,6 +80,7 @@ class Session {
                 map['cedula'] ??
                 '')
             .toString();
+        genero = (map['genero'] ?? '').toString();
         rol = (map['rol'] ?? 'usuario').toString();
         return estaLogueado;
       }
@@ -118,6 +121,20 @@ class Session {
     }
   }
 
+  /// Guarda el género en la sesión activa y en el almacenamiento local.
+  static void fijarGenero(String valor) {
+    genero = valor.trim();
+    SharedPreferences.getInstance().then((prefs) {
+      final str = prefs.getString(_kKeyUsuario);
+      if (str == null || str.isEmpty) return;
+      final map = jsonDecode(str);
+      if (map is Map<String, dynamic>) {
+        map['genero'] = genero;
+        prefs.setString(_kKeyUsuario, jsonEncode(map));
+      }
+    }).catchError((_) {});
+  }
+
   /// Cierra la sesión activa borrando la persistencia del usuario
   static void cerrar() {
     MatchEstado.instancia.reiniciar();
@@ -127,6 +144,7 @@ class Session {
     correo = '';
     telefono = '';
     documentoIdentidad = '';
+    genero = '';
     rol = 'usuario';
 
     SharedPreferences.getInstance().then((prefs) {

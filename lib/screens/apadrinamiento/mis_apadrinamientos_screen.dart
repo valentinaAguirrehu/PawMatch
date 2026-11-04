@@ -56,31 +56,16 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   void initState() {
     super.initState();
     ApadrinamientoService.marcarLeidasUsuario();
-    _resumenFuture = _cargarResumen()..then((resumen) {
+    _resumenFuture = _cargarResumen()..then((resumen) async {
+      if (!mounted || _mensajeSesionMostrado) return;
+      // Sin seguimientos no se muestra el aviso de bienvenida.
+      if (resumen == null || resumen.totalSeguimientos == 0) return;
+      _mensajeSesionMostrado = true;
+      final lista = await _future.catchError((_) => <SolicitudApadrinamiento>[]);
       if (!mounted) return;
-      if (!_mensajeSesionMostrado) {
-        _mensajeSesionMostrado = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          if (mounted) {
-            final lista = await _future.catchError((_) => <SolicitudApadrinamiento>[]);
-            if (!mounted) return;
-            _mostrarMensajePrimeraVez(
-              resumen ??
-                  ResumenPadrino(
-                    idUsuario: Session.idUsuario ?? '',
-                    nombres: Session.nombre,
-                    apellidos: Session.apellidos,
-                    bloqueadoApadrinar: false,
-                    totalSeguimientos: 0,
-                    calificacionPromedio: 0.0,
-                    tieneAlerta: false,
-                    solicitudesConAlerta: const [],
-                  ),
-              todas: lista,
-            );
-          }
-        });
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _mostrarMensajePrimeraVez(resumen, todas: lista);
+      });
     });
   }
 
