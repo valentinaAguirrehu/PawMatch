@@ -153,6 +153,64 @@ class _PetScreenState extends State<PetScreen> {
     }).toList();
   }
 
+  Widget _tituloPendientePersonalidad() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.rosaSuave,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.bordeRosa),
+        ),
+        child: const Text(
+          'Pendiente por llenar la personalidad',
+          style: TextStyle(
+            color: AppColors.rosa,
+            fontWeight: FontWeight.w800,
+            fontSize: 13.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _grillaMascotas({
+    required List<Pet> pets,
+    required int crossAxisCount,
+    required double crossAxisSpacing,
+    required double childAspectRatio,
+    required EdgeInsets padding,
+  }) {
+    return SliverPadding(
+      padding: padding,
+      sliver: SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: crossAxisSpacing,
+          mainAxisSpacing: 18,
+          childAspectRatio: childAspectRatio,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, i) => PetCard(
+            pet: pets[i],
+            onTap: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PetDetailScreen(pet: pets[i]),
+                ),
+              );
+              if (mounted) _recargar();
+            },
+          ),
+          childCount: pets.length,
+        ),
+      ),
+    );
+  }
+
   /// Todas muestra los tres grupos. El resto deja solo el grupo elegido.
   bool _coincideEstado(Pet p) {
     return switch (_estado) {
@@ -861,39 +919,60 @@ class _PetScreenState extends State<PetScreen> {
                                 child: _vistaVacia(),
                               );
                             } else {
-                              contenidoSliver = SliverPadding(
-                                padding: EdgeInsets.fromLTRB(
-                                  16,
-                                  10,
-                                  16,
-                                  esAdmin ? 88 : 28,
-                                ),
-                                sliver: SliverGrid(
-                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              final pendientes = esAdmin
+                                  ? pets
+                                      .where((p) => p.pendienteLlenarPersonalidad)
+                                      .toList()
+                                  : <Pet>[];
+                              final resto = pendientes.isEmpty
+                                  ? pets
+                                  : pets
+                                      .where((p) => !p.pendienteLlenarPersonalidad)
+                                      .toList();
+                              final inferior = esAdmin ? 88.0 : 28.0;
+                              final slivers = <Widget>[];
+
+                              if (pendientes.isNotEmpty) {
+                                slivers.add(
+                                  SliverToBoxAdapter(
+                                    child: _tituloPendientePersonalidad(),
+                                  ),
+                                );
+                                slivers.add(
+                                  _grillaMascotas(
+                                    pets: pendientes,
                                     crossAxisCount: crossAxisCount,
                                     crossAxisSpacing: crossAxisSpacing,
-                                    mainAxisSpacing: 18,
                                     childAspectRatio: childAspectRatio,
-                                  ),
-                                  delegate: SliverChildBuilderDelegate(
-                                    (context, i) => PetCard(
-                                      pet: pets[i],
-                                      onTap: () async {
-                                        final cambio = await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => PetDetailScreen(pet: pets[i]),
-                                          ),
-                                        );
-                                        if (cambio == true && mounted) {
-                                          _recargar();
-                                        }
-                                      },
+                                    padding: EdgeInsets.fromLTRB(
+                                      16,
+                                      8,
+                                      16,
+                                      resto.isEmpty ? inferior : 4,
                                     ),
-                                    childCount: pets.length,
                                   ),
-                                ),
-                              );
+                                );
+                              }
+                              if (resto.isNotEmpty) {
+                                slivers.add(
+                                  _grillaMascotas(
+                                    pets: resto,
+                                    crossAxisCount: crossAxisCount,
+                                    crossAxisSpacing: crossAxisSpacing,
+                                    childAspectRatio: childAspectRatio,
+                                    padding: EdgeInsets.fromLTRB(
+                                      16,
+                                      pendientes.isEmpty ? 10 : 8,
+                                      16,
+                                      inferior,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              contenidoSliver = slivers.length == 1
+                                  ? slivers.first
+                                  : SliverMainAxisGroup(slivers: slivers);
                             }
                           }
 

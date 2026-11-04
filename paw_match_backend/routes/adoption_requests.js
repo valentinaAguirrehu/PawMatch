@@ -5,6 +5,7 @@ const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
 const { esAdministrador } = require('../utils/roles');
+const { sqlEdad } = require('../utils/edad_mascota');
 const {
   enviarCorreoAprobacionAdopcion,
   enviarCorreoRechazoAdopcion,
@@ -267,7 +268,7 @@ const selectSolicitud = `
     COALESCE(m.nombre, '') AS mascota_nombre,
     COALESCE(m.especie, '') AS mascota_especie,
     COALESCE(m.raza, '') AS mascota_raza,
-    m.edad AS mascota_edad,
+    ${sqlEdad('m')} AS mascota_edad,
     COALESCE(m.fotos, '') AS mascota_fotos,
     COALESCE(m.estado_adopcion::text, '') AS mascota_estado_adopcion
   FROM solicitudadopcion s

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/screens/adoption/adoption_requests_admin_screen.dart';
 import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
@@ -52,6 +53,20 @@ class NotificationsTab extends StatelessWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const DenunciasAdminScreen()),
+    );
+  }
+
+  void _abrirWhatsappDudas(BuildContext context) {
+    final numero = FundacionInfo.whatsappNumero.trim();
+    final destino = RegExp(r'^\d{10,15}$').hasMatch(numero)
+        ? numero
+        : '573136177747';
+    final mensaje =
+        'Hola ${FundacionInfo.nombre}, tengo dudas sobre un proceso en Paw Match y quiero que me ayuden.';
+    abrirEnlace(
+      context,
+      'https://wa.me/$destino?text=${Uri.encodeComponent(mensaje)}',
+      nombre: 'WhatsApp',
     );
   }
 
@@ -146,64 +161,76 @@ class NotificationsTab extends StatelessWidget {
                   ),
                 ],
 
-                const SizedBox(height: 26),
-
-                // Tarjeta informativa de la fundación
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
+                if (!esAdmin) ...[
+                  const SizedBox(height: 26),
+                  Material(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.grey.shade200),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
+                    child: InkWell(
+                      onTap: () => _abrirWhatsappDudas(context),
+                      borderRadius: BorderRadius.circular(18),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: AppColors.rosaSuave,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.grey.shade200),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
-                        child: const Icon(
-                          Icons.support_agent_rounded,
-                          color: AppColors.rosa,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            const Text(
-                              '¿Tienes dudas sobre un proceso?',
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF1F2937),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: AppColors.rosaSuave,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.support_agent_rounded,
+                                color: AppColors.rosa,
+                                size: 24,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Comunícate directamente con ${FundacionInfo.nombre}.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    '¿Tienes dudas sobre un proceso?',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Escríbele por WhatsApp a ${FundacionInfo.nombre}.',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
                               ),
+                            ),
+                            const Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 15,
+                              color: Color(0xFF9E9E9E),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ],
             );
           },

@@ -7,7 +7,10 @@ class Rasgo {
   final String clave;
   final String titulo;
   final String
-  pregunta; // pregunta para la MASCOTA (evaluación de la fundación)
+  pregunta; // pregunta para la MASCOTA, en femenino o neutro
+
+  /// Misma pregunta en masculino. Si es null, la frase ya es neutra.
+  final String? preguntaMasc;
   final String minimo; // significado del 1 (en femenino / neutro)
   final String maximo; // significado del 5 (en femenino / neutro)
   final IconData icono;
@@ -26,6 +29,7 @@ class Rasgo {
     required this.clave,
     required this.titulo,
     required this.pregunta,
+    this.preguntaMasc,
     required this.minimo,
     required this.maximo,
     required this.icono,
@@ -37,6 +41,10 @@ class Rasgo {
   });
 
   static bool _esMacho(String? sexo) => sexo?.trim().toLowerCase() == 'macho';
+
+  /// Pregunta de la ficha, en femenino o masculino según el sexo de la mascota.
+  String preguntaMascotaPara(String? sexo) =>
+      _esMacho(sexo) ? (preguntaMasc ?? pregunta) : pregunta;
 
   /// Texto del extremo bajo (1) concordando con el sexo de la mascota.
   String minimoPara(String? sexo) =>
@@ -92,9 +100,9 @@ const rasgosMascota = <Rasgo>[
     clave: 'sociabilidad_personas',
     titulo: 'Sociabilidad con personas',
     pregunta: '¿Qué tan sociable es con las personas?',
-    minimo: 'Reservada o tímida',
-    minimoMasc: 'Reservado o tímido',
-    maximo: 'Muy sociable',
+    minimo: 'Reservada o tímida con personas',
+    minimoMasc: 'Reservado o tímido con personas',
+    maximo: 'Muy sociable con personas',
     icono: Icons.groups,
     preguntaUsuario:
         '¿Qué tan cómodo/a te sientes rodeado/a de nuevas personas?',
@@ -105,9 +113,9 @@ const rasgosMascota = <Rasgo>[
     clave: 'sociabilidad_mascotas',
     titulo: 'Sociabilidad con mascotas',
     pregunta: '¿Cuánto disfruta la compañía de otras mascotas?',
-    minimo: 'Prefiere estar sola',
-    minimoMasc: 'Prefiere estar solo',
-    maximo: 'Le encantan',
+    minimo: 'Independiente y reservada con mascotas',
+    minimoMasc: 'Independiente y reservado con mascotas',
+    maximo: 'Le encanta socializar con mascotas',
     icono: Icons.pets,
     preguntaUsuario: '¿Qué tan bien te llevas con otras mascotas o animales?',
     minimoUsuario: 'Me cuesta',
@@ -117,7 +125,8 @@ const rasgosMascota = <Rasgo>[
     clave: 'independencia',
     titulo: 'Independencia',
     pregunta: '¿Qué tan independiente es?',
-    minimo: 'Necesita atención constante',
+    minimo: 'Ama ser consentida',
+    minimoMasc: 'Ama ser consentido',
     maximo: 'Muy independiente',
     icono: Icons.directions_walk,
     preguntaUsuario:
@@ -129,8 +138,8 @@ const rasgosMascota = <Rasgo>[
     clave: 'nivel_juego',
     titulo: 'Nivel de juego',
     pregunta: '¿Qué tan juguetona es?',
-    minimo: 'Poco juguetona',
-    minimoMasc: 'Poco juguetón',
+    preguntaMasc: '¿Qué tan juguetón es?',
+    minimo: 'Prefiere la calma',
     maximo: 'Muy juguetona',
     maximoMasc: 'Muy juguetón',
     icono: Icons.sports_tennis,
@@ -143,8 +152,8 @@ const rasgosMascota = <Rasgo>[
     clave: 'carino',
     titulo: 'Cariño',
     pregunta: '¿Qué tan afectuosa es?',
-    minimo: 'Poco afectuosa',
-    minimoMasc: 'Poco afectuoso',
+    preguntaMasc: '¿Qué tan afectuoso es?',
+    minimo: 'De amor y cariño sutil',
     maximo: 'Muy cariñosa',
     maximoMasc: 'Muy cariñoso',
     icono: Icons.favorite,
@@ -156,8 +165,8 @@ const rasgosMascota = <Rasgo>[
     clave: 'proteccion',
     titulo: 'Protección',
     pregunta: '¿Qué tan protectora es?',
-    minimo: 'Nada protectora',
-    minimoMasc: 'Nada protector',
+    preguntaMasc: '¿Qué tan protector es?',
+    minimo: 'Amigable con todos',
     maximo: 'Muy protectora',
     maximoMasc: 'Muy protector',
     icono: Icons.shield,
@@ -170,8 +179,10 @@ const rasgosMascota = <Rasgo>[
     clave: 'tolerancia_soledad',
     titulo: 'Tolerancia a la soledad',
     pregunta: '¿Qué tan bien tolera estar sola?',
-    minimo: 'No tolera la soledad',
-    maximo: 'Tolera muy bien',
+    preguntaMasc: '¿Qué tan bien tolera estar solo?',
+    minimo: 'Prefiere estar acompañada',
+    minimoMasc: 'Prefiere estar acompañado',
+    maximo: 'Disfruta momentos a solas',
     icono: Icons.home,
     preguntaUsuario: '¿Qué tan bien toleras pasar varias horas fuera de casa?',
     minimoUsuario: 'Me cuesta',
@@ -181,7 +192,7 @@ const rasgosMascota = <Rasgo>[
     clave: 'adaptabilidad',
     titulo: 'Adaptabilidad',
     pregunta: '¿Qué tan fácil se adapta a cambios y lugares nuevos?',
-    minimo: 'Le cuesta adaptarse',
+    minimo: 'Requiere tiempo y paciencia',
     maximo: 'Se adapta fácil',
     icono: Icons.swap_horiz,
     preguntaUsuario: '¿Qué tan fácil te adaptas a cambios en tu rutina diaria?',

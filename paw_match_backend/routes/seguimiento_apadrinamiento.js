@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db');
 const { esAdministrador } = require('../utils/roles');
+const { sqlEdad, sqlUnidadEdad } = require('../utils/edad_mascota');
 const { 
   enviarCorreoAlertaIncumplimientoApadrinamiento,
   enviarCorreoDecisionApadrinamiento 
@@ -139,8 +140,8 @@ router.get('/activos', requireAdmin, async (_req, res) => {
         m.fotos AS mascota_fotos,
         m.especie AS mascota_especie,
         m.raza AS mascota_raza,
-        m.edad AS mascota_edad,
-        m.unidad_edad AS mascota_unidad_edad,
+        ${sqlEdad('m')} AS mascota_edad,
+        ${sqlUnidadEdad('m')} AS mascota_unidad_edad,
         u.id_usuario,
         u.nombres AS usuario_nombres,
         u.apellidos AS usuario_apellidos,
@@ -365,8 +366,8 @@ router.get('/historial/:idSolicitud', async (req, res) => {
         m.nombre AS mascota_nombre,
         m.especie AS mascota_especie,
         m.raza AS mascota_raza,
-        m.edad AS mascota_edad,
-        m.unidad_edad AS mascota_unidad_edad,
+        ${sqlEdad('m')} AS mascota_edad,
+        ${sqlUnidadEdad('m')} AS mascota_unidad_edad,
         u.nombres AS padrino_nombres,
         u.apellidos AS padrino_apellidos,
         u.correo AS padrino_correo,
@@ -622,8 +623,8 @@ router.get('/calendario', requireAdmin, async (_req, res) => {
         m.fotos AS mascota_fotos,
         m.especie AS mascota_especie,
         m.raza AS mascota_raza,
-        m.edad AS mascota_edad,
-        m.unidad_edad AS mascota_unidad_edad,
+        ${sqlEdad('m')} AS mascota_edad,
+        ${sqlUnidadEdad('m')} AS mascota_unidad_edad,
         u.id_usuario,
         u.nombres AS usuario_nombres,
         u.apellidos AS usuario_apellidos,
