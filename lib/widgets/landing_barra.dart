@@ -19,8 +19,11 @@ class LandingBarra extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.sizeOf(context).width;
-    final angosto = ancho < 480;
+    final size = MediaQuery.sizeOf(context);
+    if (size.width < 60 || size.height < 60) return const SizedBox.shrink();
+    final ancho = size.width;
+    final muyAngosto = ancho < 360;
+    final angosto = ancho < 520;
     return Material(
       color: const Color(0xFFFFA3C8),
       elevation: 0,
@@ -29,7 +32,7 @@ class LandingBarra extends StatelessWidget {
         bottom: false,
         child: Padding(
           padding: EdgeInsets.symmetric(
-            horizontal: angosto ? 12 : 24,
+            horizontal: muyAngosto ? 10 : (angosto ? 14 : 24),
             vertical: 8,
           ),
           child: Center(
@@ -44,6 +47,7 @@ class LandingBarra extends StatelessWidget {
                       'Paw Match',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: Colors.white,
+                        fontFamily: 'Nunito',
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -64,16 +68,17 @@ class LandingBarra extends StatelessWidget {
                       shape: const StadiumBorder(),
                       minimumSize: Size(0, angosto ? 36 : 40),
                       padding: EdgeInsets.symmetric(
-                        horizontal: angosto ? 12 : 18,
+                        horizontal: muyAngosto ? 10 : (angosto ? 14 : 18),
                       ),
+                      visualDensity: VisualDensity.compact,
                       textStyle: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: angosto ? 13 : 14.5,
+                        fontWeight: FontWeight.w700,
+                        fontSize: muyAngosto ? 12 : (angosto ? 13 : 14.5),
                       ),
                     ),
                     child: const Text('Iniciar sesión'),
                   ),
-                  SizedBox(width: angosto ? 8 : 10),
+                  SizedBox(width: muyAngosto ? 6 : (angosto ? 8 : 10)),
                   FilledButton(
                     onPressed: onRegistrarse,
                     style: FilledButton.styleFrom(
@@ -83,11 +88,12 @@ class LandingBarra extends StatelessWidget {
                       shape: const StadiumBorder(),
                       minimumSize: Size(0, angosto ? 36 : 40),
                       padding: EdgeInsets.symmetric(
-                        horizontal: angosto ? 14 : 20,
+                        horizontal: muyAngosto ? 10 : (angosto ? 14 : 20),
                       ),
+                      visualDensity: VisualDensity.compact,
                       textStyle: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: angosto ? 13 : 14.5,
+                        fontWeight: FontWeight.w700,
+                        fontSize: muyAngosto ? 12 : (angosto ? 13 : 14.5),
                       ),
                     ),
                     child: const Text('Registrarse'),
@@ -115,20 +121,20 @@ class _Logo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<int>(
-        valueListenable: FundacionInfo.cambios,
-        builder: (context, _, __) => SizedBox(
-          width: 40,
-          height: 40,
-          child: ClipOval(
-            child: FundacionImagen(
-              ruta: FundacionInfo.logo.isEmpty
-                  ? 'assets/images/logo.png'
-                  : FundacionInfo.logo,
-              fit: BoxFit.cover,
-              icono: Icons.pets,
-              tamanoIcono: 22,
-            ),
-          ),
+    valueListenable: FundacionInfo.cambios,
+    builder: (context, _, _) => SizedBox(
+      width: 40,
+      height: 40,
+      child: ClipOval(
+        child: FundacionImagen(
+          ruta: FundacionInfo.logo.isEmpty
+              ? 'assets/images/logo.png'
+              : FundacionInfo.logo,
+          fit: BoxFit.cover,
+          icono: Icons.pets,
+          tamanoIcono: 22,
         ),
-      );
+      ),
+    ),
+  );
 }

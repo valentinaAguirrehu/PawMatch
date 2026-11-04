@@ -45,128 +45,144 @@ class _PerritosCarruselState extends State<PerritosCarrusel> {
   Widget build(BuildContext context) {
     if (widget.perros.isEmpty) return const SizedBox.shrink();
 
-    final ancho = MediaQuery.sizeOf(context).width;
-    final esEscritorio = ancho >= 900;
-    const double sep = 12.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final anchoDisponible = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final esEscritorio = anchoDisponible >= 820;
+        final esTablet = anchoDisponible >= 560 && !esEscritorio;
+        final double sep = esEscritorio ? 14.0 : (esTablet ? 12.0 : 10.0);
 
-    // En computador con 4 o menos perritos, se muestran todos en una sola fila simétrica
-    if (esEscritorio && widget.perros.length <= 4) {
-      return SizedBox(
-        height: 440,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        final int itemsPorPagina = esEscritorio ? 4 : (esTablet ? 3 : 2);
+        final int totalPaginas = (widget.perros.length / itemsPorPagina).ceil();
+        final double alturaCarrusel = esEscritorio
+            ? 280.0
+            : (esTablet ? 260.0 : 235.0);
+
+        final int paginaSegura = _paginaActual.clamp(0, math.max(0, totalPaginas - 1));
+
+        // Si todos caben en una sola fila (ej. PC con <= 4 perritos), fila directa
+        if (totalPaginas <= 1) {
+          return SizedBox(
+            height: alturaCarrusel,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (int i = 0; i < itemsPorPagina; i++) ...[
+                  if (i > 0) SizedBox(width: sep),
+                  Expanded(
+                    child: i < widget.perros.length
+                        ? PerritoLandingCard(
+                            pet: widget.perros[i],
+                            paraAdopcion: true,
+                            onTap: () => widget.onPedirCuenta(widget.perros[i]),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            for (int i = 0; i < widget.perros.length; i++) ...[
-              if (i > 0) const SizedBox(width: sep),
-              Expanded(
-                child: PerritoLandingCard(
-                  pet: widget.perros[i],
-                  paraAdopcion: true,
-                  onTap: () => widget.onPedirCuenta(widget.perros[i]),
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
+            SizedBox(
+              height: alturaCarrusel,
+              child: PageView.builder(
+                controller: _pageController,
+                physics: const BouncingScrollPhysics(),
+                itemCount: totalPaginas,
+                onPageChanged: (index) {
+                  setState(() {
+                    _paginaActual = index;
+                  });
+                },
+                itemBuilder: (context, paginaIndex) {
+                  final inicio = paginaIndex * itemsPorPagina;
+                  final fin = math.min(
+                    inicio + itemsPorPagina,
+                    widget.perros.length,
+                  );
+                  final perrosPagina = widget.perros.sublist(inicio, fin);
 
-    // En celulares y tablets: exactamente 2 perritos por página
-    final int itemsPorPagina = esEscritorio ? 4 : 2;
-    final int totalPaginas = (widget.perros.length / itemsPorPagina).ceil();
-    final double alturaCarrusel = esEscritorio ? 440 : 425;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: alturaCarrusel,
-          child: PageView.builder(
-            controller: _pageController,
-            physics: const BouncingScrollPhysics(),
-            itemCount: totalPaginas,
-            onPageChanged: (index) {
-              setState(() {
-                _paginaActual = index;
-              });
-            },
-            itemBuilder: (context, paginaIndex) {
-              final inicio = paginaIndex * itemsPorPagina;
-              final fin = math.min(inicio + itemsPorPagina, widget.perros.length);
-              final perrosPagina = widget.perros.sublist(inicio, fin);
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (int i = 0; i < itemsPorPagina; i++) ...[
-                      if (i > 0) const SizedBox(width: sep),
-                      Expanded(
-                        child: i < perrosPagina.length
-                            ? PerritoLandingCard(
-                                pet: perrosPagina[i],
-                                paraAdopcion: true,
-                                onTap: () => widget.onPedirCuenta(perrosPagina[i]),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-
-        // Barra de navegación con flechas rosa pastel e indicadores
-        if (totalPaginas > 1) ...[
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Flecha Izquierda (←)
-              _BotonFlechaCarrusel(
-                icono: Icons.arrow_back_ios_new_rounded,
-                habilitado: _paginaActual > 0,
-                onTap: _paginaActual > 0 ? () => _irAPagina(_paginaActual - 1) : null,
-                tooltip: 'Perritos anteriores',
-              ),
-
-              const SizedBox(width: 14),
-
-              // Indicadores de grupo de perritos (pastillas y puntos)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: List.generate(totalPaginas, (index) {
-                  final bool esActivo = index == _paginaActual;
-                  return AnimatedContainer(
-                    duration: const Duration(milliseconds: 280),
-                    curve: Curves.easeOutCubic,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: esActivo ? 26 : 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: esActivo ? AppColors.rosa : AppColors.bordeRosa.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(4),
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (int i = 0; i < itemsPorPagina; i++) ...[
+                          if (i > 0) SizedBox(width: sep),
+                          Expanded(
+                            child: i < perrosPagina.length
+                                ? PerritoLandingCard(
+                                    pet: perrosPagina[i],
+                                    paraAdopcion: true,
+                                    onTap: () =>
+                                        widget.onPedirCuenta(perrosPagina[i]),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ],
                     ),
                   );
-                }),
+                },
               ),
+            ),
 
-              const SizedBox(width: 14),
-
-              // Flecha Derecha (→)
-              _BotonFlechaCarrusel(
-                icono: Icons.arrow_forward_ios_rounded,
-                habilitado: _paginaActual < totalPaginas - 1,
-                onTap: _paginaActual < totalPaginas - 1 ? () => _irAPagina(_paginaActual + 1) : null,
-                tooltip: 'Siguientes perritos',
-              ),
-            ],
-          ),
-        ],
-      ],
+            // Barra de navegación con flechas rosa pastel e indicadores
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _BotonFlechaCarrusel(
+                  icono: Icons.arrow_back_ios_new_rounded,
+                  habilitado: paginaSegura > 0,
+                  onTap: paginaSegura > 0
+                      ? () => _irAPagina(paginaSegura - 1)
+                      : null,
+                  tooltip: 'Perritos anteriores',
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: List.generate(totalPaginas, (index) {
+                      final bool esActivo = index == paginaSegura;
+                      return AnimatedContainer(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOutCubic,
+                        width: esActivo ? 24 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: esActivo
+                              ? AppColors.rosa
+                              : AppColors.bordeRosa.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _BotonFlechaCarrusel(
+                  icono: Icons.arrow_forward_ios_rounded,
+                  habilitado: paginaSegura < totalPaginas - 1,
+                  onTap: paginaSegura < totalPaginas - 1
+                      ? () => _irAPagina(paginaSegura + 1)
+                      : null,
+                  tooltip: 'Siguientes perritos',
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

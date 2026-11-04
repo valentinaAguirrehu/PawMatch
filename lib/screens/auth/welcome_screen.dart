@@ -78,7 +78,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       if (renderBox != null && renderBox.hasSize) {
         final posicion = renderBox.localToGlobal(Offset.zero);
         final altoPantalla = MediaQuery.sizeOf(context).height;
-        if (posicion.dy <= altoPantalla * 0.92 && (posicion.dy + renderBox.size.height) >= 0) {
+        if (posicion.dy <= altoPantalla * 0.92 &&
+            (posicion.dy + renderBox.size.height) >= 0) {
           setState(() => _haAnimadoLogros = true);
         }
       }
@@ -193,18 +194,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.sizeOf(context).width;
+    final size = MediaQuery.sizeOf(context);
+    if (size.width < 60 || size.height < 60) {
+      return const Scaffold(backgroundColor: AppColors.rosaSuave);
+    }
+    final ancho = size.width;
     final escritorio = ancho >= Layout.escritorio;
-    final pad = escritorio ? 24.0 : 16.0;
-    final interior = escritorio ? 40.0 : 22.0;
-    final contenido = math.max(0.0, math.min(ancho, Layout.anchoMaximo) - 2 * pad);
+    final pad = escritorio ? 24.0 : (ancho < 380 ? 10.0 : 14.0);
+    final interior = escritorio ? 40.0 : (ancho < 600 ? 16.0 : 24.0);
+    final contenido = math.max(
+      0.0,
+      math.min(ancho, Layout.anchoMaximo) - 2 * pad,
+    );
     final anchoInterior = math.max(0.0, contenido - 2 * interior);
     final m = _Medidas(
       escritorio,
       ancho,
       interior,
       anchoInterior,
-      escritorio ? 40 : 28,
+      escritorio ? 38 : (ancho < 380 ? 22 : 26),
     );
     const separacion = SizedBox(height: 16);
 
@@ -216,77 +224,97 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Expanded(
             child: ValueListenableBuilder<int>(
               valueListenable: FundacionInfo.cambios,
-              builder: (context, _, _) => NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  _verificarVisibilidadLogros();
-                  return false;
-                },
-                child: SingleChildScrollView(
-                  controller: _scrollCtrl,
-                  child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: Layout.anchoMaximo,
-                    ),
-                    child: Column(
-                        children: [
-                          _hero(m),
-                          Padding(
-                            padding: EdgeInsets.fromLTRB(pad, 16, pad, 90),
-                            child: Column(
-                              children: [
-                          if (FundacionInfo.rescatistaNombre.isNotEmpty ||
-                              FundacionInfo.rescatistaTexto.isNotEmpty ||
-                              FundacionInfo.fotoRescatista.isNotEmpty) ...[
-                            _rescatista(m),
-                            separacion,
-                          ],
-                          _mision(m),
-                          separacion,
-                          _perritos(m),
-                          separacion,
-                          _denuncias(m),
-                          separacion,
-                          KeyedSubtree(key: _kAyuda, child: _ayuda(m)),
-                          const SizedBox(height: 12),
-                          Text(
-                            '© ${DateTime.now().year} Paw Match · ${FundacionInfo.nombre} · ${FundacionInfo.ciudad}',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
+              builder: (context, _, _) =>
+                  NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      _verificarVisibilidadLogros();
+                      return false;
+                    },
+                    child: SingleChildScrollView(
+                      controller: _scrollCtrl,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: Layout.anchoMaximo,
                           ),
-                              ],
-                            ),
+                          child: Column(
+                            children: [
+                              _hero(m),
+                              Padding(
+                                padding: EdgeInsets.fromLTRB(pad, 14, pad, 80),
+                                child: Column(
+                                  children: [
+                                    if (FundacionInfo
+                                            .rescatistaNombre
+                                            .isNotEmpty ||
+                                        FundacionInfo
+                                            .rescatistaTexto
+                                            .isNotEmpty ||
+                                        FundacionInfo
+                                            .fotoRescatista
+                                            .isNotEmpty) ...[
+                                      _rescatista(m),
+                                      separacion,
+                                    ],
+                                    _mision(m),
+                                    separacion,
+                                    _perritos(m),
+                                    separacion,
+                                    _denuncias(m),
+                                    separacion,
+                                    KeyedSubtree(key: _kAyuda, child: _ayuda(m)),
+                                    const SizedBox(height: 14),
+                                    Text(
+                                      '© ${DateTime.now().year} Paw Match · ${FundacionInfo.nombre} · ${FundacionInfo.ciudad}',
+                                      textAlign: TextAlign.center,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
+                    ),
                   ),
-                ),
-              ),
             ),
-          ),
           ),
         ],
       ),
     );
   }
 
-  // ───────────── 1. Presentación ─────────────
+  // ───────────── 1. Presentación (imagen acompaña al texto horizontalmente) ─────────────
   Widget _hero(_Medidas m) {
-    final enFila = m.ancho >= 800;
-    final lado = enFila
-        ? (m.escritorio ? 280.0 : 220.0)
-        : math.min(230.0, math.max(170.0, m.ancho * 0.52));
-    final pad = m.escritorio ? 36.0 : 22.0;
-    final compacto = !enFila;
+    final pad = m.escritorio ? 36.0 : (m.ancho < 380 ? 14.0 : 20.0);
+    final disponible = math.max(
+      140.0,
+      math.min(m.ancho, Layout.anchoMaximo) - 2 * pad,
+    );
+    final enFila = disponible >= 270;
+    final compacto = m.ancho < 768;
 
-    final detalle = _heroDetalle(compacto: compacto);
+    final double ladoBase;
+    if (m.escritorio) {
+      ladoBase = 265.0;
+    } else if (m.ancho >= 600) {
+      ladoBase = 195.0;
+    } else {
+      ladoBase = (disponible * 0.29).clamp(84.0, 128.0);
+    }
+    final lado = math.min(ladoBase, (disponible * 0.42) / 1.36);
+
+    final detalle = _heroDetalle(compacto: compacto, muyCompacto: m.ancho < 420);
     final retrato = _RetratoHero(lado: lado);
     final cuerpo = enFila
         ? Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(child: detalle),
-              const SizedBox(width: 28),
+              SizedBox(width: m.ancho < 480 ? 12 : 24),
               retrato,
             ],
           )
@@ -294,7 +322,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               detalle,
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Center(child: retrato),
             ],
           );
@@ -307,8 +335,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               child: CustomPaint(painter: _FondoHeroPainter()),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(pad, 6, pad, 52),
-              child: _heroTitulo(compacto: compacto),
+              padding: EdgeInsets.fromLTRB(pad, 8, pad, 46),
+              child: _heroTitulo(compacto: compacto, ancho: m.ancho),
             ),
           ],
         ),
@@ -321,9 +349,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   /// Nombre de la fundación, centrado y sobre el degradado corto.
-  Widget _heroTitulo({required bool compacto}) {
+  Widget _heroTitulo({required bool compacto, required double ancho}) {
     final nombre = FundacionInfo.nombre.trim().replaceAll(RegExp(r'\s+'), ' ');
-    final tamTitulo = compacto ? 34.0 : 46.0;
+    final tamTitulo = ancho < 360 ? 26.0 : (compacto ? 32.0 : 44.0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -333,11 +361,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           'CONOCE NUESTRA',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.92),
+            color: Colors.white.withValues(alpha: 0.94),
             fontFamily: 'Nunito',
-            fontSize: compacto ? 12 : 14,
+            fontSize: compacto ? 11.5 : 14,
             fontWeight: FontWeight.w800,
-            letterSpacing: 2.8,
+            letterSpacing: 2.4,
             height: 1.1,
           ),
         ),
@@ -351,7 +379,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               color: Colors.white,
               fontSize: tamTitulo,
               fontWeight: FontWeight.w800,
-              height: 1.05,
+              height: 1.06,
               letterSpacing: 0.4,
             ),
           ),
@@ -361,7 +389,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 
   /// Ciudad, descripción e imagen siguen saliendo de la base de datos.
-  Widget _heroDetalle({required bool compacto}) {
+  Widget _heroDetalle({required bool compacto, required bool muyCompacto}) {
     final ciudad = FundacionInfo.ciudad.trim();
     final historia = FundacionInfo.historia.trim();
 
@@ -374,21 +402,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.only(top: 1),
+                padding: const EdgeInsets.only(top: 2),
                 child: Icon(
-                  Icons.location_on,
+                  Icons.location_on_rounded,
                   color: AppColors.rosa,
-                  size: compacto ? 18 : 22,
+                  size: muyCompacto ? 16 : (compacto ? 18 : 22),
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 5),
               Expanded(
                 child: Text(
                   'En ${ciudad.endsWith('.') ? ciudad.substring(0, ciudad.length - 1) : ciudad}.',
                   style: TextStyle(
                     color: AppColors.texto,
-                    fontWeight: FontWeight.w700,
-                    fontSize: compacto ? 14.5 : 16.5,
+                    fontWeight: FontWeight.w800,
+                    fontSize: muyCompacto ? 13.5 : (compacto ? 15 : 17),
                     height: 1.3,
                   ),
                 ),
@@ -396,13 +424,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ],
           ),
         if (historia.isNotEmpty) ...[
-          if (ciudad.isNotEmpty) SizedBox(height: compacto ? 8 : 10),
+          if (ciudad.isNotEmpty) SizedBox(height: muyCompacto ? 6 : 10),
           Text(
             historia,
             style: TextStyle(
-              color: const Color(0xFF6E676A),
-              fontSize: compacto ? 14.5 : 16,
-              height: 1.45,
+              color: const Color(0xFF5E565A),
+              fontSize: muyCompacto ? 12.5 : (compacto ? 14 : 16),
+              height: muyCompacto ? 1.42 : 1.5,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -411,55 +439,75 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  // ───────────── 2. Nuestra misión ─────────────
+  // ───────────── 2. Nuestra misión (2 columnas lado a lado, cada una con imagen + texto horizontal) ─────────────
   Widget _mision(_Medidas m) {
     final t = Theme.of(context).textTheme;
-    final que = _ColumnaTexto(
+    final que = _TarjetaMisionHorizontal(
       titulo: 'Lo que hacemos',
       texto: FundacionInfo.mision,
+      rutaImagen: 'assets/images/inicio/familia.jpg',
+      iconoFallback: Icons.pets_rounded,
     );
-    final queremos = _ColumnaTexto(
+    final queremos = _TarjetaMisionHorizontal(
       titulo: 'Lo que queremos',
       texto: FundacionInfo.vision,
+      rutaImagen: 'assets/images/inicio/juntos.jpg',
+      iconoFallback: Icons.favorite_rounded,
     );
+
     return BloqueLanding(
       color: Colors.white,
-      padding: EdgeInsets.all(m.interior),
+      padding: EdgeInsets.all(m.ancho < 600 ? 14.0 : m.interior),
       child: Column(
         children: [
           Text(
             'TRABAJANDO EN PRO DE LOS ANIMALES',
             textAlign: TextAlign.center,
             style: t.labelLarge?.copyWith(
-              letterSpacing: 2.5,
+              letterSpacing: m.ancho < 400 ? 1.3 : 2.2,
               color: AppColors.rosa,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
+              fontSize: m.escritorio ? 12.5 : 10.5,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             'NUESTRA MISIÓN',
             textAlign: TextAlign.center,
             style: t.headlineMedium?.copyWith(
-              fontSize: m.tTitulo + 4,
+              fontFamily: 'Nunito',
+              fontSize: m.tTitulo,
               fontWeight: FontWeight.w800,
               color: AppColors.texto,
             ),
           ),
-          const SizedBox(height: 28),
-          m.escritorio
-              ? Row(
+          SizedBox(height: m.ancho < 600 ? 14 : 22),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final maxW = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : MediaQuery.sizeOf(context).width;
+              final sep = maxW < 500 ? 10.0 : (maxW < 850 ? 16.0 : 24.0);
+              if (maxW >= 260) {
+                return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(child: que),
-                    const SizedBox(width: 40),
+                    SizedBox(width: sep),
                     Expanded(child: queremos),
                   ],
-                )
-              : Column(children: [que, const SizedBox(height: 24), queremos]),
-          const SizedBox(height: 28),
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [que, const SizedBox(height: 12), queremos],
+              );
+            },
+          ),
+          SizedBox(height: m.ancho < 600 ? 16 : 24),
           BotonLanding(
             texto: '¿Cómo ayudar?',
+            icono: Icons.volunteer_activism_outlined,
             onPressed: () => _bajarA(_kAyuda),
           ),
         ],
@@ -467,72 +515,96 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  // ───────────── 3. Nuestra rescatista ─────────────
+  // ───────────── 3. Nuestra rescatista (distribución horizontal de foto a un lado y texto al otro) ─────────────
   Widget _rescatista(_Medidas m) {
     final t = Theme.of(context).textTheme;
-    final esMovil = m.ancho < 700;
+    final compacto = m.ancho < 680;
+    final muyCompacto = m.ancho < 420;
+    final alto = muyCompacto ? 245.0 : (compacto ? 270.0 : 350.0);
 
     final foto = FundacionImagen(
       ruta: FundacionInfo.fotoRescatista,
       fit: BoxFit.cover,
       icono: Icons.volunteer_activism,
-      tamanoIcono: esMovil ? 44 : 64,
+      tamanoIcono: compacto ? 40 : 64,
     );
 
     final panel = Container(
+      width: double.infinity,
+      height: double.infinity,
       color: AppColors.rosaClaro,
-      padding: EdgeInsets.all(esMovil ? 14.0 : m.interior),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'NUESTRA RESCATISTA',
-            style: (esMovil ? t.labelLarge : t.headlineSmall)?.copyWith(
-              color: AppColors.texto,
-              fontWeight: FontWeight.w800,
-              fontSize: esMovil ? 11 : null,
-              letterSpacing: esMovil ? 1.0 : null,
-            ),
+      padding: EdgeInsets.all(
+        muyCompacto ? 12.0 : (compacto ? 18.0 : m.interior),
+      ),
+      child: Center(
+        child: SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: muyCompacto ? 8 : 10,
+                  vertical: 3.5,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.78),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  'NUESTRA RESCATISTA',
+                  style: TextStyle(
+                    color: AppColors.rosa,
+                    fontWeight: FontWeight.w800,
+                    fontSize: muyCompacto ? 9.5 : (compacto ? 10.5 : 12),
+                    letterSpacing: muyCompacto ? 0.7 : 1.2,
+                  ),
+                ),
+              ),
+              SizedBox(height: muyCompacto ? 6 : 10),
+              Text(
+                FundacionInfo.rescatistaNombre,
+                style: (compacto ? t.titleLarge : t.headlineSmall)?.copyWith(
+                  fontFamily: 'Nunito',
+                  color: AppColors.texto,
+                  fontWeight: FontWeight.w800,
+                  fontSize: muyCompacto ? 16.5 : (compacto ? 20 : 24),
+                  height: 1.15,
+                ),
+              ),
+              SizedBox(height: muyCompacto ? 6 : 10),
+              Text(
+                FundacionInfo.rescatistaTexto,
+                style: t.bodyLarge?.copyWith(
+                  fontSize: muyCompacto ? 12.0 : (compacto ? 13.5 : 15.5),
+                  height: muyCompacto ? 1.35 : 1.5,
+                  color: AppColors.texto,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: esMovil ? 4 : 8),
-          Text(
-            FundacionInfo.rescatistaNombre,
-            style: (esMovil ? t.titleMedium : t.titleLarge)?.copyWith(
-              color: AppColors.rosa,
-              fontWeight: FontWeight.w800,
-              fontSize: esMovil ? 15 : null,
-            ),
-          ),
-          SizedBox(height: esMovil ? 6 : 14),
-          Text(
-            FundacionInfo.rescatistaTexto,
-            style: (esMovil ? t.bodyMedium : t.bodyLarge)?.copyWith(
-              fontSize: esMovil ? 12 : null,
-              height: esMovil ? 1.4 : 1.55,
-              color: AppColors.texto,
-            ),
-          ),
-        ],
+        ),
       ),
     );
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(esMovil ? 20 : 32),
+      borderRadius: BorderRadius.circular(compacto ? 24 : 32),
       child: SizedBox(
-        height: esMovil ? 220 : 380,
+        height: alto,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(flex: esMovil ? 4 : 5, child: foto),
-            Expanded(flex: esMovil ? 6 : 5, child: panel),
+            Expanded(flex: compacto ? 4 : 5, child: foto),
+            Expanded(flex: 6, child: panel),
           ],
         ),
       ),
     );
   }
 
-  // ───────────── Logros (datos reales de la base de datos) ─────────────
+  // ───────────── Logros (organizados en 2 columnas en móvil/tablet y 4 en escritorio) ─────────────
   Widget _logros(_Medidas m) {
     final totalAyudados = _pets.isNotEmpty ? _pets.length : 4;
     final disponibles = _pets.isNotEmpty
@@ -544,8 +616,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final apadrinados = _pets.isNotEmpty
         ? _pets.where((p) => p.estadoApadrinamiento == 'apadrinado').length
         : 2;
-
-    const sep = 14.0;
 
     final items = [
       StatLogro(
@@ -588,7 +658,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.30),
               borderRadius: BorderRadius.circular(20),
@@ -597,24 +667,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 width: 1.2,
               ),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.auto_awesome, color: Colors.white, size: 14),
-                SizedBox(width: 8),
-                Text(
-                  'HUELLITAS QUE DEJAN MARCA',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.8,
+                const Icon(Icons.auto_awesome, color: Colors.white, size: 13),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'HUELLITAS QUE DEJAN MARCA',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: m.ancho < 380 ? 10 : 11.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Text(
             'NUESTROS LOGROS',
             textAlign: TextAlign.center,
@@ -632,24 +706,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             'Cada número representa una vida transformada con amor',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.95),
-              fontSize: 14.5,
+              fontSize: m.ancho < 400 ? 12.5 : 14.5,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 28),
+          SizedBox(height: m.ancho < 600 ? 18 : 26),
           LayoutBuilder(
             builder: (context, constraints) {
               final maxW = constraints.maxWidth.isFinite
                   ? math.max(0.0, constraints.maxWidth)
                   : 0.0;
               if (maxW <= 0) return const SizedBox.shrink();
-              final columnas = maxW >= 800 ? 4 : (maxW >= 340 ? 2 : 1);
+              final sep = maxW < 420 ? 10.0 : 14.0;
+              final columnas = maxW >= 720 ? 4 : (maxW >= 200 ? 2 : 1);
               final anchoTarjeta = math.max(
                 0.0,
                 (maxW - sep * (columnas - 1)) / columnas,
@@ -675,7 +750,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     final perros = _pets
         .where((p) => p.especie.toLowerCase() == 'perro')
         .where((p) => p.estadoAdopcion == 'disponible')
-        .take(4)
         .toList();
 
     Widget cuerpo;
@@ -710,7 +784,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     return BloqueLanding(
       color: Colors.white,
-      padding: EdgeInsets.all(m.interior),
+      padding: EdgeInsets.all(m.ancho < 600 ? 14.0 : m.interior),
       child: Column(
         children: [
           TituloLanding(
@@ -721,17 +795,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             tamano: m.tTitulo,
             alineacion: TextAlign.center,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 18),
           cuerpo,
         ],
       ),
     );
   }
 
-  // ───────────── Sección Denuncias y Protección Animal ─────────────
+  // ───────────── Sección Denuncias y Protección Animal (horizontal: texto + imagen lado a lado) ─────────────
   Widget _denuncias(_Medidas m) {
     final t = Theme.of(context).textTheme;
-    final esMovil = m.ancho < 700;
+    final compacto = m.ancho < 640;
+    final muyCompacto = m.ancho < 420;
 
     final textos = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -739,8 +814,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       children: [
         Container(
           padding: EdgeInsets.symmetric(
-            horizontal: esMovil ? 8 : 12,
-            vertical: esMovil ? 3 : 5,
+            horizontal: muyCompacto ? 8 : 11,
+            vertical: 4,
           ),
           decoration: BoxDecoration(
             color: AppColors.rosaSuave,
@@ -750,56 +825,62 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.shield_outlined, size: esMovil ? 12 : 15, color: AppColors.rosa),
-              SizedBox(width: esMovil ? 4 : 6),
-              Text(
-                'PROTECCIÓN ANIMAL',
-                style: TextStyle(
-                  fontSize: esMovil ? 9.5 : 11,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.rosa,
-                  letterSpacing: 0.6,
+              Icon(
+                Icons.shield_outlined,
+                size: muyCompacto ? 12 : 14,
+                color: AppColors.rosa,
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  'PROTECCIÓN ANIMAL',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: muyCompacto ? 9.5 : 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.rosa,
+                    letterSpacing: 0.6,
+                  ),
                 ),
               ),
             ],
           ),
         ),
-        SizedBox(height: esMovil ? 8 : 14),
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Ayúdanos a ',
-              style: TextStyle(
-                fontSize: esMovil ? 16 : (m.escritorio ? 28 : 22),
-                fontWeight: FontWeight.w800,
-                color: AppColors.texto,
-                height: 1.2,
-              ),
+        SizedBox(height: muyCompacto ? 8 : 12),
+        Text.rich(
+          TextSpan(
+            style: TextStyle(
+              fontFamily: 'Nunito',
+              fontSize: muyCompacto ? 17 : (compacto ? 21 : 28),
+              fontWeight: FontWeight.w800,
+              height: 1.18,
             ),
-            Text(
-              'proteger a los animales',
-              style: TextStyle(
-                fontSize: esMovil ? 16 : (m.escritorio ? 28 : 22),
-                fontWeight: FontWeight.w800,
-                color: AppColors.rosa,
-                height: 1.2,
+            children: const [
+              TextSpan(
+                text: 'Ayúdanos a ',
+                style: TextStyle(color: AppColors.texto),
               ),
-            ),
-          ],
-        ),
-        SizedBox(height: esMovil ? 8 : 14),
-        Text(
-          'Si conoces una situación en la que un animal esté sufriendo maltrato, haya sido abandonado o se encuentre en condiciones que pongan en riesgo su bienestar, cuéntanos lo que sucede. Tu voz puede marcar la diferencia y salvar una vida.',
-          style: (esMovil ? t.bodyMedium : t.bodyLarge)?.copyWith(
-            fontSize: esMovil ? 12 : null,
-            height: esMovil ? 1.4 : 1.55,
+              TextSpan(
+                text: 'proteger a los animales',
+                style: TextStyle(color: AppColors.rosa),
+              ),
+            ],
           ),
         ),
-        SizedBox(height: esMovil ? 12 : 24),
+        SizedBox(height: muyCompacto ? 6 : 10),
+        Text(
+          'Si conoces una situación en la que un animal esté sufriendo maltrato, haya sido abandonado o se encuentre en condiciones que pongan en riesgo su bienestar, cuéntanos lo que sucede. Tu voz puede marcar la diferencia y salvar una vida.',
+          style: t.bodyLarge?.copyWith(
+            fontSize: muyCompacto ? 12 : (compacto ? 13.5 : 15.5),
+            height: muyCompacto ? 1.38 : 1.5,
+            color: const Color(0xFF5E565A),
+          ),
+        ),
+        SizedBox(height: muyCompacto ? 12 : 18),
         BotonLanding(
           texto: 'Reportar un caso',
-          expandido: false,
+          icono: Icons.campaign_outlined,
           onPressed: () {
             Navigator.push(
               context,
@@ -810,16 +891,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       ],
     );
 
-    final double tamanoImagen = esMovil
-        ? math.min(145.0, math.max(100.0, m.ancho * 0.28))
-        : (m.escritorio ? 320.0 : 220.0);
+    final anchoImg = muyCompacto
+        ? 105.0
+        : (compacto ? 155.0 : (m.escritorio ? 290.0 : 210.0));
+    final altoImg = muyCompacto
+        ? 165.0
+        : (compacto ? 190.0 : (m.escritorio ? 290.0 : 210.0));
 
     final imagen = ClipRRect(
-      borderRadius: BorderRadius.circular(esMovil ? 18 : 28),
+      borderRadius: BorderRadius.circular(muyCompacto ? 18 : 24),
       child: Container(
         color: AppColors.rosaSuave,
-        width: tamanoImagen,
-        height: tamanoImagen,
+        width: anchoImg,
+        height: altoImg,
         child: Image.asset(
           'assets/images/denuncias_hero.jpg',
           fit: BoxFit.cover,
@@ -829,39 +913,37 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     return BloqueLanding(
       color: Colors.white,
-      padding: EdgeInsets.all(esMovil ? 16.0 : m.interior),
+      padding: EdgeInsets.all(muyCompacto ? 14.0 : (compacto ? 18.0 : m.interior)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(child: textos),
-          SizedBox(width: esMovil ? 12 : 32),
+          SizedBox(width: muyCompacto ? 12 : (compacto ? 18 : 28)),
           imagen,
         ],
       ),
     );
   }
 
-  // ───────────── 6. Ayuda y contacto ─────────────
+  // ───────────── 6. Ayuda y contacto (2 columnas lado a lado en móvil, tablet y PC) ─────────────
   Widget _ayuda(_Medidas m) {
-    final tarjetas = [
-      TarjetaAyuda(
-        icono: Icons.home_outlined,
-        titulo: FundacionInfo.ayudaAdoptaTitulo,
-        texto: FundacionInfo.ayudaAdoptaTexto,
-      ),
-      TarjetaAyuda(
-        icono: Icons.volunteer_activism,
-        titulo: FundacionInfo.ayudaApadrinaTitulo,
-        texto: FundacionInfo.ayudaApadrinaTexto,
-      ),
-    ];
+    final adopta = TarjetaAyuda(
+      icono: Icons.home_outlined,
+      titulo: FundacionInfo.ayudaAdoptaTitulo,
+      texto: FundacionInfo.ayudaAdoptaTexto,
+    );
+    final apadrina = TarjetaAyuda(
+      icono: Icons.volunteer_activism,
+      titulo: FundacionInfo.ayudaApadrinaTitulo,
+      texto: FundacionInfo.ayudaApadrinaTexto,
+    );
 
     return Column(
       children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(m.ancho < 600 ? 24 : 32),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: m.escritorio ? 350 : 0),
+            constraints: BoxConstraints(minHeight: m.escritorio ? 340 : 0),
             child: Stack(
               alignment: Alignment.center,
               children: [
@@ -880,15 +962,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          Color(0xFFFDCADA), // rosa empolvado suave
-                          Color(0xFFF9B0CE), // rosa pastel intermedio
-                          Color(0xFFF396BF), // rosa tierno delicado
+                          Color(0xFFFDCADA),
+                          Color(0xFFF9B0CE),
+                          Color(0xFFF396BF),
                         ],
                       ),
                     ),
                   ),
                 ),
-                // Burbujas bokeh decorativas en tonos blancos y rosa suave
                 Positioned(
                   top: -40,
                   left: 30,
@@ -913,22 +994,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ),
                   ),
                 ),
-                Positioned(
-                  top: 30,
-                  right: 220,
-                  child: Container(
-                    width: 75,
-                    height: 75,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.10),
-                    ),
-                  ),
-                ),
                 Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: m.interior,
-                    vertical: m.escritorio ? 40 : 32,
+                    horizontal: m.ancho < 600 ? 12.0 : m.interior,
+                    vertical: m.escritorio ? 38 : 24,
                   ),
                   child: _logros(m),
                 ),
@@ -939,7 +1008,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         const SizedBox(height: 16),
         BloqueLanding(
           color: AppColors.rosaClaro,
-          padding: EdgeInsets.all(m.interior),
+          padding: EdgeInsets.all(m.ancho < 600 ? 14.0 : m.interior),
           child: Column(
             children: [
               TituloLanding(
@@ -950,31 +1019,32 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 tamano: m.tTitulo,
                 alineacion: TextAlign.center,
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: m.ancho < 600 ? 14 : 20),
+              // Tarjetas ADOPTA y APADRINA siempre en 2 columnas lado a lado (incluyendo celular)
               LayoutBuilder(
                 builder: (context, constraints) {
                   final maxW = constraints.maxWidth.isFinite
                       ? math.max(0.0, constraints.maxWidth)
                       : 0.0;
                   if (maxW <= 0) return const SizedBox.shrink();
-                  final columnas = maxW >= Layout.tablet ? 2 : 1;
-                  const sep = 14.0;
-                  final w = math.max(
-                    0.0,
-                    (maxW - sep * (columnas - 1)) / columnas,
-                  );
-                  return Wrap(
-                    spacing: sep,
-                    runSpacing: sep,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      for (final tarjeta in tarjetas)
-                        SizedBox(width: w, child: tarjeta),
-                    ],
+                  final sep = maxW < 420 ? 10.0 : 16.0;
+                  if (maxW >= 240) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: adopta),
+                        SizedBox(width: sep),
+                        Expanded(child: apadrina),
+                      ],
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [adopta, SizedBox(height: sep), apadrina],
                   );
                 },
               ),
-              const SizedBox(height: 28),
+              SizedBox(height: m.ancho < 600 ? 14 : 20),
               _contactoContenido(m),
             ],
           ),
@@ -983,87 +1053,217 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
-  // ───────────── 7. Dónde encontrarnos ─────────────
+  // ───────────── 7. Dónde encontrarnos (Ubicación y Contacto lado a lado) ─────────────
   Widget _contactoContenido(_Medidas m) {
     final t = Theme.of(context).textTheme;
-    final ubicacion = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.location_on_outlined, color: AppColors.rosa),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'UBICACIÓN',
-                style: t.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.texto,
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxW = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final enDosColumnas = maxW >= 260;
+        final sep = maxW < 420 ? 10.0 : 18.0;
+        final anchoCol = enDosColumnas ? (maxW - sep) / 2 : maxW;
+        final compacto = anchoCol < 215;
+        final muyCompacto = anchoCol < 165;
+        final pad = muyCompacto ? 12.0 : (compacto ? 15.0 : 20.0);
+
+        Widget encabezadoTarjeta(IconData icono, String titulo) {
+          final tamCaja = muyCompacto ? 28.0 : (compacto ? 32.0 : 38.0);
+          final tamIcono = muyCompacto ? 15.0 : (compacto ? 17.0 : 20.0);
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: tamCaja,
+                height: tamCaja,
+                decoration: const BoxDecoration(
+                  color: AppColors.rosaSuave,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icono, color: AppColors.rosa, size: tamIcono),
+              ),
+              SizedBox(width: muyCompacto ? 7 : 10),
+              Expanded(
+                child: Text(
+                  titulo,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.titleMedium?.copyWith(
+                    fontFamily: 'Nunito',
+                    fontWeight: FontWeight.w800,
+                    fontSize: muyCompacto ? 11.5 : (compacto ? 13.0 : 15.5),
+                    color: AppColors.texto,
+                    letterSpacing: muyCompacto ? 0.4 : 0.8,
+                    height: 1.15,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '${FundacionInfo.nombre}\n${FundacionInfo.direccion}\n${FundacionInfo.ciudad}',
-          style: t.bodyLarge?.copyWith(height: 1.5),
-        ),
-        if (FundacionInfo.mapaUrl.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          BotonLanding(
-            texto: 'Abrir ubicación en Google Maps',
-            relleno: false,
-            onPressed: () =>
-                abrirEnlace(context, FundacionInfo.mapaUrl, nombre: 'el mapa'),
-          ),
-        ],
-      ],
-    );
+            ],
+          );
+        }
 
-    final donar = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.card_giftcard, color: AppColors.rosa),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
+        final ubicacion = Container(
+          padding: EdgeInsets.all(pad),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(compacto ? 20 : 24),
+            border: Border.all(
+              color: AppColors.bordeRosa.withValues(alpha: 0.65),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.rosa.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              encabezadoTarjeta(Icons.location_on_rounded, 'UBICACIÓN'),
+              SizedBox(height: muyCompacto ? 9 : 14),
+              Text(
+                FundacionInfo.nombre,
+                style: t.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  fontSize: muyCompacto ? 12.5 : (compacto ? 14.0 : 16.0),
+                  color: AppColors.texto,
+                  height: 1.25,
+                ),
+              ),
+              SizedBox(height: muyCompacto ? 6 : 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.place_outlined,
+                      size: muyCompacto ? 14 : 17,
+                      color: AppColors.rosa,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      FundacionInfo.direccion,
+                      style: t.bodyMedium?.copyWith(
+                        color: const Color(0xFF5E565A),
+                        height: 1.35,
+                        fontSize: muyCompacto ? 11.5 : (compacto ? 12.5 : 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.location_city_outlined,
+                      size: muyCompacto ? 14 : 17,
+                      color: AppColors.rosa,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(
+                      FundacionInfo.ciudad,
+                      style: t.bodyMedium?.copyWith(
+                        color: const Color(0xFF5E565A),
+                        height: 1.35,
+                        fontSize: muyCompacto ? 11.5 : (compacto ? 12.5 : 14),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (FundacionInfo.mapaUrl.isNotEmpty) ...[
+                SizedBox(height: muyCompacto ? 10 : 16),
+                BotonLanding(
+                  texto: muyCompacto
+                      ? 'Google Maps'
+                      : 'Abrir ubicación en Google Maps',
+                  icono: Icons.map_outlined,
+                  relleno: false,
+                  expandido: true,
+                  onPressed: () => abrirEnlace(
+                    context,
+                    FundacionInfo.mapaUrl,
+                    nombre: 'el mapa',
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+
+        final donar = Container(
+          padding: EdgeInsets.all(pad),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(compacto ? 20 : 24),
+            border: Border.all(
+              color: AppColors.bordeRosa.withValues(alpha: 0.65),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.rosa.withValues(alpha: 0.08),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              encabezadoTarjeta(
+                Icons.favorite_border_rounded,
                 'CONTACTO Y REDES',
-                style: t.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.texto,
-                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (FundacionInfo.contactoTexto.isNotEmpty) ...[
-          Text(
-            FundacionInfo.contactoTexto,
-            style: t.bodyLarge?.copyWith(height: 1.5),
+              SizedBox(height: muyCompacto ? 9 : 14),
+              if (FundacionInfo.contactoTexto.isNotEmpty) ...[
+                Text(
+                  FundacionInfo.contactoTexto,
+                  style: t.bodyMedium?.copyWith(
+                    height: 1.4,
+                    fontSize: muyCompacto ? 11.5 : (compacto ? 12.5 : 14),
+                    color: const Color(0xFF5E565A),
+                  ),
+                ),
+                SizedBox(height: muyCompacto ? 10 : 16),
+              ],
+              const RedesSociales(conTexto: true),
+            ],
           ),
-          const SizedBox(height: 14),
-        ],
-        const RedesSociales(conTexto: true),
-      ],
-    );
+        );
 
-    return m.escritorio
-        ? Row(
+        if (enDosColumnas) {
+          return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: ubicacion),
-              const SizedBox(width: 40),
+              SizedBox(width: sep),
               Expanded(child: donar),
             ],
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [ubicacion, const SizedBox(height: 24), donar],
           );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [ubicacion, SizedBox(height: sep), donar],
+        );
+      },
+    );
   }
 }
 
@@ -1290,28 +1490,110 @@ class _RamoHojas extends CustomPainter {
       oldDelegate.haciaDerecha != haciaDerecha;
 }
 
-/// Columna de la sección de misión: título en mayúsculas y texto.
-class _ColumnaTexto extends StatelessWidget {
-  final String titulo, texto;
-  const _ColumnaTexto({required this.titulo, required this.texto});
+/// Apartado de la sección de misión («LO QUE HACEMOS» / «LO QUE QUEREMOS»):
+/// Distribución horizontal con fotografía a un lado y contenido escrito al otro.
+class _TarjetaMisionHorizontal extends StatelessWidget {
+  final String titulo, texto, rutaImagen;
+  final IconData iconoFallback;
+
+  const _TarjetaMisionHorizontal({
+    required this.titulo,
+    required this.texto,
+    required this.rutaImagen,
+    required this.iconoFallback,
+  });
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          titulo.toUpperCase(),
-          style: t.titleMedium?.copyWith(
-            letterSpacing: 2,
-            fontWeight: FontWeight.w800,
-            color: AppColors.texto,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final w = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final muyCompacto = w < 185;
+        final compacto = w < 260;
+
+        final pad = muyCompacto ? 10.0 : (compacto ? 14.0 : 18.0);
+        final anchoImg = muyCompacto ? 52.0 : (compacto ? 74.0 : 104.0);
+        final altoImg = muyCompacto ? 74.0 : (compacto ? 92.0 : 114.0);
+        final tamTitulo = muyCompacto ? 11.5 : (compacto ? 13.5 : 15.5);
+        final tamTexto = muyCompacto ? 11.0 : (compacto ? 12.5 : 14.5);
+
+        return Container(
+          padding: EdgeInsets.all(pad),
+          decoration: BoxDecoration(
+            color: AppColors.rosaSuave.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(compacto ? 18 : 24),
+            border: Border.all(
+              color: AppColors.bordeRosa.withValues(alpha: 0.7),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(texto, style: t.bodyLarge?.copyWith(height: 1.7)),
-      ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(muyCompacto ? 12 : 16),
+                child: SizedBox(
+                  width: anchoImg,
+                  height: altoImg,
+                  child: Image.asset(
+                    rutaImagen,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      color: AppColors.rosaClaro,
+                      child: Icon(
+                        iconoFallback,
+                        color: AppColors.rosa,
+                        size: muyCompacto ? 24 : 32,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: muyCompacto ? 8 : (compacto ? 12 : 16)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      titulo.toUpperCase(),
+                      style: t.titleMedium?.copyWith(
+                        fontFamily: 'Nunito',
+                        fontSize: tamTitulo,
+                        letterSpacing: muyCompacto ? 0.6 : 1.4,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.texto,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      width: muyCompacto ? 22 : 30,
+                      height: 2.5,
+                      decoration: BoxDecoration(
+                        color: AppColors.rosa,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    SizedBox(height: muyCompacto ? 6 : 8),
+                    Text(
+                      texto,
+                      style: t.bodyLarge?.copyWith(
+                        fontSize: tamTexto,
+                        height: muyCompacto ? 1.35 : 1.5,
+                        color: AppColors.texto,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

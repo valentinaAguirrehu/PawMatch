@@ -25,7 +25,7 @@ String _textoBienvenida(String? genero) {
       'y quiero conocerte un poquito mejor. Te haré algunas preguntas para '
       'encontrar al peludito ideal para ti. Puedes escribir o usar tu voz, '
       '¡como te sientas más $trato! La Fundación Maritza Arévalo agradece tu '
-      'interés. ¡Comencemos! ✨';
+      'interés. ¡Comencemos!';
 }
 
 /// Mismos tonos del hero de inicio: rosa luminoso, rosa medio y rosa Paw Match.

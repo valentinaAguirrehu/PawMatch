@@ -397,65 +397,6 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  void _mostrarInfoFundacion() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        padding: const EdgeInsets.all(24),
-        constraints: const BoxConstraints(maxWidth: 600),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 5,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: _rosaWelcomeTop,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-            const Text(
-              'Fundación Maritza Arévalo',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: _textoOscuro),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Dedicados con amor al rescate, cuidado veterinario y adopción responsable de perritos y gatitos sin hogar en Cali y sus alrededores.',
-              style: TextStyle(fontSize: 13, height: 1.5, color: Colors.grey.shade700),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _rosaPrincipal,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  widget.onVerMascotas();
-                },
-                child: const Text('Conocer a los peluditos 🐾', style: TextStyle(fontWeight: FontWeight.w800)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final anchoTotal = MediaQuery.sizeOf(context).width;
@@ -771,48 +712,31 @@ class _HomeTabState extends State<HomeTab> {
             ),
           ),
 
-          // Degradado inferior
+          // Degradado inferior suave solo en la base para que se aprecie la imagen
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: const [0.0, 0.40, 1.0],
+                stops: const [0.0, 0.58, 1.0],
                 colors: [
-                  Colors.black.withValues(alpha: 0.12),
-                  _rosaPrincipal.withValues(alpha: 0.32),
-                  const Color(0xFF261D22).withValues(alpha: 0.90),
+                  Colors.transparent,
+                  Colors.transparent,
+                  const Color(0xFF261D22).withValues(alpha: 0.72),
                 ],
               ),
             ),
           ),
 
-          // Textos y Botón Conocer más
+          // Textos inferiores limpios
           Padding(
             padding: EdgeInsets.all(esEscritorio ? 22 : 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    'LABOR SOCIAL DE AMOR',
-                    style: TextStyle(
-                      color: _rosaPrincipal,
-                      fontSize: esEscritorio ? 11 : 9.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ),
-                SizedBox(height: esEscritorio ? 8 : 5),
                 Text(
-                  'Uniendo Huellitas ❤️',
+                  'Uniendo Huellitas',
                   style: TextStyle(
                     fontSize: esEscritorio ? 27 : 21,
                     fontWeight: FontWeight.w900,
@@ -821,51 +745,15 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Rescatando vidas, creando finales felices 🐾',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: esEscritorio ? 13.5 : 11.5,
-                          color: const Color(0xFFFFF0F5),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: _rosaPrincipal,
-                        elevation: 2,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: esEscritorio ? 16 : 12,
-                          vertical: esEscritorio ? 9 : 6,
-                        ),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                      onPressed: _mostrarInfoFundacion,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'Conocer más',
-                            style: TextStyle(
-                              fontSize: esEscritorio ? 12.5 : 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          Icon(Icons.chevron_right_rounded, size: esEscritorio ? 16 : 14),
-                        ],
-                      ),
-                    ),
-                  ],
+                Text(
+                  'Rescatando vidas, creando finales felices',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: esEscritorio ? 13.5 : 11.5,
+                    color: const Color(0xFFFFF0F5),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
