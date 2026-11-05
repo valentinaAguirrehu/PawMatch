@@ -11,12 +11,16 @@ class BarraSuperior extends StatelessWidget {
   /// Si se indica, el círculo de la izquierda vuelve atrás en lugar de mostrar la huella.
   final VoidCallback? onVolver;
 
+  /// Si es true, siempre muestra el icono de huella en el círculo izquierdo.
+  final bool forzarHuella;
+
   const BarraSuperior({
     super.key,
     required this.iconoTitulo,
     required this.titulo,
     required this.onCerrarSesion,
     this.onVolver,
+    this.forzarHuella = false,
   });
 
   static const _sombra = [
@@ -29,14 +33,18 @@ class BarraSuperior extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accionVolver = onVolver ??
+        (Navigator.canPop(context) ? () => Navigator.pop(context) : null);
+    final mostrarIconoHuella = forzarHuella || onVolver == null;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 6),
       child: Row(
         children: [
           Tooltip(
-            message: onVolver == null ? 'Paw Match' : 'Volver',
+            message: accionVolver == null ? 'Paw Match' : 'Volver',
             child: GestureDetector(
-              onTap: onVolver,
+              onTap: accionVolver,
               child: Container(
                 width: 42,
                 height: 42,
@@ -47,7 +55,7 @@ class BarraSuperior extends StatelessWidget {
                 ),
                 child: Center(
                   child: Icon(
-                    onVolver == null ? Icons.pets : Icons.arrow_back_rounded,
+                    mostrarIconoHuella ? Icons.pets : Icons.arrow_back_rounded,
                     color: AppColors.rosa,
                     size: 22,
                   ),
