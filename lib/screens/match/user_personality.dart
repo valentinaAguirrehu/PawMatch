@@ -11,6 +11,8 @@ import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/personalidad_usuario_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/screens/users/voz_asistente_screen.dart';
+import 'package:paw_match/services/voz_asistente_service.dart';
 import 'package:paw_match/services/voz_entrevista.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
@@ -167,6 +169,7 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
       final local = await EntrevistaPersonalidadService.leerBorradorLocal();
       final remotas = await EntrevistaPersonalidadService.borradores();
       final voz = await EntrevistaPersonalidadService.vozActiva();
+      await VozAsistenteService.vozGuardada();
       if (!mounted) return;
 
       _voz.vozActiva = voz;
@@ -782,6 +785,8 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
               ],
             ),
           ),
+          const MarcaVozAsistente(),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: _cargando || _error != null ? null : _alternarVelocidadCiclica,
             child: Tooltip(
