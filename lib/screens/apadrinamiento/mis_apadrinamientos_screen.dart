@@ -7,16 +7,19 @@ import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/seguimiento_apadrinamiento.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
+import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/reporte_padrino_pdf_service.dart';
 import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
+import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart';
-import 'package:paw_match/widgets/star_rating_selector.dart';
-import 'package:paw_match/widgets/tarjeta_seguimiento.dart';
 
 class MisApadrinamientosScreen extends StatefulWidget {
   const MisApadrinamientosScreen({super.key});
@@ -26,31 +29,18 @@ class MisApadrinamientosScreen extends StatefulWidget {
       _MisApadrinamientosScreenState();
 }
 
-class _InfoBannerPadrino {
-  final String titulo;
-  final String mensaje;
-  final IconData icono;
-  final Color colorFondo;
-  final Color colorBorde;
-  final Color colorTexto;
-  final Color colorIcono;
-
-  const _InfoBannerPadrino({
-    required this.titulo,
-    required this.mensaje,
-    required this.icono,
-    required this.colorFondo,
-    required this.colorBorde,
-    required this.colorTexto,
-    required this.colorIcono,
-  });
-}
-
 class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
   static bool _mensajeSesionMostrado = false;
-  int _filtroSeleccionado = 0; // 0: Aprobadas, 1: Pendientes, 2: Rechazadas o canceladas
+  int _filtroSeleccionado = 0; // 0: Aprobadas, 1: Pendientes, 2: Rechazadas
+
   late Future<List<SolicitudApadrinamiento>> _future = _cargar();
   late Future<ResumenPadrino?> _resumenFuture = _cargarResumen();
+
+  String? _descargandoPdfId;
+  String? _reenviandoCorreoId;
+
+  // Solicitud seleccionada como principal para ver en detalle (por defecto la primera de la lista activa)
+  String? _idSolicitudSeleccionada;
 
   @override
   void initState() {
@@ -58,7 +48,6 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     ApadrinamientoService.marcarLeidasUsuario();
     _resumenFuture = _cargarResumen()..then((resumen) async {
       if (!mounted || _mensajeSesionMostrado) return;
-      // Sin seguimientos no se muestra el aviso de bienvenida.
       if (resumen == null || resumen.totalSeguimientos == 0) return;
       _mensajeSesionMostrado = true;
       final lista = await _future.catchError((_) => <SolicitudApadrinamiento>[]);
@@ -86,8 +75,14 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     ]);
   }
 
-  String? _descargandoPdfId;
-  String? _reenviandoCorreoId;
+  Future<void> _confirmarCerrarSesion() async {
+    final confirmar = await DialogoCerrarSesion.mostrar(context);
+    if (!confirmar || !mounted) return;
+    ApadrinamientoService.detenerMonitoreo();
+    AdoptionService.detenerMonitoreo();
+    Session.cerrar();
+    Navegacion.ir(context, const WelcomeScreen());
+  }
 
   Future<void> _reenviarVerificacion(SolicitudApadrinamiento s) async {
     setState(() => _reenviandoCorreoId = s.id);
@@ -178,8 +173,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
         : '573136177747';
     final mensaje =
         'Hola Fundación Maritza Arévalo, soy el padrino de ${s.mascotaNombre} y vengo de la app Paw Match para coordinar los detalles de mi apadrinamiento.';
-    final url =
-        'https://wa.me/$numero?text=${Uri.encodeComponent(mensaje)}';
+    final url = 'https://wa.me/$numero?text=${Uri.encodeComponent(mensaje)}';
     abrirEnlace(context, url, nombre: 'WhatsApp de la Fundación');
   }
 
@@ -187,12 +181,12 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.rosa)),
     );
     try {
       final pet = await PetsService.obtener(idMascota);
       if (!mounted) return;
-      Navigator.pop(context); // cerrar diálogo de espera
+      Navigator.pop(context);
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -212,18 +206,18 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.rosa)),
     );
     try {
       final bytes = await ApadrinamientoService.obtenerBytesContrato(s.id);
       if (!mounted) return;
-      Navigator.pop(context); // cerrar diálogo de espera
+      Navigator.pop(context);
 
       final esPdf = bytes.length >= 4 &&
           bytes[0] == 0x25 &&
           bytes[1] == 0x50 &&
           bytes[2] == 0x44 &&
-          bytes[3] == 0x46; // %PDF
+          bytes[3] == 0x46;
 
       if (esPdf) {
         await Printing.layoutPdf(
@@ -269,1081 +263,451 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     }
   }
 
+  static const List<String> _mesesCortos = [
+    'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+    'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+  ];
+
+  static const List<String> _mesesCompletos = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ];
+
+  static String formatearFechaCorta(DateTime f) {
+    return '${f.day} ${_mesesCortos[f.month - 1]}. ${f.year}';
+  }
+
+  static String formatearFechaLarga(DateTime f) {
+    return '${f.day} de ${_mesesCompletos[f.month - 1]} de ${f.year}';
+  }
+
+  static String parsearYFormatearFecha(String? fechaStr, {bool larga = false}) {
+    if (fechaStr == null || fechaStr.trim().isEmpty) return 'Activo';
+    try {
+      final parsed = DateTime.tryParse(fechaStr);
+      if (parsed != null) {
+        return larga ? formatearFechaLarga(parsed) : formatearFechaCorta(parsed);
+      }
+    } catch (_) {}
+    return fechaStr;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final t = Theme.of(context).textTheme;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mis Apadrinamientos'),
-      ),
-      body: FutureBuilder<List<SolicitudApadrinamiento>>(
-        future: _future,
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.error_outline,
-                        size: 48, color: Colors.redAccent),
-                    const SizedBox(height: 12),
-                    Text('Error al cargar tus apadrinamientos: ${snap.error}',
-                        textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.rosa,
-                      ),
-                      onPressed: _recargar,
-                      child: const Text('Reintentar'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final todas = snap.data ?? [];
-          if (todas.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.volunteer_activism_outlined,
-                        size: 68, color: Colors.grey.shade400),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Aún no tienes solicitudes de apadrinamiento',
-                      style: t.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: Colors.grey.shade700,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Explora las mascotas disponibles y pulsa «Apadrinar» para brindar tu apoyo y transformar una vida.',
-                      style: t.bodyMedium?.copyWith(color: Colors.grey.shade600),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          final List<SolicitudApadrinamiento> lista;
-          if (_filtroSeleccionado == 0) {
-            // 1. Aprobadas (solo las que ya comenzaron con su primer seguimiento o su primer ciclo)
-            final aprobadas = todas.where((s) {
-              final esAprobadaOContrato = s.estado == 'aprobada' || s.tieneContrato;
-              final tieneSeguimientosOCiclos = s.totalSeguimientos > 0 ||
-                  s.seguimientosEnCiclo > 0 ||
-                  s.cicloActual > 1 ||
-                  s.evaluacionesCiclos.isNotEmpty;
-              return esAprobadaOContrato &&
-                  tieneSeguimientosOCiclos &&
-                  s.estado != 'cancelada' &&
-                  s.estadoApadrinamiento != 'cancelada';
-            }).toList();
-
-            // Ordenar: debe salir de primero la mascota con la que ya tiene ciclos o más seguimientos
-            aprobadas.sort((a, b) {
-              final ciclosA = a.evaluacionesCiclos.length;
-              final ciclosB = b.evaluacionesCiclos.length;
-              if (ciclosA != ciclosB) {
-                return ciclosB.compareTo(ciclosA);
-              }
-              if (a.cicloActual != b.cicloActual) {
-                return b.cicloActual.compareTo(a.cicloActual);
-              }
-              if (a.totalSeguimientos != b.totalSeguimientos) {
-                return b.totalSeguimientos.compareTo(a.totalSeguimientos);
-              }
-              return b.seguimientosEnCiclo.compareTo(a.seguimientosEnCiclo);
-            });
-            lista = aprobadas;
-          } else if (_filtroSeleccionado == 1) {
-            // 2. Pendientes (las que aún no han comenzado su primer seguimiento/ciclo, o pendientes de aprobación)
-            lista = todas.where((s) {
-              final esRechazadaOCancelada = s.estado == 'rechazada' ||
-                  s.estado == 'cancelada' ||
-                  s.estadoApadrinamiento == 'cancelada';
-              if (esRechazadaOCancelada) return false;
-              final tieneSeguimientosOCiclos = s.totalSeguimientos > 0 ||
-                  s.seguimientosEnCiclo > 0 ||
-                  s.cicloActual > 1 ||
-                  s.evaluacionesCiclos.isNotEmpty;
-              final esAprobadaConSeguimiento =
-                  (s.estado == 'aprobada' || s.tieneContrato) &&
-                      tieneSeguimientosOCiclos;
-              return !esAprobadaConSeguimiento;
-            }).toList();
-          } else {
-            // 3. Rechazadas o canceladas
-            lista = todas.where((s) {
-              return s.estado == 'rechazada' ||
-                  s.estado == 'cancelada' ||
-                  s.estadoApadrinamiento == 'cancelada';
-            }).toList();
-          }
-
-          final totalElementos = lista.isEmpty ? 2 : lista.length + 1;
-
-          return RefreshIndicator(
-            onRefresh: _recargar,
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: totalElementos,
-              separatorBuilder: (_, ___) => const SizedBox(height: 16),
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return _construirCabeceraPadrino(todas);
-                }
-
-                if (lista.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _filtroSeleccionado == 0
-                                ? Icons.verified_outlined
-                                : (_filtroSeleccionado == 1
-                                    ? Icons.hourglass_empty_rounded
-                                    : Icons.cancel_outlined),
-                            size: 42,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            _filtroSeleccionado == 0
-                                ? 'No tienes apadrinamientos con seguimientos activos actualmente.'
-                                : (_filtroSeleccionado == 1
-                                    ? 'No tienes solicitudes de apadrinamiento pendientes.'
-                                    : 'No tienes solicitudes rechazadas o canceladas.'),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 13.5, color: Colors.grey.shade600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                final s = lista[i - 1];
-                final color = switch (s.estado) {
-                  'aprobada' =>
-                    s.tieneContrato ? Colors.green : Colors.amber.shade800,
-                  'rechazada' => Colors.redAccent,
-                  'cancelada' => Colors.blueGrey,
-                  _ => Colors.orange,
-                };
-
-                final estadoTexto = switch (s.estado) {
-                  'aprobada' => s.tieneContrato
-                      ? 'APROBADA (PADRINO OFICIAL)'
-                      : 'APROBADA (ESPERANDO CONTRATO)',
-                  'rechazada' => 'RECHAZADA',
-                  'cancelada' => 'CANCELADA',
-                  _ => 'PENDIENTE',
-                };
-
-                return Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    side: BorderSide(color: color.withValues(alpha: 0.35)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Cabecera: Estado de verificación de correo y Estado del proceso
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          alignment: WrapAlignment.spaceBetween,
-                          children: [
-                            // Badge de verificación de correo
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: s.esCorreoConfirmado
-                                    ? const Color(0xFFE8F5E9)
-                                    : const Color(0xFFFFF8E1),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: s.esCorreoConfirmado
-                                      ? const Color(0xFF81C784)
-                                      : const Color(0xFFFFD54F),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    s.esCorreoConfirmado
-                                        ? Icons.mark_email_read_rounded
-                                        : Icons.mark_email_unread_rounded,
-                                    size: 14,
-                                    color: s.esCorreoConfirmado
-                                        ? const Color(0xFF2E7D32)
-                                        : const Color(0xFFF57F17),
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    s.correoEstadoTexto,
-                                    style: TextStyle(
-                                      color: s.esCorreoConfirmado
-                                          ? const Color(0xFF2E7D32)
-                                          : const Color(0xFFF57F17),
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                  if (!s.esCorreoConfirmado) ...[
-                                    const SizedBox(width: 6),
-                                    InkWell(
-                                      onTap: _reenviandoCorreoId == s.id
-                                          ? null
-                                          : () => _reenviarVerificacion(s),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                        child: _reenviandoCorreoId == s.id
-                                            ? const SizedBox(
-                                                width: 10,
-                                                height: 10,
-                                                child: CircularProgressIndicator(strokeWidth: 1.5),
-                                              )
-                                            : const Text(
-                                                'Reenviar',
-                                                style: TextStyle(
-                                                  decoration: TextDecoration.underline,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 10.5,
-                                                  color: Color(0xFFE65100),
-                                                ),
-                                              ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-
-                            if (s.tieneReporteNuevo) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.rosa,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.mark_email_unread_rounded, size: 14, color: Colors.white),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      'Reporte nuevo',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-
-                            // Chip estado del proceso
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: color),
-                              ),
-                              child: Text(
-                                estadoTexto,
-                                style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Fotografía centrada, nombre debajo centrado, y edad debajo
-                        Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                width: 94,
-                                height: 94,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.rosa, width: 2.5),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.08),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: ClipOval(
-                                  child: PetImage(url: s.mascotaFotos),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                s.mascotaNombre,
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 20,
-                                  color: AppColors.texto,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.rosaSuave,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: AppColors.bordeRosa),
-                                ),
-                                child: Text(
-                                  s.mascotaEdadTexto,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: AppColors.rosa,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 12.5,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${s.mascotaEspecie} • ${s.mascotaRaza.isEmpty ? 'Mestizo' : s.mascotaRaza}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppColors.rosa,
-                                  side: const BorderSide(color: AppColors.rosa),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                icon: const Icon(Icons.pets, size: 18),
-                                label: Text('Ver perfil de ${s.mascotaNombre}'),
-                                onPressed: () => _verDetallesMascota(s.idMascota),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Divider(height: 24),
-
-                        // Progreso del ciclo actual (para apadrinamientos aprobados/activos)
-                        if (s.esAprobada) ...[
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 14),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFDF7F9),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: const Color(0xFFF3D5E2)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Ciclo ${s.cicloActual} · ${s.seguimientosEnCiclo}/3',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 13,
-                                        color: AppColors.texto,
-                                      ),
-                                    ),
-                                    Text(
-                                      s.seguimientosEnCiclo >= 3
-                                          ? 'Ciclo completado'
-                                          : '${3 - s.seguimientosEnCiclo} pendiente(s)',
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: s.seguimientosEnCiclo >= 3
-                                            ? Colors.green.shade700
-                                            : AppColors.rosa,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: LinearProgressIndicator(
-                                    value: (s.seguimientosEnCiclo / 3.0).clamp(0.0, 1.0),
-                                    minHeight: 8,
-                                    backgroundColor: const Color(0xFFE8D5DF),
-                                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.rosa),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-
-                        // ESTADO APROBADA
-                        if (s.esAprobada) ...[
-                          if (!s.tieneContrato) ...[
-                            // PASO PENDIENTE: ESPERANDO CONTRATO
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.shade50,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: Colors.amber.shade400,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.hourglass_top_rounded,
-                                        color: Colors.amber.shade900,
-                                        size: 24,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          '¡Solicitud aprobada! Falta 1 paso ⏳',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
-                                            color: Colors.amber.shade900,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Tu solicitud para apadrinar a ${s.mascotaNombre} ha sido aprobada por la fundación.',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.grey.shade900,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: Colors.amber.shade300,
-                                      ),
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Icon(
-                                          Icons.assignment_outlined,
-                                          color: Colors.amber.shade900,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'Aún falta un paso: debes esperar que el administrador suba el contrato de apadrinamiento firmado. Una vez lo suba, serás formalmente el padrino de ${s.mascotaNombre} y podrás descargarlo aquí.',
-                                            style: TextStyle(
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.amber.shade900,
-                                              height: 1.35,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (s.observaciones != null &&
-                                      s.observaciones!.trim().isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Indicaciones de la fundación: ${s.observaciones}',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontStyle: FontStyle.italic,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ] else ...[
-                            // YA TIENE CONTRATO: PADRINO OFICIAL
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade50,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: Colors.green.shade300,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(Icons.verified, color: Colors.green, size: 24),
-                                      SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          '¡Eres padrino oficial! 🎉',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 15,
-                                            color: Colors.green,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '📅 Fecha oficial de inicio: ${s.fechaInicioApadrinamiento ?? 'Activo'}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Contacto oficial: Fundación Maritza Arévalo (+${FundacionInfo.whatsappNumero.isNotEmpty ? FundacionInfo.whatsappNumero : '573136177747'})',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade800,
-                                    ),
-                                  ),
-                                  if (s.observaciones != null &&
-                                      s.observaciones!.trim().isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.green.shade200),
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Row(
-                                            children: [
-                                              Icon(Icons.rate_review_outlined,
-                                                  size: 15, color: Colors.green),
-                                              SizedBox(width: 6),
-                                              Text(
-                                                'Observaciones de la fundación:',
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
-                                                  color: Colors.green,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            s.observaciones!,
-                                            style: const TextStyle(
-                                              fontSize: 12.5,
-                                              height: 1.35,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 12),
-                                  FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: AppColors.rosa,
-                                      minimumSize: const Size.fromHeight(44),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    icon: const Icon(Icons.assignment_turned_in),
-                                    label: const Text(
-                                      'Ver Contrato de Apadrinamiento',
-                                      style: TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    onPressed: () => _verContrato(s),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: const Color(0xFF25D366),
-                                      foregroundColor: Colors.white,
-                                      minimumSize: const Size.fromHeight(44),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    icon: const Icon(Icons.chat_bubble_outline),
-                                    label: const Text(
-                                      'Contactar por WhatsApp a la Fundación',
-                                      style: TextStyle(fontWeight: FontWeight.bold),
-                                    ),
-                                    onPressed: () => _contactarWhatsApp(s),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  _SeccionSeguimientoUsuario(
-                                    solicitud: s,
-                                    idSolicitud: s.id,
-                                    nombreMascota: s.mascotaNombre,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ] else if (s.esCancelada) ...[
-                          // ESTADO CANCELADA
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: Colors.red.shade300,
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.cancel,
-                                      color: Colors.redAccent,
-                                      size: 24,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Apadrinamiento cancelado por la administración',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14.5,
-                                          color: Colors.red.shade900,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Motivo de la cancelación informado por la fundación:',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.red.shade200),
-                                  ),
-                                  child: Text(
-                                    s.observaciones?.trim().isNotEmpty == true
-                                        ? s.observaciones!
-                                        : 'No se detalló un motivo específico.',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.black87,
-                                      height: 1.35,
-                                    ),
-                                  ),
-                                ),
-                                if (s.fechaActualizacionEstado != null) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Fecha de cancelación: ${s.fechaActualizacionEstado}',
-                                    style: TextStyle(
-                                      fontSize: 11.5,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
-                                _construirCuentaRegresivaEliminacion(s),
-                              ],
-                            ),
-                          ),
-                        ] else if (s.esPendiente) ...[
-                          Text(
-                            'Tu solicitud fue enviada el ${s.fechaSolicitud}. El administrador de la fundación está revisando tu motivación y tus datos.',
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              height: 1.4,
-                            ),
-                          ),
-                        ] else if (s.esRechazada) ...[
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.red.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'Motivo u observaciones:',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.redAccent,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red.shade100,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        'Rechazada ${s.vecesRechazada} ${s.vecesRechazada == 1 ? 'vez' : 'veces'}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red.shade900,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  s.observaciones ?? 'No se especificó motivo.',
-                                  style: const TextStyle(
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                _construirCuentaRegresivaEliminacion(s),
-                              ],
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 12),
-                        // Tu motivación enviada
-                        Text(
-                          'Tu motivación registrada:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey.shade600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          s.motivacion,
-                          style: const TextStyle(
-                            fontStyle: FontStyle.italic,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.rosa,
-                            side: const BorderSide(color: AppColors.rosa, width: 1.4),
-                            minimumSize: const Size.fromHeight(42),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          icon: _descargandoPdfId == s.id
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
-                                )
-                              : const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                          label: const Text(
-                            'Descargar acuerdo de apadrinamiento (PDF)',
-                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                          ),
-                          onPressed: _descargandoPdfId == s.id ? null : () => _descargarAcuerdoPdf(s),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// Cabecera con nombre de usuario, promedio de estrellas, banner y filtros.
-  Widget _construirCabeceraPadrino(List<SolicitudApadrinamiento> todas) {
-    final tieneReporteNuevoEnAprobadas = todas.any(
-      (s) =>
-          (s.estado == 'aprobada' ||
-              s.estadoApadrinamiento == 'activa' ||
-              s.tieneContrato) &&
-          s.tieneReporteNuevo,
-    );
-
-    return FutureBuilder<ResumenPadrino?>(
-      future: _resumenFuture,
-      builder: (context, snap) {
-        final resumen = snap.data;
-        final nombre = '${Session.nombre} ${Session.apellidos}'.trim();
-
-        return Column(
+      backgroundColor: const Color(0xFFFFF0F5),
+      body: SafeArea(
+        child: Column(
           children: [
-            Card(
-              elevation: 1.5,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFFF0E5EC)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            nombre.isNotEmpty ? nombre : 'Padrino PawMatch',
-                            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15.5),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'Calificación como padrino',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
+            BarraSuperior(
+              iconoTitulo: Icons.favorite_rounded,
+              titulo: 'Mis Apadrinamientos',
+              onCerrarSesion: _confirmarCerrarSesion,
+              forzarHuella: true,
+            ),
+            Expanded(
+              child: FutureBuilder<List<SolicitudApadrinamiento>>(
+                future: _future,
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(color: AppColors.rosa),
+                    );
+                  }
+                  if (snap.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.error_outline,
+                                size: 48, color: Colors.redAccent),
+                            const SizedBox(height: 12),
+                            Text('Error al cargar tus apadrinamientos: ${snap.error}',
+                                textAlign: TextAlign.center),
+                            const SizedBox(height: 12),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.rosa,
+                              ),
+                              onPressed: _recargar,
+                              child: const Text('Reintentar'),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    StarRatingBadge(
-                      rating: resumen?.calificacionPromedio ?? 0.0,
-                      totalSeguimientos: resumen?.totalSeguimientos ?? 0,
-                    ),
-                  ],
-                ),
+                    );
+                  }
+
+                  final todas = snap.data ?? [];
+
+                  // Filtrado según especificación
+                  final List<SolicitudApadrinamiento> aprobadas = todas.where((s) {
+                    final esAprobadaOContrato = s.estado == 'aprobada' || s.tieneContrato;
+                    final tieneSeguimientosOCiclos = s.totalSeguimientos > 0 ||
+                        s.seguimientosEnCiclo > 0 ||
+                        s.cicloActual > 1 ||
+                        s.evaluacionesCiclos.isNotEmpty;
+                    return esAprobadaOContrato &&
+                        tieneSeguimientosOCiclos &&
+                        s.estado != 'cancelada' &&
+                        s.estadoApadrinamiento != 'cancelada';
+                  }).toList()
+                    ..sort((a, b) {
+                      final ciclosA = a.evaluacionesCiclos.length;
+                      final ciclosB = b.evaluacionesCiclos.length;
+                      if (ciclosA != ciclosB) return ciclosB.compareTo(ciclosA);
+                      if (a.cicloActual != b.cicloActual) {
+                        return b.cicloActual.compareTo(a.cicloActual);
+                      }
+                      if (a.totalSeguimientos != b.totalSeguimientos) {
+                        return b.totalSeguimientos.compareTo(a.totalSeguimientos);
+                      }
+                      return b.seguimientosEnCiclo.compareTo(a.seguimientosEnCiclo);
+                    });
+
+                  final List<SolicitudApadrinamiento> pendientes = todas.where((s) {
+                    final esRechazadaOCancelada = s.estado == 'rechazada' ||
+                        s.estado == 'cancelada' ||
+                        s.estadoApadrinamiento == 'cancelada';
+                    if (esRechazadaOCancelada) return false;
+                    final tieneSeguimientosOCiclos = s.totalSeguimientos > 0 ||
+                        s.seguimientosEnCiclo > 0 ||
+                        s.cicloActual > 1 ||
+                        s.evaluacionesCiclos.isNotEmpty;
+                    final esAprobadaConSeguimiento =
+                        (s.estado == 'aprobada' || s.tieneContrato) &&
+                            tieneSeguimientosOCiclos;
+                    return !esAprobadaConSeguimiento;
+                  }).toList();
+
+                  final List<SolicitudApadrinamiento> rechazadas = todas.where((s) {
+                    return s.estado == 'rechazada' ||
+                        s.estado == 'cancelada' ||
+                        s.estadoApadrinamiento == 'cancelada';
+                  }).toList();
+
+                  final listaActiva = _filtroSeleccionado == 0
+                      ? aprobadas
+                      : (_filtroSeleccionado == 1 ? pendientes : rechazadas);
+
+                  // Identificar la solicitud principal y las otras apadrinaciones
+                  SolicitudApadrinamiento? solicitudPrincipal;
+                  if (listaActiva.isNotEmpty) {
+                    if (_idSolicitudSeleccionada != null) {
+                      final encontrada = listaActiva
+                          .where((s) => s.id == _idSolicitudSeleccionada)
+                          .firstOrNull;
+                      solicitudPrincipal = encontrada ?? listaActiva.first;
+                    } else {
+                      solicitudPrincipal = listaActiva.first;
+                    }
+                  }
+
+                  // ÚNICAMENTE las demás de la MISMA categoría activa (nunca mezclar estados)
+                  final List<SolicitudApadrinamiento> otrasDePestana = solicitudPrincipal != null
+                      ? listaActiva.where((s) => s.id != solicitudPrincipal!.id).toList()
+                      : <SolicitudApadrinamiento>[];
+
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      final double ancho = constraints.maxWidth;
+                      final bool esDesktop = ancho >= 880;
+                      final bool esTablet = ancho >= 600 && ancho < 880;
+
+                      // Ancho máximo contenido fluido
+                      final double maxAnchoContenedor = esDesktop
+                          ? 1120.0
+                          : (esTablet ? 780.0 : double.infinity);
+
+                      return RefreshIndicator(
+                        color: AppColors.rosa,
+                        onRefresh: _recargar,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: EdgeInsets.fromLTRB(
+                            esDesktop ? 28 : 16,
+                            8,
+                            esDesktop ? 28 : 16,
+                            // Espacio generoso inferior para no solapar la barra de navegación flotante
+                            110,
+                          ),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: maxAnchoContenedor),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const SizedBox(height: 6),
+
+                                  // Pestañas de navegación adaptables
+                                  _construirPestanas(
+                                    conteoAprobadas: aprobadas.length,
+                                    conteoPendientes: pendientes.length,
+                                    conteoRechazadas: rechazadas.length,
+                                    esDesktop: esDesktop,
+                                  ),
+                                  const SizedBox(height: 16),
+
+                                  // Tarjeta Principal y Sección de Otras Apadrinaciones
+                                  if (listaActiva.isEmpty)
+                                    _construirEstadoVacio()
+                                  else ...[
+                                    if (solicitudPrincipal != null)
+                                      _TarjetaApadrinamientoPrincipal(
+                                        solicitud: solicitudPrincipal,
+                                        esDesktop: esDesktop,
+                                        reenviandoCorreoId: _reenviandoCorreoId,
+                                        descargandoPdfId: _descargandoPdfId,
+                                        onReenviarVerificacion: () =>
+                                            _reenviarVerificacion(solicitudPrincipal!),
+                                        onDescargarAcuerdoPdf: () =>
+                                            _descargarAcuerdoPdf(solicitudPrincipal!),
+                                        onContactarWhatsApp: () =>
+                                            _contactarWhatsApp(solicitudPrincipal!),
+                                        onVerContrato: () => _verContrato(solicitudPrincipal!),
+                                        onVerDetallesMascota: () =>
+                                            _verDetallesMascota(solicitudPrincipal!.idMascota),
+                                      ),
+
+                                    // Lista / Cuadrícula de Otras Apadrinaciones (SOLO si hay más de 1 en esta categoría)
+                                    if (otrasDePestana.isNotEmpty) ...[
+                                      const SizedBox(height: 24),
+                                      _construirEncabezadoOtrasApadrinaciones(
+                                        _filtroSeleccionado == 0
+                                            ? 'Otras mascotas apadrinadas'
+                                            : (_filtroSeleccionado == 1
+                                                ? 'Otras solicitudes pendientes'
+                                                : 'Otras solicitudes rechazadas'),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _construirGridOtrasApadrinaciones(
+                                        otras: otrasDePestana,
+                                        esDesktop: esDesktop,
+                                        esTablet: esTablet,
+                                      ),
+                                    ] else if (_filtroSeleccionado == 0) ...[
+                                      // Si solo tiene 1 apadrinación aprobada
+                                      const SizedBox(height: 18),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(18),
+                                          border: Border.all(color: const Color(0xFFFCE4EC)),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(0xFFF772A9).withValues(alpha: 0.05),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFDE8F1),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: const Icon(
+                                                Icons.pets_rounded,
+                                                color: AppColors.rosa,
+                                                size: 18,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Expanded(
+                                              child: Text(
+                                                'Hasta el momento solo tienes una apadrinación.',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 13,
+                                                  color: Color(0xFF4A1525),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 12),
-            _construirBannerPadrino(resumen, todas),
-            const SizedBox(height: 14),
-            _construirFiltros(tieneReporteNuevoEnAprobadas),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _construirFiltros(bool tieneReporteNuevoEnAprobadas) {
+  // ---------------- Pestañas visuales responsive ----------------
+
+  Widget _construirPestanas({
+    required int conteoAprobadas,
+    required int conteoPendientes,
+    required int conteoRechazadas,
+    required bool esDesktop,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFCE4EC)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _botonPestana(
+              indice: 0,
+              titulo: 'Aprobadas',
+              conteo: conteoAprobadas,
+              esDesktop: esDesktop,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _botonPestana(
+              indice: 1,
+              titulo: 'Pendientes',
+              conteo: conteoPendientes,
+              esDesktop: esDesktop,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _botonPestana(
+              indice: 2,
+              titulo: 'Rechazadas',
+              conteo: conteoRechazadas,
+              esDesktop: esDesktop,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _botonPestana({
+    required int indice,
+    required String titulo,
+    required int conteo,
+    required bool esDesktop,
+  }) {
+    final bool activa = _filtroSeleccionado == indice;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () {
+          setState(() {
+            _filtroSeleccionado = indice;
+            _idSolicitudSeleccionada = null;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: EdgeInsets.symmetric(
+            vertical: esDesktop ? 12 : 9,
+            horizontal: 6,
+          ),
+          decoration: BoxDecoration(
+            color: activa ? AppColors.rosa : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: activa
+                ? [
+                    BoxShadow(
+                      color: AppColors.rosa.withValues(alpha: 0.28),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  titulo,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: activa ? FontWeight.w800 : FontWeight.w600,
+                    fontSize: esDesktop ? 14 : 12.5,
+                    color: activa ? Colors.white : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+              if (conteo > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: activa
+                        ? Colors.white.withValues(alpha: 0.25)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$conteo',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: activa ? Colors.white : const Color(0xFF475569),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------- Encabezado de otras apadrinaciones ----------------
+
+  Widget _construirEncabezadoOtrasApadrinaciones(String titulo) {
     return Row(
       children: [
-        // 1. Aprobadas
-        Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => setState(() => _filtroSeleccionado = 0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-              decoration: BoxDecoration(
-                color: _filtroSeleccionado == 0
-                    ? AppColors.rosa
-                    : AppColors.rosa.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: _filtroSeleccionado == 0
-                      ? AppColors.rosa
-                      : AppColors.rosa.withValues(alpha: 0.25),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 15,
-                    color: _filtroSeleccionado == 0 ? Colors.white : AppColors.rosa,
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      'Aprobadas',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.5,
-                        color: _filtroSeleccionado == 0 ? Colors.white : AppColors.rosa,
-                      ),
-                    ),
-                  ),
-                  if (tieneReporteNuevoEnAprobadas) ...[
-                    const SizedBox(width: 4),
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: _filtroSeleccionado == 0 ? Colors.white : AppColors.rosa,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFDE8F1),
+            borderRadius: BorderRadius.circular(8),
           ),
+          child: const Icon(Icons.pets, color: AppColors.rosa, size: 16),
         ),
-        const SizedBox(width: 6),
-        // 2. Pendientes
+        const SizedBox(width: 8),
         Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => setState(() => _filtroSeleccionado = 1),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-              decoration: BoxDecoration(
-                color: _filtroSeleccionado == 1
-                    ? AppColors.rosa
-                    : AppColors.rosa.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: _filtroSeleccionado == 1
-                      ? AppColors.rosa
-                      : AppColors.rosa.withValues(alpha: 0.25),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.hourglass_top_rounded,
-                    size: 15,
-                    color: _filtroSeleccionado == 1 ? Colors.white : AppColors.rosa,
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      'Pendientes',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.5,
-                        color: _filtroSeleccionado == 1 ? Colors.white : AppColors.rosa,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        // 3. Rechazadas o canceladas
-        Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: () => setState(() => _filtroSeleccionado = 2),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-              decoration: BoxDecoration(
-                color: _filtroSeleccionado == 2
-                    ? AppColors.rosa
-                    : AppColors.rosa.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: _filtroSeleccionado == 2
-                      ? AppColors.rosa
-                      : AppColors.rosa.withValues(alpha: 0.25),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.cancel_rounded,
-                    size: 15,
-                    color: _filtroSeleccionado == 2 ? Colors.white : AppColors.rosa,
-                  ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      'Rechazadas',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12.5,
-                        color: _filtroSeleccionado == 2 ? Colors.white : AppColors.rosa,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          child: Text(
+            titulo,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15.5,
+              color: Color(0xFF1E293B),
             ),
           ),
         ),
@@ -1351,449 +715,184 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     );
   }
 
-  Widget _construirCuentaRegresivaEliminacion(SolicitudApadrinamiento s) {
-    final limite = s.eliminarDespuesDe;
-    String texto;
-    if (limite != null) {
-      final diff = limite.difference(DateTime.now());
-      final minutos = diff.inMinutes;
-      if (minutos <= 0) {
-        texto =
-            'Esta solicitud se eliminará en cualquier momento (tiempo de 2 horas cumplido tras ver la notificación).';
-      } else if (minutos > 60) {
-        texto =
-            'Esta solicitud se eliminará en 1 hora y ${minutos % 60} min (regla de 2 horas tras ver la notificación).';
-      } else {
-        texto =
-            'Esta solicitud se eliminará en $minutos min (regla de 2 horas tras ver la notificación).';
-      }
-    } else {
-      texto =
-          'Esta solicitud se eliminará automáticamente 2 horas después de que veas su notificación.';
-    }
+  // ---------------- Cuadrícula / Lista responsive de otras apadrinaciones ----------------
 
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.amber.shade300),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.access_time_rounded, size: 16, color: Colors.amber.shade900),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              texto,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.amber.shade900,
-                height: 1.3,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Estructura de información visual para el banner y modal
-  _InfoBannerPadrino _calcularInfoBanner(
-    ResumenPadrino? resumen, {
-    List<SolicitudApadrinamiento> todas = const [],
+  Widget _construirGridOtrasApadrinaciones({
+    required List<SolicitudApadrinamiento> otras,
+    required bool esDesktop,
+    required bool esTablet,
   }) {
-    final total = resumen?.totalSeguimientos ?? 0;
-    final prom = resumen?.calificacionPromedio ?? 0.0;
-
-    // Calcular si algún apadrinamiento ya terminó ciclo(s)
-    int maxCicloTerminado = 0;
-    for (final s in todas) {
-      if (s.evaluacionesCiclos.isNotEmpty) {
-        for (final ev in s.evaluacionesCiclos) {
-          if (ev.ciclo > maxCicloTerminado) {
-            maxCicloTerminado = ev.ciclo;
-          }
-        }
-      } else if (s.cicloActual > 1) {
-        final c = s.cicloActual - 1;
-        if (c > maxCicloTerminado) {
-          maxCicloTerminado = c;
-        }
-      }
-    }
-
-    if (maxCicloTerminado >= 1) {
-      final sigCiclo = maxCicloTerminado + 1;
-      final cicloTexto = maxCicloTerminado == 1
-          ? 'Tu primer ciclo de seguimiento ya terminó'
-          : 'Tu ciclo de seguimiento $maxCicloTerminado ya terminó';
-      return _InfoBannerPadrino(
-        titulo: 'Vas por buen camino',
-        mensaje:
-            '$cicloTexto, vas por buen camino. Comenzaremos con el ciclo $sigCiclo.',
-        icono: Icons.warning_amber_rounded,
-        colorFondo: const Color(0xFFFFF3E0),
-        colorBorde: const Color(0xFFFFB74D),
-        colorTexto: const Color(0xFFE65100),
-        colorIcono: const Color(0xFFEF6C00),
+    if (esDesktop || esTablet) {
+      final int columnas = esDesktop ? 2 : 2;
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final double anchoItem = (constraints.maxWidth - 16) / columnas;
+          return Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: otras.map((s) {
+              return SizedBox(
+                width: anchoItem,
+                child: _TarjetaOtraApadrinacion(
+                  solicitud: s,
+                  onSeleccionar: () {
+                    setState(() {
+                      _idSolicitudSeleccionada = s.id;
+                    });
+                  },
+                  onVerDetalles: () => _verDetallesMascota(s.idMascota),
+                ),
+              );
+            }).toList(),
+          );
+        },
       );
     }
 
-    if (total == 0) {
-      return const _InfoBannerPadrino(
-        titulo: 'Bienvenido a tus apadrinamientos',
-        mensaje: 'Aún no tienes seguimientos. Tu apadrinamiento será evaluado por la fundación.',
-        icono: Icons.volunteer_activism_outlined,
-        colorFondo: Color(0xFFFCE4EC),
-        colorBorde: Color(0xFFF48FB1),
-        colorTexto: Color(0xFF880E4F),
-        colorIcono: AppColors.rosa,
-      );
-    }
-
-    if (prom >= 4.0) {
-      return const _InfoBannerPadrino(
-        titulo: '¡Excelente compromiso!',
-        mensaje: '¡Eres un buen padrino! Sigue así, tu compromiso hace la diferencia.',
-        icono: Icons.military_tech_rounded,
-        colorFondo: Color(0xFFE8F5E9),
-        colorBorde: Color(0xFF81C784),
-        colorTexto: Color(0xFF1B5E20),
-        colorIcono: Color(0xFF2E7D32),
-      );
-    }
-
-    if (prom >= 3.0) {
-      return const _InfoBannerPadrino(
-        titulo: 'Vas por buen camino',
-        mensaje: 'Vas por buen camino, pero puedes mejorar. Cumple con tus compromisos para mantener tu apadrinamiento.',
-        icono: Icons.warning_amber_rounded,
-        colorFondo: Color(0xFFFFF3E0),
-        colorBorde: Color(0xFFFFB74D),
-        colorTexto: Color(0xFFE65100),
-        colorIcono: Color(0xFFEF6C00),
-      );
-    }
-
-    return const _InfoBannerPadrino(
-      titulo: 'Atención a tu apadrinamiento',
-      mensaje: 'Tu apadrinamiento no está cumpliendo lo esperado. Si no mejoras, podrías perder la posibilidad de seguir siendo padrino.',
-      icono: Icons.error_outline_rounded,
-      colorFondo: Color(0xFFFFEBEE),
-      colorBorde: Color(0xFFEF9A9A),
-      colorTexto: Color(0xFFB71C1C),
-      colorIcono: Color(0xFFC62828),
+    // En móviles: lista vertical compacta
+    return Column(
+      children: otras.map((s) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _TarjetaOtraApadrinacion(
+            solicitud: s,
+            onSeleccionar: () {
+              setState(() {
+                _idSolicitudSeleccionada = s.id;
+              });
+            },
+            onVerDetalles: () => _verDetallesMascota(s.idMascota),
+          ),
+        );
+      }).toList(),
     );
   }
 
-  /// Banner informativo permanente en la cabecera
-  Widget _construirBannerPadrino(
-    ResumenPadrino? resumen, [
-    List<SolicitudApadrinamiento> todas = const [],
-  ]) {
-    final info = _calcularInfoBanner(resumen, todas: todas);
-    final total = resumen?.totalSeguimientos ?? 0;
-    final progreso = (total / 3.0).clamp(0.0, 1.0);
+  Widget _construirEstadoVacio() {
+    final String mensaje = _filtroSeleccionado == 0
+        ? 'No tienes apadrinamientos con seguimientos activos actualmente.'
+        : (_filtroSeleccionado == 1
+            ? 'No tienes solicitudes de apadrinamiento pendientes.'
+            : 'No tienes solicitudes rechazadas o canceladas.');
 
-    int maxCicloTerminado = 0;
-    for (final s in todas) {
-      if (s.evaluacionesCiclos.isNotEmpty) {
-        for (final ev in s.evaluacionesCiclos) {
-          if (ev.ciclo > maxCicloTerminado) {
-            maxCicloTerminado = ev.ciclo;
-          }
-        }
-      } else if (s.cicloActual > 1) {
-        final c = s.cicloActual - 1;
-        if (c > maxCicloTerminado) {
-          maxCicloTerminado = c;
-        }
-      }
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: info.colorFondo,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: info.colorBorde, width: 1.2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(info.icono, color: info.colorIcono, size: 26),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      info.titulo,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14.5,
-                        color: info.colorTexto,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      info.mensaje,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: info.colorTexto.withValues(alpha: 0.9),
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, thickness: 1, color: Colors.black12),
-          const SizedBox(height: 12),
-          if (maxCicloTerminado >= 1) ...[
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: info.colorBorde),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle_outline, color: info.colorIcono, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '¡Cuentas con el reporte del Ciclo $maxCicloTerminado disponible! Puedes consultarlo y descargarlo en la tarjeta de cada mascota abajo.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: info.colorTexto,
-                      ),
-                    ),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFFCE4EC)),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.rosa.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
+              child: Icon(
+                _filtroSeleccionado == 0
+                    ? Icons.verified_outlined
+                    : (_filtroSeleccionado == 1
+                        ? Icons.hourglass_empty_rounded
+                        : Icons.cancel_outlined),
+                size: 38,
+                color: AppColors.rosa,
+              ),
             ),
-          ] else if (total < 3) ...[
+            const SizedBox(height: 14),
             Text(
-              'En tu 3er seguimiento podrás ver tu reporte de padrino y la fundación evaluará si puedes seguir siendo padrino. Llevas $total de 3.',
-              style: TextStyle(
-                fontSize: 12,
+              mensaje,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13.5,
                 fontWeight: FontWeight.w600,
-                color: info.colorTexto,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: progreso,
-                minHeight: 7,
-                backgroundColor: Colors.black.withValues(alpha: 0.08),
-                valueColor: AlwaysStoppedAnimation<Color>(info.colorIcono),
-              ),
-            ),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: info.colorBorde),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.check_circle_outline, color: info.colorIcono, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '¡Cuentas con seguimientos evaluados! Puedes consultar y descargar el reporte en la tarjeta de cada mascota abajo.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: info.colorTexto,
-                      ),
-                    ),
-                  ),
-                ],
+                color: Color(0xFF64748B),
               ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  /// Diálogo / bottom sheet modal que se muestra la primera vez que entra en la sesión
   void _mostrarMensajePrimeraVez(
     ResumenPadrino resumen, {
     List<SolicitudApadrinamiento> todas = const [],
-  }) {
-    final info = _calcularInfoBanner(resumen, todas: todas);
-    final total = resumen.totalSeguimientos;
-
-    int maxCicloTerminado = 0;
-    for (final s in todas) {
-      if (s.evaluacionesCiclos.isNotEmpty) {
-        for (final ev in s.evaluacionesCiclos) {
-          if (ev.ciclo > maxCicloTerminado) {
-            maxCicloTerminado = ev.ciclo;
-          }
-        }
-      } else if (s.cicloActual > 1) {
-        final c = s.cicloActual - 1;
-        if (c > maxCicloTerminado) {
-          maxCicloTerminado = c;
-        }
-      }
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(ctx).size.height * 0.85,
-        ),
-        padding: const EdgeInsets.all(22),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            bottom: 100 + MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 18),
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: info.colorFondo,
-                child: Icon(info.icono, size: 32, color: info.colorIcono),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                info.titulo,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: info.colorTexto,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                info.mensaje,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade800,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F7F9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Text(
-                  maxCicloTerminado >= 1
-                      ? '¡Ciclo $maxCicloTerminado concluido con éxito! Tu reporte de padrino está disponible.'
-                      : (total < 3
-                          ? 'Progreso de evaluación: Llevas $total de 3 seguimientos.'
-                          : '¡Ya cuentas con 3 o más seguimientos! Tu reporte de padrino está disponible.'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.rosa,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                  ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text(
-                    'Entendido',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  }) {}
 }
 
-/// Sección de historial de seguimiento dentro de la tarjeta de apadrinamiento del usuario.
-class _SeccionSeguimientoUsuario extends StatefulWidget {
-  final SolicitudApadrinamiento solicitud;
-  final String idSolicitud;
-  final String nombreMascota;
+// ============================================================================
+// TARJETA PRINCIPAL DE APADRINAMIENTO CON BOTÓN "VER SEGUIMIENTOS Y REPORTES"
+// ============================================================================
 
-  const _SeccionSeguimientoUsuario({
+class _TarjetaApadrinamientoPrincipal extends StatefulWidget {
+  final SolicitudApadrinamiento solicitud;
+  final bool esDesktop;
+  final String? reenviandoCorreoId;
+  final String? descargandoPdfId;
+  final VoidCallback onReenviarVerificacion;
+  final VoidCallback onDescargarAcuerdoPdf;
+  final VoidCallback onContactarWhatsApp;
+  final VoidCallback onVerContrato;
+  final VoidCallback onVerDetallesMascota;
+
+  const _TarjetaApadrinamientoPrincipal({
     required this.solicitud,
-    required this.idSolicitud,
-    required this.nombreMascota,
+    required this.esDesktop,
+    required this.reenviandoCorreoId,
+    required this.descargandoPdfId,
+    required this.onReenviarVerificacion,
+    required this.onDescargarAcuerdoPdf,
+    required this.onContactarWhatsApp,
+    required this.onVerContrato,
+    required this.onVerDetallesMascota,
   });
 
   @override
-  State<_SeccionSeguimientoUsuario> createState() =>
-      _SeccionSeguimientoUsuarioState();
+  State<_TarjetaApadrinamientoPrincipal> createState() =>
+      _TarjetaApadrinamientoPrincipalState();
 }
 
-class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> {
+class _TarjetaApadrinamientoPrincipalState
+    extends State<_TarjetaApadrinamientoPrincipal> {
   late Future<List<SeguimientoApadrinamientoItem>> _historialFuture;
+
+  // Botón interactivo principal para desplegar u ocultar la sección completa
+  bool _mostrarSeguimientosYReportes = false;
+
+  // Secciones individuales colapsables
+  bool _expandirCiclos = true;
+  bool _expandirReportes = true;
+  bool _expandirHistorial = false;
+  bool _expandirMotivacion = false;
 
   @override
   void initState() {
     super.initState();
     _historialFuture =
-        SeguimientoApadrinamientoService.obtenerHistorial(widget.idSolicitud);
+        SeguimientoApadrinamientoService.obtenerHistorial(widget.solicitud.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TarjetaApadrinamientoPrincipal oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.solicitud.id != widget.solicitud.id) {
+      _historialFuture =
+          SeguimientoApadrinamientoService.obtenerHistorial(widget.solicitud.id);
+    }
   }
 
   Future<void> _abrirReporte(CicloEvaluacionItem ev, {required bool descargar}) async {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.rosa)),
     );
     try {
       final seguimientos =
@@ -1801,7 +900,6 @@ class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> 
       if (!mounted) return;
       Navigator.pop(context);
 
-      // Si no estaba visto por el usuario, marcarlo visto de inmediato
       if (!ev.vistoPorUsuario) {
         SeguimientoApadrinamientoService.marcarReporteVisto(ev.idEvaluacion);
         setState(() {
@@ -1871,258 +969,1193 @@ class _SeccionSeguimientoUsuarioState extends State<_SeccionSeguimientoUsuario> 
 
   @override
   Widget build(BuildContext context) {
+    final s = widget.solicitud;
+
     return FutureBuilder<List<SeguimientoApadrinamientoItem>>(
       future: _historialFuture,
       builder: (context, snap) {
-        final lista = snap.data ?? [];
-        final cargando = snap.connectionState == ConnectionState.waiting;
-        final proximo = lista.isNotEmpty ? lista.first.proximoSeguimiento : null;
+        final List<SeguimientoApadrinamientoItem> historial = snap.data ?? [];
+        final proximo = historial.isNotEmpty ? historial.first.proximoSeguimiento : null;
+        final ultimo = historial.isNotEmpty ? historial.first : null;
 
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFF0E5EC)),
-          ),
-          child: Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              initiallyExpanded: false,
-              tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              leading: CircleAvatar(
-                backgroundColor: AppColors.rosa.withValues(alpha: 0.12),
-                radius: 18,
-                child: const Icon(
-                  Icons.assignment_turned_in_outlined,
-                  color: AppColors.rosa,
-                  size: 20,
-                ),
+        final CicloEvaluacionItem? primerReporte = s.evaluacionesCiclos.isNotEmpty
+            ? s.evaluacionesCiclos.first
+            : null;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ---------------- TARJETA PRINCIPAL BLANCA ----------------
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFFCE4EC), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF772A9).withValues(alpha: 0.08),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              title: Text(
-                'Seguimiento de ${widget.nombreMascota}',
-                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-              ),
-              subtitle: Text(
-                lista.isEmpty
-                    ? (cargando
-                        ? 'Cargando reportes...'
-                        : (widget.solicitud.cicloActual > 1
-                            ? 'Comenzará el Ciclo ${widget.solicitud.cicloActual} · Sin seguimientos'
-                            : 'Sin seguimientos registrados'))
-                    : (widget.solicitud.seguimientosEnCiclo == 0 && widget.solicitud.cicloActual > 1
-                        ? 'Comenzará el Ciclo ${widget.solicitud.cicloActual} (0/3) · Próximo: ${proximo != null ? "${proximo.day}/${proximo.month}/${proximo.year}" : "Por programar"}'
-                        : 'Ciclo ${widget.solicitud.cicloActual} (${widget.solicitud.seguimientosEnCiclo}/3) · Próximo: ${proximo != null ? "${proximo.day}/${proximo.month}/${proximo.year}" : "Por programar"}'),
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-              ),
-              children: [
-                if (cargando)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (lista.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
+              padding: EdgeInsets.all(widget.esDesktop ? 22 : 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Distribución adaptativa (Desktop: fila amplia / Móvil: fila compacta)
+                  if (widget.esDesktop)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Aún no se han registrado seguimientos oficiales para ${widget.nombreMascota}. Pronto el administrador añadirá los reportes.',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'El reporte se habilita a partir de 3 seguimientos (0/3)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w600,
+                        _construirFotoMascota(s, tamano: 120),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _construirInfoMascota(s),
+                              const SizedBox(height: 12),
+                              if (s.esAprobada && s.tieneContrato)
+                                _construirBannerAgradecimiento(s),
+                            ],
                           ),
                         ),
                       ],
-                    ),
-                  )
-                else ...[
-                  // Aviso cuando comenzará un nuevo ciclo
-                  if (widget.solicitud.seguimientosEnCiclo == 0 && widget.solicitud.cicloActual > 1)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFFA5D6A7)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.rocket_launch_rounded, color: Color(0xFF2E7D32), size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '¡Comenzará el Ciclo ${widget.solicitud.cicloActual}! El ciclo anterior fue finalizado formalmente.',
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1B5E20),
-                              ),
-                            ),
-                          ),
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _construirFotoMascota(s, tamano: 86),
+                            const SizedBox(width: 12),
+                            Expanded(child: _construirInfoMascota(s)),
+                          ],
+                        ),
+                        if (s.esAprobada && s.tieneContrato) ...[
+                          const SizedBox(height: 12),
+                          _construirBannerAgradecimiento(s),
                         ],
-                      ),
+                      ],
                     ),
 
-                  // Filas de reportes por ciclo evaluado
-                  if (widget.solicitud.evaluacionesCiclos.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Reportes de apadrinamiento disponibles:',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: AppColors.texto,
+                  const SizedBox(height: 14),
+
+                  // Acciones principales: WhatsApp, Ver Contrato y NUEVO BOTÓN "Ver Seguimientos y Reportes"
+                  if (s.esAprobada && s.tieneContrato) ...[
+                    // Botón principal Fucsia de WhatsApp
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.rosa,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(46),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 2,
+                        shadowColor: AppColors.rosa.withValues(alpha: 0.4),
+                      ),
+                      icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+                      label: const Text(
+                        'Contactar por WhatsApp',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      onPressed: widget.onContactarWhatsApp,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Botón secundario: Ver Contrato
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF880E4F),
+                        side: const BorderSide(color: Color(0xFFF48FB1), width: 1.2),
+                        minimumSize: const Size.fromHeight(42),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        backgroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.description_outlined, size: 17),
+                      label: const Text(
+                        'Ver Contrato',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                      onPressed: widget.onVerContrato,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // ---------------- NUEVO BOTÓN INTERACTIVO DE SEGUIMIENTOS Y REPORTES ----------------
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () {
+                          setState(() {
+                            _mostrarSeguimientosYReportes = !_mostrarSeguimientosYReportes;
+                          });
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: _mostrarSeguimientosYReportes
+                                ? const Color(0xFFFDE8F1)
+                                : const Color(0xFFFFF9FB),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _mostrarSeguimientosYReportes
+                                  ? AppColors.rosa
+                                  : const Color(0xFFF9A8D4),
+                              width: 1.3,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          ...widget.solicitud.evaluacionesCiclos.map((ev) {
-                            final noVisto = !ev.vistoPorUsuario;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: noVisto ? const Color(0xFFFFF0F5) : const Color(0xFFF9F9FB),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: noVisto ? AppColors.rosa : Colors.grey.shade300,
-                                  width: noVisto ? 1.5 : 1.0,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _mostrarSeguimientosYReportes
+                                    ? Icons.analytics_rounded
+                                    : Icons.analytics_outlined,
+                                size: 18,
+                                color: AppColors.rosa,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _mostrarSeguimientosYReportes
+                                    ? 'Ocultar Seguimientos y Reportes'
+                                    : 'Ver Seguimientos y Reportes',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.5,
+                                  color: AppColors.rosa,
                                 ),
                               ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.picture_as_pdf_rounded,
-                                    color: noVisto ? AppColors.rosa : Colors.grey.shade700,
-                                    size: 22,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Text(
-                                              'Reporte ciclo ${ev.ciclo}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 13,
-                                              ),
-                                            ),
-                                            if (noVisto) ...[
-                                              const SizedBox(width: 8),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.rosa,
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: const Text(
-                                                  'Reporte nuevo',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Promedio: ${ev.promedio.toStringAsFixed(1)}/5 · ${ev.puntuacion.toUpperCase()}',
-                                          style: TextStyle(
-                                            fontSize: 11.5,
-                                            color: Colors.grey.shade700,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: AppColors.rosa,
-                                      side: const BorderSide(color: AppColors.rosa),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    onPressed: () => _abrirReporte(ev, descargar: false),
-                                    child: const Text('Ver', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  FilledButton(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: AppColors.rosa,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    onPressed: () => _abrirReporte(ev, descargar: true),
-                                    child: const Text('Descargar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                                  ),
-                                ],
+                              const SizedBox(width: 6),
+                              Icon(
+                                _mostrarSeguimientosYReportes
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                size: 20,
+                                color: AppColors.rosa,
                               ),
-                            );
-                          }),
-                        ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ] else ...[
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    // Estado pendiente o rechazado
+                    if (s.esPendiente)
+                      Container(
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.info_outline_rounded, size: 16, color: Colors.grey.shade700),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                'El reporte se habilita a partir de 3 seguimientos (${widget.solicitud.seguimientosEnCiclo}/3)',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade800,
-                                ),
+                        child: Text(
+                          'Tu solicitud fue enviada el ${s.fechaSolicitud}. El administrador de la fundación la está revisando.',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                        ),
+                      ),
+                    if (s.esRechazada)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: Text(
+                          'Motivo: ${s.observaciones ?? "No se especificó motivo"}',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF991B1B)),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+
+            // ---------------- SECCIÓN DESPLEGABLE COMPLETA (ACTIVADA POR EL NUEVO BOTÓN) ----------------
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 250),
+              crossFadeState: (s.esAprobada && _mostrarSeguimientosYReportes)
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              firstChild: const SizedBox.shrink(),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. Seguimiento de Ciclos
+                    _construirSeccionDesplegable(
+                      expandida: _expandirCiclos,
+                      onToggle: () => setState(() => _expandirCiclos = !_expandirCiclos),
+                      icono: Icons.calendar_month_rounded,
+                      titulo: 'Seguimiento de Ciclos',
+                      subtitulo: 'Ciclo ${s.cicloActual} • ${s.seguimientosEnCiclo} de 3 seguimientos',
+                      trailingHeader: _construirIndicadorEtapas(
+                        etapaActual: s.seguimientosEnCiclo,
+                        proximo: proximo != null
+                            ? _MisApadrinamientosScreenState.formatearFechaCorta(proximo)
+                            : null,
+                      ),
+                      contenido: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (s.seguimientosEnCiclo == 0 && s.cicloActual > 1)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFECFDF5),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFA7F3D0)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.check_circle_outline, color: Color(0xFF059669), size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '¡El ciclo anterior finalizó formalmente! Comenzarás con el ciclo ${s.cicloActual}.',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF065F46),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const Text(
+                            'Cada ciclo de apadrinamiento consta de 3 seguimientos periódicos por parte del equipo de la Fundación Maritza Arévalo para verificar el bienestar del peludito.',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.35),
+                          ),
+                          if (proximo != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Próxima fecha programada: ${_MisApadrinamientosScreenState.formatearFechaLarga(proximo)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.rosa,
                               ),
                             ),
                           ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 2. Reportes de Apadrinamiento
+                    _construirSeccionDesplegable(
+                      expandida: _expandirReportes,
+                      onToggle: () => setState(() => _expandirReportes = !_expandirReportes),
+                      icono: Icons.description_rounded,
+                      titulo: 'Reportes de Apadrinamiento',
+                      etiquetaTitulo: primerReporte != null && !primerReporte.vistoPorUsuario
+                          ? 'Nuevo'
+                          : null,
+                      subtitulo: primerReporte != null
+                          ? 'Reporte del ciclo ${primerReporte.ciclo} • Promedio: ${primerReporte.promedio.toStringAsFixed(1)}/5'
+                          : 'Reporte a partir de 3 seguimientos (${s.seguimientosEnCiclo}/3)',
+                      etiquetaSubtitulo: primerReporte != null
+                          ? primerReporte.puntuacion.toUpperCase()
+                          : null,
+                      trailingHeader: primerReporte != null
+                          ? OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.rosa,
+                                side: const BorderSide(color: Color(0xFFF48FB1)),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              icon: const Icon(Icons.download_rounded, size: 15),
+                              label: const Text('Descargar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                              onPressed: () => _abrirReporte(primerReporte, descargar: true),
+                            )
+                          : null,
+                      contenido: s.evaluacionesCiclos.isEmpty
+                          ? const Text(
+                              'El reporte oficial se genera automáticamente al completar los 3 seguimientos de cada ciclo.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            )
+                          : Column(
+                              children: s.evaluacionesCiclos.map((ev) {
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF9FC),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: const Color(0xFFFCE4EC)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.picture_as_pdf_rounded, color: AppColors.rosa, size: 24),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Reporte del Ciclo ${ev.ciclo}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 13,
+                                                color: Color(0xFF1E293B),
+                                              ),
+                                            ),
+                                            Text(
+                                              'Promedio: ${ev.promedio.toStringAsFixed(1)}/5 • ${ev.puntuacion.toUpperCase()}',
+                                              style: const TextStyle(
+                                                fontSize: 11.5,
+                                                color: Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => _abrirReporte(ev, descargar: false),
+                                        child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.rosa)),
+                                      ),
+                                      FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: AppColors.rosa,
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                        ),
+                                        onPressed: () => _abrirReporte(ev, descargar: true),
+                                        child: const Text('Descargar', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 3. Historial de Seguimientos
+                    _construirSeccionDesplegable(
+                      expandida: _expandirHistorial,
+                      onToggle: () => setState(() => _expandirHistorial = !_expandirHistorial),
+                      icono: Icons.history_rounded,
+                      titulo: 'Historial de Seguimientos',
+                      subtitulo: ultimo != null
+                          ? 'Último: #${ultimo.numeroSeguimiento} • ${ultimo.cumplimiento ? "Cumplió" : "Pendiente"} • ${_MisApadrinamientosScreenState.parsearYFormatearFecha(ultimo.fechaSeguimiento.toIso8601String())}'
+                          : 'Sin seguimientos registrados aún',
+                      contenido: historial.isEmpty
+                          ? const Text(
+                              'Pronto el administrador registrará el primer seguimiento de tu apadrinamiento.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            )
+                          : Column(
+                              children: historial.map((it) {
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF9FC),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: const Color(0xFFFCE4EC)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            'Seguimiento #${it.numeroSeguimiento} • Ciclo ${it.ciclo}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 13,
+                                              color: Color(0xFF1E293B),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: it.cumplimiento
+                                                  ? const Color(0xFFDCFCE7)
+                                                  : const Color(0xFFFEE2E2),
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              it.cumplimiento ? 'Cumplió' : 'No cumplió',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800,
+                                                color: it.cumplimiento
+                                                    ? const Color(0xFF15803D)
+                                                    : const Color(0xFFB91C1C),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Fecha: ${_MisApadrinamientosScreenState.formatearFechaLarga(it.fechaSeguimiento)}',
+                                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                      ),
+                                      Text(
+                                        'Calificación: ${it.calificacion}/5  •  Revisado por: ${it.adminNombre}',
+                                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF475569)),
+                                      ),
+                                      if (it.observaciones.trim().isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Comentario: ${it.observaciones}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontStyle: FontStyle.italic,
+                                            color: Color(0xFF334155),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 4. Tu motivación registrada
+                    _construirSeccionDesplegable(
+                      expandida: _expandirMotivacion,
+                      onToggle: () => setState(() => _expandirMotivacion = !_expandirMotivacion),
+                      icono: Icons.favorite_rounded,
+                      titulo: 'Tu motivación registrada',
+                      subtitulo: s.motivacion.trim().isNotEmpty
+                          ? (s.motivacion.length > 35
+                              ? '${s.motivacion.substring(0, 35)}...'
+                              : s.motivacion)
+                          : 'Sin motivación registrada',
+                      contenido: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF9FC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFFCE4EC)),
+                        ),
+                        child: Text(
+                          s.motivacion.trim().isNotEmpty
+                              ? s.motivacion
+                              : 'No se registró texto de motivación.',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontStyle: FontStyle.italic,
+                            color: Color(0xFF475569),
+                            height: 1.35,
+                          ),
                         ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+
+                    // 5. Botón de descarga de acuerdo en PDF
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFDE8F1),
+                        foregroundColor: const Color(0xFF880E4F),
+                        side: const BorderSide(color: Color(0xFFF9A8D4), width: 1.1),
+                        minimumSize: const Size.fromHeight(44),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      icon: widget.descargandoPdfId == s.id
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.rosa,
+                              ),
+                            )
+                          : const Icon(Icons.description_rounded, size: 18),
+                      label: const Text(
+                        'Descargar acuerdo de apadrinamiento (PDF)',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                      ),
+                      onPressed: widget.descargandoPdfId == s.id
+                          ? null
+                          : widget.onDescargarAcuerdoPdf,
+                    ),
                   ],
-                  ...lista.map((it) => TarjetaSeguimiento(seguimiento: it)),
-                ],
-              ],
+                ),
+              ),
             ),
-          ),
+          ],
         );
       },
     );
   }
+
+  // ---------------- Subcomponentes de información ----------------
+
+  Widget _construirFotoMascota(SolicitudApadrinamiento s, {required double tamano}) {
+    return Stack(
+      children: [
+        Container(
+          width: tamano,
+          height: tamano,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFFCE4EC), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: PetImage(url: s.mascotaFotos),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.9),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.favorite_rounded,
+              color: AppColors.rosa,
+              size: 13,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _construirInfoMascota(SolicitudApadrinamiento s) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.pets_rounded, color: AppColors.rosa, size: 19),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                s.mascotaNombre,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                  color: Color(0xFF1E293B),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        _construirBadgeCorreo(s),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            const Icon(Icons.calendar_today_rounded, size: 13, color: Color(0xFFE91E63)),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                '${s.mascotaEdadTexto}  •  ${s.mascotaEspecie} • ${s.mascotaRaza.isEmpty ? "Mestiza" : s.mascotaRaza}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        _construirBadgeEstado(s),
+        if (s.esAprobada && s.tieneContrato) ...[
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Icon(Icons.workspace_premium_rounded, color: Color(0xFFD97706), size: 14),
+              const SizedBox(width: 3),
+              const Flexible(
+                child: Text(
+                  'PADRINO OFICIAL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10.5,
+                    color: Color(0xFFB45309),
+                    letterSpacing: 0.5,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _construirBannerAgradecimiento(SolicitudApadrinamiento s) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDE8F1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF9A8D4), width: 1.1),
+      ),
+      child: Row(
+        children: [
+          const Text('🎉', style: TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '¡Gracias por apadrinar a ${s.mascotaNombre}!',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: Color(0xFF4A1525),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Inicio oficial: ${_MisApadrinamientosScreenState.parsearYFormatearFecha(s.fechaInicioApadrinamiento)}',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF701A75),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _construirBadgeCorreo(SolicitudApadrinamiento s) {
+    final bool verificado = s.esCorreoConfirmado;
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: verificado ? const Color(0xFFECFDF5) : const Color(0xFFFFF1F2),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: verificado ? const Color(0xFFA7F3D0) : const Color(0xFFFECDD3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              verificado ? Icons.mark_email_read_rounded : Icons.mail_outline_rounded,
+              size: 13,
+              color: verificado ? const Color(0xFF059669) : const Color(0xFFE11D48),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              verificado ? 'Correo verificado' : 'Correo pendiente',
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: verificado ? const Color(0xFF047857) : const Color(0xFFBE123C),
+              ),
+            ),
+            if (!verificado) ...[
+              const SizedBox(width: 5),
+              const Text('|', style: TextStyle(fontSize: 10, color: Color(0xFFFDA4AF))),
+              const SizedBox(width: 5),
+              InkWell(
+                onTap: widget.reenviandoCorreoId == s.id
+                    ? null
+                    : widget.onReenviarVerificacion,
+                child: widget.reenviandoCorreoId == s.id
+                    ? const SizedBox(
+                        width: 9,
+                        height: 9,
+                        child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFFBE123C)),
+                      )
+                    : const Text(
+                        'Reenviar',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFFBE123C),
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _construirBadgeEstado(SolicitudApadrinamiento s) {
+    final bool aprobada = s.esAprobada;
+    final bool rechazada = s.esRechazada;
+
+    final Color fondo = aprobada
+        ? const Color(0xFFDCFCE7)
+        : (rechazada ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7));
+    final Color texto = aprobada
+        ? const Color(0xFF15803D)
+        : (rechazada ? const Color(0xFFB91C1C) : const Color(0xFFB45309));
+    final IconData icono = aprobada
+        ? Icons.check_circle_rounded
+        : (rechazada ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
+
+    final String etiqueta = aprobada
+        ? 'Aprobada'
+        : (rechazada ? 'Rechazada' : 'Pendiente');
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+        decoration: BoxDecoration(
+          color: fondo,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 14, color: texto),
+            const SizedBox(width: 4),
+            Text(
+              etiqueta,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: texto,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _construirSeccionDesplegable({
+    required bool expandida,
+    required VoidCallback onToggle,
+    required IconData icono,
+    required String titulo,
+    String? etiquetaTitulo,
+    required String subtitulo,
+    String? etiquetaSubtitulo,
+    Widget? trailingHeader,
+    required Widget contenido,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFCE4EC), width: 1.1),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onToggle,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDE8F1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icono, color: AppColors.rosa, size: 19),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                titulo,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 13.5,
+                                  color: Color(0xFF1E293B),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (etiquetaTitulo != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDBEAFE),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  etiquetaTitulo,
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1D4ED8),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                subtitulo,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF64748B),
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (etiquetaSubtitulo != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  etiquetaSubtitulo,
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFFD97706),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (trailingHeader != null) ...[
+                    trailingHeader,
+                    const SizedBox(width: 6),
+                  ],
+                  Icon(
+                    expandida ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                    color: const Color(0xFF64748B),
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 220),
+            crossFadeState: expandida
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  const SizedBox(height: 10),
+                  contenido,
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _construirIndicadorEtapas({
+    required int etapaActual,
+    String? proximo,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _etapaPunto(1, etapaActual >= 1),
+            _etapaLinea(etapaActual >= 2),
+            _etapaPunto(2, etapaActual >= 2),
+            _etapaLinea(etapaActual >= 3),
+            _etapaPunto(3, etapaActual >= 3),
+          ],
+        ),
+        if (proximo != null) ...[
+          const SizedBox(height: 3),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.access_time_rounded, size: 11, color: Color(0xFF64748B)),
+              const SizedBox(width: 3),
+              Text(
+                'Próximo: $proximo',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _etapaPunto(int num, bool completada) {
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: completada ? AppColors.rosa : const Color(0xFFE2E8F0),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: completada ? AppColors.rosa : const Color(0xFFCBD5E1),
+          width: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _etapaLinea(bool completada) {
+    return Container(
+      width: 18,
+      height: 2.5,
+      color: completada ? AppColors.rosa : const Color(0xFFE2E8F0),
+    );
+  }
 }
 
+// ============================================================================
+// TARJETA DE "OTRA APADRINACIÓN" (LISTA / GRID SECUNDARIO)
+// ============================================================================
+
+class _TarjetaOtraApadrinacion extends StatelessWidget {
+  final SolicitudApadrinamiento solicitud;
+  final VoidCallback onSeleccionar;
+  final VoidCallback onVerDetalles;
+
+  const _TarjetaOtraApadrinacion({
+    required this.solicitud,
+    required this.onSeleccionar,
+    required this.onVerDetalles,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = solicitud;
+
+    final Color colorEstado = s.esAprobada
+        ? const Color(0xFF15803D)
+        : (s.esRechazada ? const Color(0xFFB91C1C) : const Color(0xFFB45309));
+    final Color fondoEstado = s.esAprobada
+        ? const Color(0xFFDCFCE7)
+        : (s.esRechazada ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFCE4EC), width: 1.1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF772A9).withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Foto de la mascota
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFCE4EC)),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: PetImage(url: s.mascotaFotos),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Datos principales
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            s.mascotaNombre,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              color: Color(0xFF1E293B),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: fondoEstado,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            s.esAprobada
+                                ? 'Aprobada'
+                                : (s.esRechazada ? 'Rechazada' : 'Pendiente'),
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w800,
+                              color: colorEstado,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${s.mascotaEdadTexto}  •  ${s.mascotaEspecie} • ${s.mascotaRaza.isEmpty ? "Mestiza" : s.mascotaRaza}',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Solicitud: ${s.fechaSolicitud}',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Botones de acción en la tarjeta secundaria
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF64748B),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    minimumSize: Size.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: onVerDetalles,
+                  child: const Text('Ver perfil', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.rosa,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    minimumSize: Size.zero,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: onSeleccionar,
+                  child: const Text('Ver detalles', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
