@@ -9,6 +9,8 @@ import 'package:paw_match/screens/match/dog_personality.dart';
 import 'package:paw_match/services/entrevista_mascota_luna_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/screens/users/voz_asistente_screen.dart';
+import 'package:paw_match/services/voz_asistente_service.dart';
 import 'package:paw_match/services/voz_entrevista.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
@@ -91,6 +93,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
     _voz.alCambiarEstadoReproduccion = () {
       if (mounted) setState(() {});
     };
+    unawaited(VozAsistenteService.vozGuardada());
     _iniciarConversacion();
   }
 
@@ -758,6 +761,8 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
               color: Colors.white,
             ),
           ),
+          const MarcaVozAsistente(),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: _alternarVelocidadCiclica,
             child: Tooltip(

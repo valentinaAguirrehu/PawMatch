@@ -13,6 +13,7 @@ const noticiasRoutes = require('./routes/noticias');
 const pool = require('./db');
 const { asegurarRolSuperAdmin } = require('./utils/roles');
 const { asegurarGeneroUsuario } = require('./utils/genero_usuario');
+const { asegurarVozAsistente } = require('./utils/voz_asistente');
 const { asegurarEsquemaMatch } = require('./utils/match_persistencia');
 const denunciasRoutes = require('./routes/denuncias');
 const seguimientoApadrinamientoRoutes = require('./routes/seguimiento_apadrinamiento');
@@ -50,6 +51,9 @@ asegurarRolSuperAdmin(pool).catch((error) => {
 });
 asegurarGeneroUsuario(pool).catch((error) => {
   console.error('No se pudo preparar el género del usuario:', error.message);
+});
+asegurarVozAsistente(pool).catch((error) => {
+  console.error('No se pudo preparar la voz del asistente:', error.message);
 });
 asegurarEsquemaMatch().catch((error) => {
   console.error('No se pudo preparar el esquema de Match:', error.message);

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:paw_match/services/entrevista_personalidad_service.dart';
+import 'package:paw_match/services/voz_asistente_service.dart';
 import 'package:record/record.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -33,6 +35,9 @@ class VozEntrevista {
   final SpeechToText _speech = SpeechToText();
   final FlutterTts _tts = FlutterTts();
   final AudioRecorder _grabadora = AudioRecorder();
+  AudioPlayer? _audioOpenAi;
+  final List<StreamSubscription<dynamic>> _suscripcionesAudio =
+      <StreamSubscription<dynamic>>[];
 
   bool vozActiva = true;
 
@@ -329,6 +334,8 @@ class VozEntrevista {
     _posicionCaracterActual = _offsetBaseSegmento;
     _progresoNativoRecibidoEnSegmento = false;
 
+    if (await _intentarVozOpenAi(subtexto, token)) return;
+
     try {
       await preparar();
       await _tts.stop();
@@ -351,6 +358,80 @@ class VozEntrevista {
         _notificarEstado();
       }
     }
+  }
+
+  /// Pide el mp3 a OpenAI con la voz guardada del usuario.
+  /// Si el servidor no responde, la lectura sigue con la voz del dispositivo.
+  Future<bool> _intentarVozOpenAi(String subtexto, int token) async {
+    final trozo = subtexto.length > 3500 ? subtexto.substring(0, 3500) : subtexto;
+    try {
+      await _detenerAudioOpenAi();
+      final voz = await VozAsistenteService.vozGuardada();
+      if (token != _tokenOperacion) return true;
+      final bytes = await VozAsistenteService.sintetizar(
+        texto: trozo,
+        voz: voz,
+        velocidad: _multiplicadorVelocidad,
+      );
+      if (token != _tokenOperacion) return true;
+      if (bytes == null || bytes.isEmpty) return false;
+
+      final player = _audioOpenAi ??= AudioPlayer();
+      Duration duracion = Duration.zero;
+      _suscripcionesAudio.add(
+        player.onDurationChanged.listen((d) => duracion = d),
+      );
+      _suscripcionesAudio.add(player.onPositionChanged.listen((pos) {
+        if (token != _tokenOperacion || duracion.inMilliseconds <= 0) return;
+        final fraccion = pos.inMilliseconds / duracion.inMilliseconds;
+        final nueva = _offsetBaseSegmento + (fraccion * trozo.length).round();
+        _posicionCaracterActual = nueva.clamp(
+          _offsetBaseSegmento,
+          _textoLimpioCompleto.length,
+        );
+      }));
+      _suscripcionesAudio.add(player.onPlayerComplete.listen((_) {
+        if (token != _tokenOperacion) return;
+        final finTrozo = (_offsetBaseSegmento + trozo.length).clamp(
+          0,
+          _textoLimpioCompleto.length,
+        );
+        _posicionCaracterActual = _ajustarAlLimiteDePalabra(
+          _textoLimpioCompleto,
+          finTrozo,
+        );
+        if (_posicionCaracterActual < _textoLimpioCompleto.length) {
+          _reproducirDesdePosicionActual();
+          return;
+        }
+        _marcarMensajeActualFinalizado();
+      }));
+
+      _progresoNativoRecibidoEnSegmento = true;
+      _estado = EstadoReproduccionVoz.reproduciendo;
+      _inicioSegmento = DateTime.now();
+      _iniciarTimerSeguimiento(token);
+      _notificarEstado();
+      await player.play(BytesSource(bytes, mimeType: 'audio/mpeg'));
+      return token == _tokenOperacion;
+    } catch (_) {
+      await _detenerAudioOpenAi();
+      if (token != _tokenOperacion) return true;
+      _progresoNativoRecibidoEnSegmento = false;
+      return false;
+    }
+  }
+
+  Future<void> _detenerAudioOpenAi() async {
+    for (final suscripcion in _suscripcionesAudio) {
+      await suscripcion.cancel();
+    }
+    _suscripcionesAudio.clear();
+    final player = _audioOpenAi;
+    if (player == null) return;
+    try {
+      await player.stop();
+    } catch (_) {}
   }
 
   /// Cambia la velocidad (X1, X1.5, X2, X3).
@@ -458,6 +539,7 @@ class VozEntrevista {
     try {
       await _tts.stop();
     } catch (_) {}
+    await _detenerAudioOpenAi();
     _notificarEstado();
   }
 
@@ -488,6 +570,7 @@ class VozEntrevista {
     try {
       await _tts.stop();
     } catch (_) {}
+    await _detenerAudioOpenAi();
     _notificarEstado();
   }
 
@@ -630,6 +713,10 @@ class VozEntrevista {
     } catch (_) {}
     try {
       await _grabadora.dispose();
+    } catch (_) {}
+    try {
+      await _audioOpenAi?.dispose();
+      _audioOpenAi = null;
     } catch (_) {}
   }
 

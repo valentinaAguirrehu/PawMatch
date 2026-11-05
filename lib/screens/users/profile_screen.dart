@@ -8,6 +8,7 @@ import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/screens/users/voz_asistente_screen.dart';
 import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
@@ -765,6 +766,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
           ),
         ],
+        const SizedBox(height: 28),
+        Text(
+          'Voz del asistente',
+          style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 12),
+        const BotonElegirVoz(),
         const SizedBox(height: 28),
       Text(
         'Contraseña',

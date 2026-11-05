@@ -18,6 +18,14 @@ const {
   sincronizarMatchDeUsuario,
 } = require('../utils/match_persistencia');
 const { generoValido } = require('../utils/genero_usuario');
+const {
+  VOCES,
+  VOZ_DEFECTO,
+  TEXTO_MUESTRA,
+  vozValida,
+  normalizarVoz,
+  sintetizar,
+} = require('../utils/voz_asistente');
 const { esAdministrador } = require('../utils/roles');
 const { enviarCorreoRecuperacionContrasena } = require('../utils/correo');
 
@@ -519,6 +527,124 @@ router.patch('/:id/notificaciones-match/leer', async (req, res) => {
     console.error('Error al marcar notificación de Match:', error);
     res.status(500).json({ error: 'No se pudo actualizar la notificación de Match' });
   }
+});
+
+function sesionPropia(req) {
+  const sesion = req.header('x-usuario-id');
+  return Boolean(sesion && sesion === req.params.id);
+}
+
+router.get('/voces-asistente', (_req, res) => {
+  res.json({ defecto: VOZ_DEFECTO, voces: VOCES });
+});
+
+router.get('/:id/voz-asistente', async (req, res) => {
+  if (!sesionPropia(req)) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+  try {
+    const resultado = await pool.query(
+      'SELECT voz_asistente FROM usuario WHERE id_usuario = $1',
+      [req.params.id],
+    );
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json({ voz: normalizarVoz(resultado.rows[0].voz_asistente) });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo leer la voz del asistente' });
+  }
+});
+
+router.put('/:id/voz-asistente', async (req, res) => {
+  if (!sesionPropia(req)) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+  const voz = String(req.body?.voz || '').trim().toLowerCase();
+  if (!vozValida(voz)) {
+    return res.status(400).json({ error: 'Esa voz no está disponible' });
+  }
+  try {
+    const resultado = await pool.query(
+      `UPDATE usuario SET voz_asistente = $1
+       WHERE id_usuario = $2
+       RETURNING voz_asistente`,
+      [voz, req.params.id],
+    );
+    if (resultado.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    res.json({ voz: resultado.rows[0].voz_asistente });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'No se pudo guardar la voz del asistente' });
+  }
+});
+
+async function responderAudio(req, res, { texto, voz, velocidad }) {
+  if (!sesionPropia(req)) {
+    return res.status(401).json({ error: 'Debes iniciar sesión' });
+  }
+  try {
+    const audio = await sintetizar({
+      texto,
+      voz: normalizarVoz(voz),
+      velocidad,
+    });
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Cache-Control', 'no-store');
+    res.send(audio);
+  } catch (error) {
+    const estado = error.estado || 502;
+    console.error('TTS:', error.detalle || error.message);
+    if (res.headersSent) return;
+    res.status(estado === 503 ? 503 : 502).json({
+      error: estado === 503
+        ? 'El asistente de voz no está configurado en el servidor.'
+        : 'No se pudo generar la voz. Intenta de nuevo.',
+    });
+  }
+}
+
+router.post('/:id/voz-asistente/probar', async (req, res) => {
+  const pedida = String(req.body?.voz || '').trim().toLowerCase();
+  if (pedida && !vozValida(pedida)) {
+    return res.status(400).json({ error: 'Esa voz no está disponible' });
+  }
+  return responderAudio(req, res, {
+    texto: TEXTO_MUESTRA,
+    voz: pedida || VOZ_DEFECTO,
+    velocidad: 1,
+  });
+});
+
+router.post('/:id/voz-asistente/hablar', async (req, res) => {
+  const texto = String(req.body?.texto || '').trim();
+  if (!texto) {
+    return res.status(400).json({ error: 'Falta el texto para leer' });
+  }
+  const pedida = String(req.body?.voz || '').trim().toLowerCase();
+  if (pedida && !vozValida(pedida)) {
+    return res.status(400).json({ error: 'Esa voz no está disponible' });
+  }
+  let voz = pedida;
+  if (!voz) {
+    try {
+      const resultado = await pool.query(
+        'SELECT voz_asistente FROM usuario WHERE id_usuario = $1',
+        [req.params.id],
+      );
+      voz = normalizarVoz(resultado.rows[0]?.voz_asistente);
+    } catch (_) {
+      voz = VOZ_DEFECTO;
+    }
+  }
+  return responderAudio(req, res, {
+    texto,
+    voz,
+    velocidad: req.body?.velocidad,
+  });
 });
 
 router.get('/:id', async (req, res) => {
