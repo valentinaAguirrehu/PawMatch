@@ -13,6 +13,10 @@ const {
   borrarBorradoresUsuario,
   coincidenConBorradores,
 } = require('../utils/entrevista_personalidad');
+const {
+  asegurarEsquemaMatch,
+  sincronizarMatchDeUsuario,
+} = require('../utils/match_persistencia');
 const { generoValido } = require('../utils/genero_usuario');
 const { esAdministrador } = require('../utils/roles');
 const { enviarCorreoRecuperacionContrasena } = require('../utils/correo');
@@ -327,8 +331,11 @@ router.post('/foto', upload.single('foto'), async (req, res) => {
 // GET /api/usuarios/:id/personalidad — existe y, si hay fila, las respuestas
 router.get('/:id/personalidad', async (req, res) => {
   try {
+    await asegurarEsquemaMatch();
     const resultado = await pool.query(
-      `SELECT id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion
+      `SELECT id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')},
+              id_mascota_match_inicial, porcentaje_match_inicial, fecha_match_inicial,
+              fecha_actualizacion
        FROM personalidadusuario WHERE id_usuario = $1`,
       [req.params.id],
     );
@@ -356,6 +363,7 @@ function responderErrorPersonalidad(res, error) {
 
 // POST /api/usuarios/:id/personalidad — un registro por usuario.
 // Con `respuestas`, solo confirma lo que el asistente ya interpretó.
+// Al guardar el cuestionario por primera vez, asigna y persiste su Match inicial.
 router.post('/:id/personalidad', async (req, res) => {
   const sesion = req.header('x-usuario-id');
   if (!sesion || sesion !== req.params.id) {
@@ -373,6 +381,8 @@ router.post('/:id/personalidad', async (req, res) => {
     return res.status(400).json({ error: entrevista.error });
   }
 
+  await asegurarEsquemaMatch();
+
   const sqlInsert = `INSERT INTO personalidadusuario
        (id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion)
        VALUES ($1, ${personalityColumns.map((_, i) => `$${i + 2}`).join(', ')}, CURRENT_TIMESTAMP)
@@ -382,6 +392,9 @@ router.post('/:id/personalidad', async (req, res) => {
   if (!entrevista.filas) {
     try {
       const resultado = await pool.query(sqlInsert, params);
+      await sincronizarMatchDeUsuario(req.params.id).catch((err) => {
+        console.error('Error sincronizando Match inicial:', err.message);
+      });
       return res.status(201).json(resultado.rows[0]);
     } catch (error) {
       return responderErrorPersonalidad(res, error);
@@ -406,6 +419,7 @@ router.post('/:id/personalidad', async (req, res) => {
       borradores,
     );
     await borrarBorradoresUsuario(client, req.params.id);
+    await sincronizarMatchDeUsuario(req.params.id, client);
     await client.query('COMMIT');
     return res.status(201).json(resultado.rows[0]);
   } catch (error) {
@@ -429,21 +443,81 @@ router.put('/:id/personalidad', async (req, res) => {
   }
 
   try {
+    await asegurarEsquemaMatch();
     const resultado = await pool.query(
       `UPDATE personalidadusuario
        SET ${personalityColumns.map((column, i) => `${column} = $${i + 1}`).join(', ')},
            fecha_actualizacion = CURRENT_TIMESTAMP
        WHERE id_usuario = $${personalityColumns.length + 1}
-       RETURNING id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')}, fecha_actualizacion`,
+       RETURNING id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')},
+                 id_mascota_match_inicial, porcentaje_match_inicial, fecha_match_inicial,
+                 fecha_actualizacion`,
       [...valores, req.params.id],
     );
     if (resultado.rows.length === 0) {
       return res.status(404).json({ error: 'Aún no registras tu personalidad' });
     }
+    await sincronizarMatchDeUsuario(req.params.id).catch(() => {});
     res.json(resultado.rows[0]);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'No se pudo actualizar la personalidad' });
+  }
+});
+
+// GET /api/usuarios/:id/match-sincronizar
+// Devuelve el Match inicial persistido del usuario y las notificaciones de nuevas coincidencias.
+router.get('/:id/match-sincronizar', async (req, res) => {
+  try {
+    const datos = await sincronizarMatchDeUsuario(req.params.id);
+    res.set('Cache-Control', 'no-store');
+    res.json(datos);
+  } catch (error) {
+    console.error('Error en /match-sincronizar:', error);
+    res.status(500).json({ error: 'No se pudo sincronizar el Match del usuario' });
+  }
+});
+
+// PATCH /api/usuarios/:id/notificaciones-match/leer
+// Marca como leídas y/o mostradas las notificaciones de nuevas mascotas compatibles.
+router.patch('/:id/notificaciones-match/leer', async (req, res) => {
+  try {
+    await asegurarEsquemaMatch();
+    const { id_mascota: idMascota, id_notificacion: idNotificacion, solo_mostrada: soloMostrada } = req.body || {};
+
+    if (idNotificacion) {
+      await pool.query(
+        `UPDATE notificacion_match_usuario
+         SET mostrada_en_mascotas = TRUE,
+             leida = CASE WHEN $3::boolean THEN leida ELSE TRUE END,
+             fecha_lectura = COALESCE(fecha_lectura, CURRENT_TIMESTAMP)
+         WHERE id_usuario = $1 AND id_notificacion = $2`,
+        [req.params.id, idNotificacion, soloMostrada === true],
+      );
+    } else if (idMascota) {
+      await pool.query(
+        `UPDATE notificacion_match_usuario
+         SET mostrada_en_mascotas = TRUE,
+             leida = CASE WHEN $3::boolean THEN leida ELSE TRUE END,
+             fecha_lectura = COALESCE(fecha_lectura, CURRENT_TIMESTAMP)
+         WHERE id_usuario = $1 AND id_mascota = $2`,
+        [req.params.id, idMascota, soloMostrada === true],
+      );
+    } else {
+      await pool.query(
+        `UPDATE notificacion_match_usuario
+         SET mostrada_en_mascotas = TRUE,
+             leida = TRUE,
+             fecha_lectura = COALESCE(fecha_lectura, CURRENT_TIMESTAMP)
+         WHERE id_usuario = $1`,
+        [req.params.id],
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error al marcar notificación de Match:', error);
+    res.status(500).json({ error: 'No se pudo actualizar la notificación de Match' });
   }
 });
 
@@ -726,6 +800,7 @@ router.delete('/:id', async (req, res) => {
         )`,
       [req.params.id]
     );
+    await client.query('DELETE FROM notificacion_match_usuario WHERE id_usuario = $1', [req.params.id]).catch(() => {});
     await client.query('DELETE FROM respuestausuario WHERE id_usuario = $1', [req.params.id]);
     await client.query('DELETE FROM valoracion_usuario WHERE id_usuario = $1', [req.params.id]);
     await client.query('DELETE FROM personalidadusuario WHERE id_usuario = $1', [req.params.id]);

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/pet.dart';
+import '../widgets/pet_card.dart';
 import 'api_service.dart';
 import 'session.dart';
 
@@ -12,12 +13,23 @@ class PetsService {
 
   /// Notificador con el conteo de mascotas en la base de datos que esperan un hogar (no adoptadas).
   static final ValueNotifier<int> peluditosEsperando = ValueNotifier<int>(0);
+
+  /// Estado reactivo con el listado de mascotas en memoria para actualizar inmediatamente
+  /// la interfaz al crear, editar o eliminar una mascota sin recargar toda la página.
+  static final ValueNotifier<List<Pet>?> mascotasEnMemoria =
+      ValueNotifier<List<Pet>?>(null);
+
   static Timer? _timerMonitoreo;
 
   static Map<String, String> get _headersAdmin => {
     'Content-Type': 'application/json',
     'x-usuario-id': Session.idUsuario ?? '',
   };
+
+  static void _actualizarMemoria(List<Pet> mascotas) {
+    mascotasEnMemoria.value = List<Pet>.unmodifiable(mascotas);
+    peluditosEsperando.value = mascotas.where((p) => !p.estaAdoptada).length;
+  }
 
   /// Inicia el monitoreo periódico del conteo de peluditos.
   static void iniciarMonitoreo() {
@@ -62,7 +74,11 @@ class PetsService {
     _validar(resp, 200);
     final data = jsonDecode(resp.body) as List<dynamic>;
     final mascotas = data.map((e) => Pet.fromJson(e as Map<String, dynamic>)).toList();
-    peluditosEsperando.value = mascotas.where((p) => !p.estaAdoptada).length;
+    if (estado == null) {
+      _actualizarMemoria(mascotas);
+    } else {
+      peluditosEsperando.value = mascotas.where((p) => !p.estaAdoptada).length;
+    }
     return mascotas;
   }
 
@@ -75,15 +91,20 @@ class PetsService {
 
   /// Sube la foto al servidor y devuelve la ruta que hay que guardar en la
   /// mascota (ej: /uploads/mascotas/abc.jpg). Funciona en celular, web y PC.
+  /// Guarda inmediatamente los bytes en la caché en memoria de `PetImage` para
+  /// que las tarjetas y detalles muestren la fotografía al instante sin volver a descargarla.
   static Future<String> subirFoto(Uint8List bytes, String nombreArchivo) async {
     final req = http.MultipartRequest('POST', Uri.parse('$_url/foto'));
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
     req.files.add(
       http.MultipartFile.fromBytes('foto', bytes, filename: nombreArchivo),
     );
-    final resp = await http.Response.fromStream(await req.send());
+    final enviada = await req.send().timeout(const Duration(seconds: 45));
+    final resp = await http.Response.fromStream(enviada);
     _validar(resp, 201);
-    return (jsonDecode(resp.body) as Map<String, dynamic>)['ruta'] as String;
+    final ruta = (jsonDecode(resp.body) as Map<String, dynamic>)['ruta'] as String;
+    PetImage.guardarEnCacheMemoria(ruta, bytes);
+    return ruta;
   }
 
   static Future<Pet> crear(Pet pet) async {
@@ -94,7 +115,15 @@ class PetsService {
     );
     _validar(resp, 201);
     final creada = Pet.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
-    unawaited(refrescarConteo());
+    final actuales = mascotasEnMemoria.value;
+    if (actuales != null) {
+      _actualizarMemoria([
+        creada,
+        ...actuales.where((p) => p.id != creada.id),
+      ]);
+    } else {
+      unawaited(refrescarConteo());
+    }
     return creada;
   }
 
@@ -106,7 +135,18 @@ class PetsService {
     );
     _validar(resp, 200);
     final editada = Pet.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
-    unawaited(refrescarConteo());
+    final actuales = mascotasEnMemoria.value;
+    if (actuales != null) {
+      final nuevaLista = [
+        for (final p in actuales) p.id == id ? editada : p,
+      ];
+      if (!nuevaLista.any((p) => p.id == id)) {
+        nuevaLista.insert(0, editada);
+      }
+      _actualizarMemoria(nuevaLista);
+    } else {
+      unawaited(refrescarConteo());
+    }
     return editada;
   }
 
@@ -116,7 +156,12 @@ class PetsService {
       headers: _headersAdmin,
     );
     _validar(resp, 200);
-    unawaited(refrescarConteo());
+    final actuales = mascotasEnMemoria.value;
+    if (actuales != null) {
+      _actualizarMemoria(actuales.where((p) => p.id != id).toList());
+    } else {
+      unawaited(refrescarConteo());
+    }
   }
 
   static void _validar(http.Response resp, int esperado) {

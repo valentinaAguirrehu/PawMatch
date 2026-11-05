@@ -47,6 +47,9 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
   late String? _fotoActual = widget.pet?.foto;
   Uint8List? _fotoBytes;
   String _fotoNombre = 'foto.jpg';
+  String? _fotoRutaSubida;
+  bool _subiendoFoto = false;
+  String? _errorSubidaFoto;
 
   final _personalidad = DogPersonalityController();
   late bool _personalidadEnDesarrollo =
@@ -152,8 +155,9 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
     try {
       final x = await ImagePicker().pickImage(
         source: origen,
-        maxWidth: 1600,
-        imageQuality: 85,
+        maxWidth: 1080,
+        maxHeight: 1080,
+        imageQuality: 78,
       );
       if (x == null) return;
       final bytes = await x.readAsBytes();
@@ -164,15 +168,54 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
       setState(() {
         _fotoBytes = bytes;
         _fotoNombre = x.name.isEmpty ? 'foto.jpg' : x.name;
+        _fotoRutaSubida = null;
+        _errorSubidaFoto = null;
       });
+      await _subirFotoSeleccionada();
     } catch (e) {
       if (mounted) _aviso('No se pudo abrir la foto: $e');
+    }
+  }
+
+  Future<String?> _subirFotoSeleccionada() async {
+    final bytes = _fotoBytes;
+    if (bytes == null) return _fotoActual;
+    if (_fotoRutaSubida != null && _fotoRutaSubida!.isNotEmpty) {
+      return _fotoRutaSubida;
+    }
+    setState(() {
+      _subiendoFoto = true;
+      _errorSubidaFoto = null;
+    });
+    try {
+      final ruta = await PetsService.subirFoto(bytes, _fotoNombre);
+      if (mounted) {
+        setState(() {
+          _fotoRutaSubida = ruta;
+          _fotoActual = ruta;
+          _subiendoFoto = false;
+          _errorSubidaFoto = null;
+        });
+      }
+      return ruta;
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      if (mounted) {
+        setState(() {
+          _subiendoFoto = false;
+          _errorSubidaFoto = msg;
+        });
+      }
+      return null;
     }
   }
 
   void _quitarFoto() => setState(() {
     _fotoBytes = null;
     _fotoActual = null;
+    _fotoRutaSubida = null;
+    _subiendoFoto = false;
+    _errorSubidaFoto = null;
   });
 
   // ---------------- Guardar ----------------
@@ -228,10 +271,16 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
     setState(() => _guardando = true);
 
     try {
-      // 1) si eligió una foto nueva, primero se sube y se obtiene su ruta
-      String? ruta = _fotoActual;
-      if (_fotoBytes != null) {
-        ruta = await PetsService.subirFoto(_fotoBytes!, _fotoNombre);
+      // 1) Si eligió una foto nueva, esperamos la confirmación de que se guardó correctamente
+      String? ruta = _fotoRutaSubida ?? _fotoActual;
+      if (_fotoBytes != null && (ruta == null || _errorSubidaFoto != null)) {
+        ruta = await _subirFotoSeleccionada();
+        if (ruta == null) {
+          throw Exception(
+            _errorSubidaFoto ??
+                'No se pudo guardar la fotografía. Reintenta la carga antes de continuar.',
+          );
+        }
       }
 
       // 2) se guarda la mascota con su personalidad
@@ -786,10 +835,121 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
               clipBehavior: Clip.antiAlias,
-              child: contenido,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  contenido,
+                  if (_subiendoFoto)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        color: Colors.black.withValues(alpha: 0.62),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 10),
+                            Text(
+                              'Subiendo y optimizando fotografía...',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (_fotoRutaSubida != null)
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF166534),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            SizedBox(width: 4),
+                            Text(
+                              'Foto lista',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
+        if (_errorSubidaFoto != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFCA5A5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: Color(0xFFB91C1C),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Error al subir la foto: $_errorSubidaFoto',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFB91C1C),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: _subiendoFoto ? null : _subirFotoSeleccionada,
+                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text('Reintentar'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         if (tieneFoto)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

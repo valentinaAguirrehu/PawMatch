@@ -116,6 +116,9 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _voz.alCambiarEstadoReproduccion = () {
+      if (mounted) setState(() {});
+    };
     _pulso = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -240,17 +243,37 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
   void _hablarInicio(BorradorEntrevista? local) {
     if (!_voz.vozActiva || _preguntas.isEmpty) return;
     if (_resumen) {
-      _voz.hablar('Revisa tus respuestas antes de guardarlas.');
+      _voz.hablar(
+        'Así entendí tus respuestas. Si alguna no refleja lo que quisiste decir, corrígela antes de guardar.',
+        idMensaje: 'resumen_intro',
+      );
+      return;
+    }
+    if (_pendiente != null) {
+      _voz.hablar(
+        _pendiente!.mensaje,
+        idMensaje: 'pendiente_${_pendiente!.clave}',
+      );
       return;
     }
     final reanudar = _confirmadas.isNotEmpty ||
-        _pendiente != null ||
         _turnos.isNotEmpty ||
         (local?.borradorTexto.trim().isNotEmpty ?? false);
-    final pregunta = _preguntas[_indice].pregunta;
-    _voz.hablar(
-      reanudar ? pregunta : '${_textoBienvenida(Session.genero)} $pregunta',
-    );
+    final pregunta = _preguntas[_indice];
+    if (reanudar) {
+      _voz.hablar(pregunta.pregunta, idMensaje: 'pregunta_${pregunta.id}');
+    } else {
+      _voz.hablarSecuencia([
+        (
+          idMensaje: 'bienvenida',
+          texto: _textoBienvenida(Session.genero),
+        ),
+        (
+          idMensaje: 'pregunta_${pregunta.id}',
+          texto: pregunta.pregunta,
+        ),
+      ]);
+    }
   }
 
   int? _primerFaltante(List<RespuestaEntrevista> confirmadas) {
@@ -286,10 +309,31 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
     }
     if (_preguntas.isEmpty) return;
     if (_resumen) {
-      _voz.hablar('Revisa tus respuestas antes de guardarlas.');
-    } else if (_pendiente == null) {
-      _voz.hablar(_preguntas[_indice].pregunta);
+      _voz.hablar(
+        'Así entendí tus respuestas. Si alguna no refleja lo que quisiste decir, corrígela antes de guardar.',
+        idMensaje: 'resumen_intro',
+      );
+    } else if (_pendiente != null) {
+      _voz.hablar(
+        _pendiente!.mensaje,
+        idMensaje: 'pendiente_${_pendiente!.clave}',
+      );
+    } else {
+      _voz.hablar(
+        _preguntas[_indice].pregunta,
+        idMensaje: 'pregunta_${_preguntas[_indice].id}',
+      );
     }
+  }
+
+  Future<void> _cambiarVelocidadVoz(double nuevaVelocidad) async {
+    await _voz.cambiarVelocidad(nuevaVelocidad);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _alternarVelocidadCiclica() async {
+    await _voz.siguienteVelocidad();
+    if (mounted) setState(() {});
   }
 
   Future<void> _alternarMic() async {
@@ -391,7 +435,11 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
           _campo.clear();
         });
         _persistir();
-        _voz.hablar(interpretacion.mensaje);
+        final idxTurno = _turnos.length - 1;
+        _voz.hablar(
+          interpretacion.mensaje,
+          idMensaje: 'turno_${_preguntas[_indice].id}_$idxTurno',
+        );
         _alFinal();
         return;
       }
@@ -401,10 +449,11 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
       if (nota == null || porque.length < 3) {
         throw Exception('El asistente no asignó una puntuación válida.');
       }
+      final claveActual = _preguntas[_indice].id;
       setState(() {
         _procesando = false;
         _pendiente = RespuestaEntrevista(
-          clave: _preguntas[_indice].id,
+          clave: claveActual,
           respuestaOriginal: interpretacion.respuestaOriginal.trim(),
           puntuacion: nota,
           justificacion: porque,
@@ -414,7 +463,10 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
         _campo.clear();
       });
       _persistir();
-      _voz.hablar(interpretacion.mensaje);
+      _voz.hablar(
+        interpretacion.mensaje,
+        idMensaje: 'pendiente_$claveActual',
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _procesando = false);
@@ -441,10 +493,16 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
     });
     _persistir();
     if (_resumen) {
-      _voz.hablar('Revisa tus respuestas antes de guardarlas.');
+      _voz.hablar(
+        'Así entendí tus respuestas. Si alguna no refleja lo que quisiste decir, corrígela antes de guardar.',
+        idMensaje: 'resumen_intro',
+      );
     } else {
       _alFinal();
-      _voz.hablar(_preguntas[_indice].pregunta);
+      _voz.hablar(
+        _preguntas[_indice].pregunta,
+        idMensaje: 'pregunta_${_preguntas[_indice].id}',
+      );
     }
   }
 
@@ -724,6 +782,34 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
               ],
             ),
           ),
+          GestureDetector(
+            onTap: _cargando || _error != null ? null : _alternarVelocidadCiclica,
+            child: Tooltip(
+              message: 'Cambiar velocidad de voz (X1, X1.5, X2, X3)',
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 9,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.24),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    width: 1.2,
+                  ),
+                ),
+                child: Text(
+                  _voz.etiquetaVelocidad.toUpperCase(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: _voz.vozActiva
                 ? 'Silenciar la lectura'
@@ -830,7 +916,11 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
 
   List<Widget> _burbujasHistorial() {
     final burbujas = <Widget>[
-      _burbuja(_textoBienvenida(Session.genero), usuario: false),
+      _burbuja(
+        _textoBienvenida(Session.genero),
+        usuario: false,
+        idMensaje: 'bienvenida',
+      ),
     ];
     RespuestaEntrevista? ultima;
     PreguntaEntrevista? preguntaUltima;
@@ -848,16 +938,302 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
         _burbuja(
           '${ultima.mensaje}\n\nPuntuación ${ultima.puntuacion} de 5 · ${_etiqueta(preguntaUltima, ultima.puntuacion)}',
           usuario: false,
+          idMensaje: 'confirmada_${preguntaUltima.id}',
+          textoVoz: ultima.mensaje,
         ),
       );
     }
-    for (final turno in _turnos) {
-      burbujas.add(_burbuja(turno.texto, usuario: turno.rol == 'usuario'));
+    for (var i = 0; i < _turnos.length; i++) {
+      final turno = _turnos[i];
+      final esUsuario = turno.rol == 'usuario';
+      burbujas.add(
+        _burbuja(
+          turno.texto,
+          usuario: esUsuario,
+          idMensaje: esUsuario ? null : 'turno_${_preguntas[_indice].id}_$i',
+        ),
+      );
     }
     return burbujas;
   }
 
-  Widget _burbuja(String texto, {required bool usuario}) {
+  Widget _selectorVelocidadVoz() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final vel in VozEntrevista.velocidadesDisponibles)
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: GestureDetector(
+              onTap: () => _cambiarVelocidadVoz(vel),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: _voz.multiplicadorVelocidad == vel
+                      ? AppColors.rosa
+                      : AppColors.rosaSuave,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _voz.multiplicadorVelocidad == vel
+                        ? AppColors.rosa
+                        : AppColors.bordeRosa,
+                  ),
+                ),
+                child: Text(
+                  vel == 1.0
+                      ? 'X1'
+                      : (vel == 1.5 ? 'X1.5' : (vel == 2.0 ? 'X2' : 'X3')),
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w900,
+                    color: _voz.multiplicadorVelocidad == vel
+                        ? Colors.white
+                        : AppColors.rosa,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _controlesVozMensaje({
+    required String idMensaje,
+    required String texto,
+  }) {
+    final esMensajeActivo = _voz.idMensajeActual == idMensaje;
+    final reproduciendoEste =
+        esMensajeActivo && _voz.estado == EstadoReproduccionVoz.reproduciendo;
+    final pausadoEste =
+        esMensajeActivo && _voz.estado == EstadoReproduccionVoz.pausado;
+    final finalizadoEste = _voz.esFinalizado(idMensaje);
+    final progreso = _voz.progresoDeMensaje(idMensaje);
+    final porcentaje = (progreso * 100).round();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (reproduciendoEste || pausadoEste || finalizadoEste) ...[
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: reproduciendoEste
+                        ? progreso.clamp(0.04, 1.0)
+                        : progreso.clamp(0.0, 1.0),
+                    minHeight: 5,
+                    backgroundColor: const Color(0xFFFCE4EF),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppColors.rosa,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$porcentaje%',
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.rosa,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+        ],
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (reproduciendoEste) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFDCEB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.graphic_eq_rounded,
+                      size: 14,
+                      color: AppColors.rosa,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Reproduciendo · ${_voz.etiquetaVelocidad}',
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.rosa,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _voz.pausar(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.rosaSuave,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.bordeRosa),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.pause_rounded,
+                        size: 14,
+                        color: AppColors.rosa,
+                      ),
+                      SizedBox(width: 3),
+                      Text(
+                        'Pausar',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.rosa,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ] else if (pausadoEste) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFDCEB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'En pausa · ${_voz.etiquetaVelocidad}',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.rosa,
+                  ),
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => _voz.continuar(),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.rosa,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '▶ Continuar (${_voz.etiquetaVelocidad})',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ] else if (finalizadoEste) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFCE4EF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.check_circle_rounded,
+                      size: 13,
+                      color: AppColors.rosa,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'Finalizado',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.rosa,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _voz.volverAEscuchar(
+                idMensaje: idMensaje,
+                texto: texto,
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.rosaSuave,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.bordeRosa),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.volume_up_rounded,
+                      size: 14,
+                      color: AppColors.rosa,
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'Volver a escuchar',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.rosa,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _burbuja(
+    String texto, {
+    required bool usuario,
+    String? idMensaje,
+    String? textoVoz,
+  }) {
+    final idMsg = idMensaje ?? 'burbuja_${texto.hashCode}';
+    final reproduciendoEste = !usuario &&
+        _voz.idMensajeActual == idMsg &&
+        _voz.estado == EstadoReproduccionVoz.reproduciendo;
     return Align(
       alignment: usuario ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -868,14 +1244,52 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
           color: usuario ? null : Colors.white,
           gradient: usuario ? _degradadoBoton : null,
           borderRadius: BorderRadius.circular(18),
+          border: !usuario && reproduciendoEste
+              ? Border.all(color: AppColors.rosa, width: 1.6)
+              : null,
           boxShadow: _sombraRosa(blur: 12, y: 4, alpha: 0.14),
         ),
-        child: Text(
-          texto,
-          style: TextStyle(
-            color: usuario ? AppColors.blanco : AppColors.texto,
-            height: 1.35,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!usuario)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Flexible(
+                      child: Text(
+                        'Asistente de Paw Match 🐾',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.rosa,
+                        ),
+                      ),
+                    ),
+                    _selectorVelocidadVoz(),
+                  ],
+                ),
+              ),
+            Text(
+              texto,
+              style: TextStyle(
+                color: usuario ? AppColors.blanco : AppColors.texto,
+                height: 1.35,
+              ),
+            ),
+            if (!usuario) ...[
+              const SizedBox(height: 8),
+              _controlesVozMensaje(
+                idMensaje: idMsg,
+                texto: textoVoz ?? texto,
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -883,12 +1297,18 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
 
   Widget _tarjetaPregunta() {
     final pregunta = _preguntas[_indice];
+    final idMsg = 'pregunta_${pregunta.id}';
+    final reproduciendoEste = _voz.idMensajeActual == idMsg &&
+        _voz.estado == EstadoReproduccionVoz.reproduciendo;
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 4, 20, 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: reproduciendoEste
+            ? Border.all(color: AppColors.rosa, width: 1.6)
+            : null,
         boxShadow: _sombraRosa(blur: 18, y: 8),
       ),
       child: Column(
@@ -907,10 +1327,16 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
                   ),
                 ),
               ),
+              _selectorVelocidadVoz(),
             ],
           ),
           const SizedBox(height: 6),
           Text(pregunta.pregunta, style: const TextStyle(height: 1.35)),
+          const SizedBox(height: 10),
+          _controlesVozMensaje(
+            idMensaje: idMsg,
+            texto: pregunta.pregunta,
+          ),
         ],
       ),
     );
@@ -1074,17 +1500,42 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
     final etiqueta = pregunta == null
         ? '${respuesta.puntuacion} de 5'
         : '${respuesta.puntuacion} de 5 · ${_etiqueta(pregunta, respuesta.puntuacion)}';
+    final idMsg = 'pendiente_${respuesta.clave}';
+    final reproduciendoEste = _voz.idMensajeActual == idMsg &&
+        _voz.estado == EstadoReproduccionVoz.reproduciendo;
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 4, 20, 12),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: reproduciendoEste
+            ? Border.all(color: AppColors.rosa, width: 1.6)
+            : null,
         boxShadow: _sombraRosa(blur: 18, y: 8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Flexible(
+                child: Text(
+                  'Asistente de Paw Match 🐾',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.rosa,
+                  ),
+                ),
+              ),
+              _selectorVelocidadVoz(),
+            ],
+          ),
+          const SizedBox(height: 6),
           Text(respuesta.mensaje, style: const TextStyle(height: 1.35)),
           const SizedBox(height: 6),
           Text(
@@ -1100,6 +1551,11 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
             ),
           ),
           const SizedBox(height: 10),
+          _controlesVozMensaje(
+            idMensaje: idMsg,
+            texto: respuesta.mensaje,
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
@@ -1123,12 +1579,51 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
   }
 
   Widget _listaResumen() {
+    const textoIntro =
+        'Así entendí tus respuestas. Si alguna no refleja lo que quisiste decir, corrígela antes de guardar.';
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       children: [
-        const Text(
-          'Así entendí tus respuestas. Si alguna no refleja lo que quisiste decir, corrígela antes de guardar.',
-          style: TextStyle(height: 1.35),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: _sombraRosa(blur: 14, y: 6, alpha: 0.14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Flexible(
+                    child: Text(
+                      'Asistente de Paw Match 🐾',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.rosa,
+                      ),
+                    ),
+                  ),
+                  _selectorVelocidadVoz(),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                textoIntro,
+                style: TextStyle(height: 1.35),
+              ),
+              const SizedBox(height: 8),
+              _controlesVozMensaje(
+                idMensaje: 'resumen_intro',
+                texto: textoIntro,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
         for (final pregunta in _preguntas)
@@ -1146,20 +1641,36 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
   }
 
   Widget _tarjetaResumen(PreguntaEntrevista pregunta, RespuestaEntrevista respuesta) {
+    final idMsg = 'resumen_${pregunta.id}';
+    final reproduciendoEste = _voz.idMensajeActual == idMsg &&
+        _voz.estado == EstadoReproduccionVoz.reproduciendo;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: reproduciendoEste
+            ? Border.all(color: AppColors.rosa, width: 1.6)
+            : null,
         boxShadow: _sombraRosa(blur: 14, y: 6, alpha: 0.14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            pregunta.titulo,
-            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.texto),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  pregunta.titulo,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.texto,
+                  ),
+                ),
+              ),
+              _selectorVelocidadVoz(),
+            ],
           ),
           const SizedBox(height: 4),
           Text(pregunta.pregunta, style: const TextStyle(fontSize: 13.5, height: 1.3)),
@@ -1172,6 +1683,11 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
           Text(
             'Puntuación ${respuesta.puntuacion} de 5 · ${_etiqueta(pregunta, respuesta.puntuacion)}',
             style: const TextStyle(color: AppColors.rosa, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          _controlesVozMensaje(
+            idMensaje: idMsg,
+            texto: '${pregunta.pregunta} ${respuesta.mensaje}',
           ),
           Align(
             alignment: Alignment.centerRight,

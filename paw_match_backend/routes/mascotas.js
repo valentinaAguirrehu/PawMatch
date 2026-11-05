@@ -7,6 +7,19 @@ const pool = require('../db');
 const { esAdministrador } = require('../utils/roles');
 const { quitarFondo } = require('../utils/quitarFondo');
 const { sqlEdad, sqlUnidadEdad, leerFechaNacimiento } = require('../utils/edad_mascota');
+const {
+  asegurarEsquemaMatch,
+  procesarNuevaMascotaParaUsuarios,
+} = require('../utils/match_persistencia');
+const {
+  asegurarTablaBorradorMascota,
+  obtenerLimitesColumnasMascota,
+  normalizarFicha,
+  guardarBorradorMascotaEnBd,
+  obtenerBorradorMascotaDeBd,
+  eliminarBorradorMascotaDeBd,
+  procesarTurnoEntrevistaMascota,
+} = require('../utils/entrevista_mascota_admin');
 
 const router = express.Router();
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'mascotas');
@@ -52,6 +65,8 @@ const esquemaListo = (async () => {
       ALTER COLUMN tolerancia_soledad DROP NOT NULL,
       ALTER COLUMN adaptabilidad DROP NOT NULL;
   `);
+  await asegurarEsquemaMatch();
+  await asegurarTablaBorradorMascota();
 })().catch((err) => {
   console.error('No se pudo preparar la tabla mascota:', err.message);
   throw err;
@@ -143,7 +158,8 @@ function procesarEstadoSaludYProcedimientos(estadoSaludInput, vacunasInput, este
   };
 }
 
-// fecha_ingreso va como texto 'YYYY-MM-DD' para evitar desfases de zona horaria
+// fecha_ingreso va como texto 'YYYY-MM-DD' para evitar desfases de zona horaria.
+// fecha_creacion se conserva intacta desde el registro para calcular exactamente las 48 horas de «NUEVO».
 const petSelect = `
   SELECT m.id_mascota, m.nombre, m.especie, m.raza,
          ${sqlEdad('m')} AS edad, ${sqlUnidadEdad('m')} AS unidad_edad, m.sexo,
@@ -154,6 +170,10 @@ const petSelect = `
          to_char(m.fecha_ingreso, 'YYYY-MM-DD') AS fecha_ingreso,
          to_char(m.fecha_nacimiento, 'YYYY-MM-DD') AS fecha_nacimiento,
          to_char(m.fecha_actualizacion, 'YYYY-MM-DD HH24:MI') AS fecha_actualizacion,
+         to_char(m.fecha_creacion AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS fecha_creacion,
+         (m.fecha_creacion IS NOT NULL
+          AND (CURRENT_TIMESTAMP - m.fecha_creacion) <= INTERVAL '48 hours'
+          AND (CURRENT_TIMESTAMP - m.fecha_creacion) >= INTERVAL '-2 hours') AS es_nuevo,
          (SELECT s.id_usuario
             FROM solicitudadopcion s
            WHERE s.id_mascota = m.id_mascota
@@ -202,6 +222,65 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+router.post('/entrevista-luna', requireAdmin, async (req, res) => {
+  try {
+    const resultado = await procesarTurnoEntrevistaMascota({
+      idAdmin: req.adminId,
+      ficha: req.body?.ficha || {},
+      historial: Array.isArray(req.body?.historial) ? req.body.historial : [],
+      mensaje: req.body?.mensaje || '',
+      reiniciar: req.body?.reiniciar === true,
+    });
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error en entrevista asistente de Paw Match:', error.message || error);
+    if (error.estado === 503) {
+      return res.status(503).json({
+        error: 'El asistente de Paw Match está ocupado en este momento. Inténtalo de nuevo.',
+      });
+    }
+    res.status(502).json({
+      error: 'No se pudo guardar o procesar la respuesta en este momento. Por favor reintenta.',
+    });
+  }
+});
+
+router.put('/entrevista-luna/borrador', requireAdmin, async (req, res) => {
+  try {
+    const limites = await obtenerLimitesColumnasMascota();
+    const existente = await obtenerBorradorMascotaDeBd(req.adminId);
+    const fichaNormalizada = normalizarFicha(
+      req.body?.ficha || {},
+      existente?.ficha || {},
+      limites,
+    );
+    await guardarBorradorMascotaEnBd(
+      req.adminId,
+      fichaNormalizada,
+      req.body?.paso_actual || existente?.pasoActual || 'revision',
+      Array.isArray(req.body?.historial)
+        ? req.body.historial
+        : existente?.historial || [],
+    );
+    res.json({ ok: true, ficha: fichaNormalizada, guardado_en_bd: true });
+  } catch (error) {
+    console.error('Error guardando borrador de mascota:', error.message || error);
+    res.status(500).json({
+      error: 'No se pudo guardar el avance en la base de datos. Inténtalo de nuevo.',
+    });
+  }
+});
+
+router.delete('/entrevista-luna/borrador', requireAdmin, async (req, res) => {
+  try {
+    await eliminarBorradorMascotaDeBd(req.adminId);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error eliminando borrador de mascota:', error.message || error);
+    res.status(500).json({ error: 'No se pudo limpiar el borrador.' });
+  }
+});
+
 router.post('/foto', requireAdmin, upload.single('foto'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna foto' });
 
@@ -236,10 +315,10 @@ router.post('/', requireAdmin, async (req, res) => {
     const pet = await client.query(
       `INSERT INTO mascota
        (id_mascota, nombre, especie, raza, edad, unidad_edad, sexo, tamano, descripcion,
-        esterilizado, vacunas, fotos, fecha_ingreso, fecha_actualizacion, estado_adopcion,
+        esterilizado, vacunas, fotos, fecha_ingreso, fecha_creacion, fecha_actualizacion, estado_adopcion,
         estado_apadrinamiento, estado_salud, detalle_salud, id_administrador,
         personalidad_definida, fecha_nacimiento)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_DATE, CURRENT_TIMESTAMP,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_DATE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
                $13, $14, $15, $16, $17, $18, $19) RETURNING id_mascota`,
       [randomUUID(), nombre, especie, raza || null, fechaLeida.edad, fechaLeida.unidad, sexo || null,
         tamano || null, descripcion || null, esterilizadoFinal, vacunasFinal,
@@ -256,6 +335,10 @@ router.post('/', requireAdmin, async (req, res) => {
     );
     const result = await client.query(`${petSelect} WHERE m.id_mascota = $1`, [idMascota]);
     await client.query('COMMIT');
+    eliminarBorradorMascotaDeBd(req.adminId).catch(() => {});
+    procesarNuevaMascotaParaUsuarios(idMascota).catch((err) => {
+      console.error('Error evaluando nueva mascota para Match:', err.message);
+    });
     res.status(201).json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -286,6 +369,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // IMPORTANTE: No se modifica fecha_creacion en UPDATE para no reiniciar las 48h de «NUEVO».
     const pet = await client.query(
       `UPDATE mascota SET nombre = $1, especie = $2, raza = $3,
        edad = COALESCE($4, edad), unidad_edad = COALESCE($5, unidad_edad), sexo = $6,
@@ -320,6 +404,11 @@ router.put('/:id', requireAdmin, async (req, res) => {
     }
     const result = await client.query(`${petSelect} WHERE m.id_mascota = $1`, [req.params.id]);
     await client.query('COMMIT');
+    if (personalidadLeida.definida) {
+      procesarNuevaMascotaParaUsuarios(req.params.id).catch((err) => {
+        console.error('Error evaluando mascota actualizada para Match:', err.message);
+      });
+    }
     res.json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
