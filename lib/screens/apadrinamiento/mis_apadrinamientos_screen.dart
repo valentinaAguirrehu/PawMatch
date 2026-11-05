@@ -5,6 +5,7 @@ import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
 import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/seguimiento_apadrinamiento.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
@@ -13,11 +14,11 @@ import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/navegacion.dart';
-import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/reporte_padrino_pdf_service.dart';
 import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
+import 'package:paw_match/widgets/dialogo_carga.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
@@ -177,90 +178,81 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     abrirEnlace(context, url, nombre: 'WhatsApp de la Fundación');
   }
 
-  Future<void> _verDetallesMascota(String idMascota) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.rosa)),
+  void _verDetallesMascota(SolicitudApadrinamiento s) {
+    if (s.idMascota.isEmpty) return;
+    final pet = Pet(
+      id: s.idMascota,
+      nombre: s.mascotaNombre.isEmpty ? 'Mascota' : s.mascotaNombre,
+      especie: s.mascotaEspecie.isEmpty ? 'Perro' : s.mascotaEspecie,
+      raza: s.mascotaRaza.isEmpty ? null : s.mascotaRaza,
+      edad: s.mascotaEdad,
+      foto: s.mascotaFotos.isEmpty ? null : s.mascotaFotos,
+      estadoAdopcion: s.esAprobada ? 'adoptado' : 'disponible',
     );
-    try {
-      final pet = await PetsService.obtener(idMascota);
-      if (!mounted) return;
-      Navigator.pop(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PetDetailScreen(pet: pet),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cargar la mascota: $e')),
-      );
-    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PetDetailScreen(pet: pet)),
+    );
   }
 
   Future<void> _verContrato(SolicitudApadrinamiento s) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.rosa)),
-    );
+    late final Uint8List bytes;
     try {
-      final bytes = await ApadrinamientoService.obtenerBytesContrato(s.id);
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      final esPdf = bytes.length >= 4 &&
-          bytes[0] == 0x25 &&
-          bytes[1] == 0x50 &&
-          bytes[2] == 0x44 &&
-          bytes[3] == 0x46;
-
-      if (esPdf) {
-        await Printing.layoutPdf(
-          onLayout: (_) => bytes,
-          name: 'Contrato_Apadrinamiento_${s.mascotaNombre}.pdf',
-        );
-        return;
-      }
-
-      showDialog(
-        context: context,
-        builder: (ctx) => Dialog.fullscreen(
-          child: Scaffold(
-            backgroundColor: Colors.black,
-            appBar: AppBar(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              title: Text('Contrato de Apadrinamiento - ${s.mascotaNombre}'),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ),
-            body: Center(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.memory(bytes, fit: BoxFit.contain),
-              ),
-            ),
-          ),
-        ),
+      bytes = await DialogoCarga.mientras(
+        context,
+        () => ApadrinamientoService.obtenerBytesContrato(s.id),
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.redAccent,
           content: Text('Error al cargar contrato: $e'),
         ),
       );
+      return;
     }
+    if (!mounted) return;
+
+    final esPdf = bytes.length >= 4 &&
+        bytes[0] == 0x25 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x44 &&
+        bytes[3] == 0x46;
+
+    if (esPdf) {
+      await Printing.layoutPdf(
+        onLayout: (_) => bytes,
+        name: 'Contrato_Apadrinamiento_${s.mascotaNombre}.pdf',
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: Text('Contrato de Apadrinamiento - ${s.mascotaNombre}'),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: Image.memory(bytes, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   static const List<String> _mesesCortos = [
@@ -468,7 +460,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                                             _contactarWhatsApp(solicitudPrincipal!),
                                         onVerContrato: () => _verContrato(solicitudPrincipal!),
                                         onVerDetallesMascota: () =>
-                                            _verDetallesMascota(solicitudPrincipal!.idMascota),
+                                            _verDetallesMascota(solicitudPrincipal!),
                                       ),
 
                                     // Lista / Cuadrícula de Otras Apadrinaciones (SOLO si hay más de 1 en esta categoría)
@@ -740,7 +732,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                       _idSolicitudSeleccionada = s.id;
                     });
                   },
-                  onVerDetalles: () => _verDetallesMascota(s.idMascota),
+                  onVerDetalles: () => _verDetallesMascota(s),
                 ),
               );
             }).toList(),
@@ -761,7 +753,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                 _idSolicitudSeleccionada = s.id;
               });
             },
-            onVerDetalles: () => _verDetallesMascota(s.idMascota),
+            onVerDetalles: () => _verDetallesMascota(s),
           ),
         );
       }).toList(),

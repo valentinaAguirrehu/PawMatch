@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/enlaces.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/models/pet.dart';
@@ -23,6 +22,7 @@ import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/dialogo_carga.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 /// Detalle de una mascota inspirado en el diseño de referencia:
@@ -379,19 +379,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                 Text('📅 Fecha oficial de inicio: ${s.adoptionStartDateLabel ?? 'Activo'}'),
                 const SizedBox(height: 8),
                 const Text(
-                  'El contrato de adopción ya está disponible. Puedes verlo y descargarlo, y coordinar la entrega por WhatsApp.',
+                  'El contrato de adopción ya está disponible.\nPuedes verlo y descargarlo.',
                 ),
-                if (s.hasObservations) ...[
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Observaciones de la fundación:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(s.observations!),
-                ],
               ],
             ),
+            actionsAlignment: MainAxisAlignment.center,
+            actionsOverflowAlignment: OverflowBarAlignment.center,
             actions: [
               FilledButton.icon(
                 style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
@@ -549,126 +542,91 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   Future<void> _verContratoAdopcion(AdoptionRequest solicitud) async {
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
+    late final Uint8List bytes;
     try {
-      final bytes = await AdoptionService.fetchContract(solicitud.id);
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      final esPdf = bytes.length >= 4 &&
-          bytes[0] == 0x25 &&
-          bytes[1] == 0x50 &&
-          bytes[2] == 0x44 &&
-          bytes[3] == 0x46;
-
-      if (esPdf) {
-        await Printing.layoutPdf(
-          onLayout: (_) => bytes,
-          name: 'Contrato_Adopcion_${_pet.nombre}.pdf',
-        );
-        return;
-      }
-
-      if (!mounted) return;
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => Dialog.fullscreen(
-          child: Scaffold(
-            backgroundColor: Colors.black,
-            appBar: AppBar(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              title: Text('Contrato de adopción - ${_pet.nombre}'),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ),
-            body: Center(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4,
-                child: Image.memory(bytes, fit: BoxFit.contain),
-              ),
-            ),
-          ),
-        ),
+      bytes = await DialogoCarga.mientras(
+        context,
+        () => AdoptionService.fetchContract(solicitud.id),
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.redAccent,
           content: Text('Error al cargar contrato: $e'),
         ),
       );
+      return;
     }
+    if (!mounted) return;
+    await _mostrarArchivoContrato(
+      bytes,
+      'Contrato de adopción - ${_pet.nombre}',
+      'Contrato_Adopcion_${_pet.nombre}.pdf',
+    );
   }
 
   Future<void> _verContrato(SolicitudApadrinamiento s) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
+    late final Uint8List bytes;
     try {
-      final bytes = await ApadrinamientoService.obtenerBytesContrato(s.id);
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      final esPdf = bytes.length >= 4 &&
-          bytes[0] == 0x25 &&
-          bytes[1] == 0x50 &&
-          bytes[2] == 0x44 &&
-          bytes[3] == 0x46; // %PDF
-
-      if (esPdf) {
-        await Printing.layoutPdf(
-          onLayout: (_) => bytes,
-          name: 'Contrato_Apadrinamiento_${_pet.nombre}.pdf',
-        );
-        return;
-      }
-
-      showDialog(
-        context: context,
-        builder: (ctx) => Dialog.fullscreen(
-          child: Scaffold(
-            backgroundColor: Colors.black,
-            appBar: AppBar(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              title: Text('Contrato de Apadrinamiento - ${_pet.nombre}'),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ),
-            body: Center(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.memory(bytes, fit: BoxFit.contain),
-              ),
-            ),
-          ),
-        ),
+      bytes = await DialogoCarga.mientras(
+        context,
+        () => ApadrinamientoService.obtenerBytesContrato(s.id),
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.redAccent,
           content: Text('Error al cargar contrato: $e'),
         ),
       );
+      return;
     }
+    if (!mounted) return;
+    await _mostrarArchivoContrato(
+      bytes,
+      'Contrato de Apadrinamiento - ${_pet.nombre}',
+      'Contrato_Apadrinamiento_${_pet.nombre}.pdf',
+    );
+  }
+
+  Future<void> _mostrarArchivoContrato(Uint8List bytes, String titulo, String nombrePdf) async {
+    final esPdf = bytes.length >= 4 &&
+        bytes[0] == 0x25 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x44 &&
+        bytes[3] == 0x46;
+    if (esPdf) {
+      await Printing.layoutPdf(onLayout: (_) => bytes, name: nombrePdf);
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+            title: Text(titulo),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4,
+              child: Image.memory(bytes, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _verEstadoSolicitud() {
@@ -1687,41 +1645,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       const SizedBox(height: 10),
                       _personalidad(),
 
-                      // Contrato disponible si es padrino
-                      if (_miAdopcion != null && _miAdopcion!.hasContract) ...[
-                        const SizedBox(height: 22),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0FDF4),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Colors.green.shade200),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.assignment_turned_in, color: Colors.green, size: 28),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'Contrato oficial de adopción firmado y disponible.',
-                                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                                ),
-                              ),
-                              FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Colors.green.shade700,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                onPressed: () => _verContratoAdopcion(_miAdopcion!),
-                                child: const Text('Ver'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-
                       if (_miSolicitud != null && _miSolicitud!.tieneContrato) ...[
                         const SizedBox(height: 22),
                         Container(
@@ -1901,40 +1824,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     );
   }
 
-  Future<void> _compartirMascota() async {
-    final nombre = _pet.nombre.trim();
-    final raza = _pet.raza?.trim() ?? '';
-    final sexo = _pet.sexo?.trim() ?? '';
-    final texto =
-        'Te comparto la información de la mascota $nombre. ¡Ingresa a nuestra página web Paw Match! 🐾\n\n'
-        '• Nombre: $nombre\n'
-        '• Especie: ${_pet.especie}\n'
-        '${raza.isNotEmpty ? '• Raza: $raza\n' : ''}'
-        '• Edad: ${_pet.edadTexto}\n'
-        '${sexo.isNotEmpty ? '• Sexo: $sexo\n' : ''}'
-        '• Fundación Maritza Arévalo';
-
-    final uriApp =
-        Uri.parse('whatsapp://send?text=${Uri.encodeComponent(texto)}');
-    final uriWeb =
-        Uri.parse('https://wa.me/?text=${Uri.encodeComponent(texto)}');
-
-    try {
-      if (await canLaunchUrl(uriApp)) {
-        await launchUrl(uriApp, mode: LaunchMode.externalApplication);
-        return;
-      }
-      if (await canLaunchUrl(uriWeb)) {
-        await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
-        return;
-      }
-      await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      if (!mounted) return;
-      await abrirEnlace(context, uriWeb.toString(), nombre: 'WhatsApp');
-    }
-  }
-
   Widget _botonesAccion(Pet p) {
     if (Session.esAdmin) {
       return Row(
@@ -1974,9 +1863,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     }
 
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final esEstrecho = constraints.maxWidth < 460;
-
+      builder: (context, _) {
         // 1. Botón Adoptar
         var etiquetaAdoptar = switch (_estadoAdopcion) {
           'en_proceso' => 'En proceso',
@@ -2033,7 +1920,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           onPressed: accionAdoptar,
         );
 
-        // Con la solicitud en revisión no se ofrece apadrinar ni compartir.
+        // Con la solicitud en revisión no se ofrece apadrinar.
         if (mia != null && mia.isPending) {
           return Column(
             children: [
@@ -2131,45 +2018,13 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           }
         }
 
-        // 3. Botón Compartir
-        final botonCompartir = OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.rosa,
-            backgroundColor: AppColors.rosaSuave,
-            side: const BorderSide(color: AppColors.bordeRosa, width: 1.2),
-            minimumSize: const Size.fromHeight(48),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
-          ),
-          icon: const Icon(Icons.share_outlined, size: 17, color: AppColors.rosa),
-          label: const Text('Compartir', maxLines: 1, overflow: TextOverflow.ellipsis),
-          onPressed: _compartirMascota,
+        final filaBotones = Row(
+          children: [
+            Expanded(flex: 4, child: botonAdoptar),
+            const SizedBox(width: 10),
+            Expanded(flex: 4, child: botonApadrinar),
+          ],
         );
-
-        final filaBotones = esEstrecho
-            ? Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(flex: 3, child: botonAdoptar),
-                      const SizedBox(width: 8),
-                      Expanded(flex: 3, child: botonApadrinar),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(width: double.infinity, child: botonCompartir),
-                ],
-              )
-            : Row(
-                children: [
-                  Expanded(flex: 4, child: botonAdoptar),
-                  const SizedBox(width: 10),
-                  Expanded(flex: 4, child: botonApadrinar),
-                  const SizedBox(width: 10),
-                  Expanded(flex: 3, child: botonCompartir),
-                ],
-              );
 
         if (_miSolicitud != null && !_miSolicitud!.tieneContrato) {
           return Column(
