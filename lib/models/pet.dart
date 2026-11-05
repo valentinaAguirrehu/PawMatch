@@ -23,6 +23,12 @@ class Pet {
   final String? detalleSalud;
   final String? fechaActualizacion;
 
+  /// Fecha real de creación del registro en la base de datos (ISO UTC).
+  final String? fechaCreacion;
+
+  /// Indicador calculado por la base de datos (true si fue creada hace <= 48 horas).
+  final bool esNuevoDb;
+
   /// Usuario con la solicitud de adopción aprobada. Vacío si nadie la adoptó.
   final String? idAdoptante;
 
@@ -51,6 +57,8 @@ class Pet {
     this.estadosSalud = const ['No presenta necesidades veterinarias pendientes.'],
     this.detalleSalud,
     this.fechaActualizacion,
+    this.fechaCreacion,
+    this.esNuevoDb = false,
     this.idAdoptante,
     this.personalidadDefinida = true,
     this.personalidad = const {},
@@ -79,10 +87,25 @@ class Pet {
       estadosSalud: estadosSalud,
       detalleSalud: detalleSalud,
       fechaActualizacion: fechaActualizacion,
+      fechaCreacion: fechaCreacion,
+      esNuevoDb: esNuevoDb,
       idAdoptante: idAdoptante,
       personalidadDefinida: personalidadDefinida ?? this.personalidadDefinida,
       personalidad: personalidad ?? this.personalidad,
     );
+  }
+
+  /// True únicamente durante las primeras 48 horas desde la fecha real de creación en la BD.
+  bool get esNuevo {
+    final raw = fechaCreacion?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final dt = DateTime.tryParse(raw);
+      if (dt != null) {
+        final diff = DateTime.now().toUtc().difference(dt.toUtc());
+        return diff.inMinutes <= 48 * 60 && diff.inMinutes >= -120;
+      }
+    }
+    return esNuevoDb;
   }
 
   String get estadoSalud =>
@@ -108,6 +131,8 @@ class Pet {
     estadosSalud: _parseEstadosSalud(j['estado_salud'], j['vacunas'], j['esterilizado']),
     detalleSalud: j['detalle_salud'] as String?,
     fechaActualizacion: j['fecha_actualizacion'] as String?,
+    fechaCreacion: j['fecha_creacion'] as String?,
+    esNuevoDb: j['es_nuevo'] == true,
     idAdoptante: _id(j['id_usuario_adoptante']),
     personalidadDefinida: j['personalidad_definida'] != false,
 

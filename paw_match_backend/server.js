@@ -13,6 +13,7 @@ const noticiasRoutes = require('./routes/noticias');
 const pool = require('./db');
 const { asegurarRolSuperAdmin } = require('./utils/roles');
 const { asegurarGeneroUsuario } = require('./utils/genero_usuario');
+const { asegurarEsquemaMatch } = require('./utils/match_persistencia');
 const denunciasRoutes = require('./routes/denuncias');
 const seguimientoApadrinamientoRoutes = require('./routes/seguimiento_apadrinamiento');
 const seguimientoAdopcionRoutes = require('./routes/seguimiento_adopcion');
@@ -32,7 +33,14 @@ app.use('/api/seguimiento-adopcion', seguimientoAdopcionRoutes);
 app.use('/api/adoption-requests', adoptionRequestsRoutes);
 app.use('/api/noticias', noticiasRoutes);
 app.use('/api/denuncias', denunciasRoutes);
-app.use('/uploads', express.static('uploads'));
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, 'uploads'), {
+    maxAge: '7d',
+    immutable: true,
+    etag: true,
+  }),
+);
 
 app.get('/', (req, res) => res.send('API Paw Match funcionando'));
 
@@ -42,6 +50,9 @@ asegurarRolSuperAdmin(pool).catch((error) => {
 });
 asegurarGeneroUsuario(pool).catch((error) => {
   console.error('No se pudo preparar el género del usuario:', error.message);
+});
+asegurarEsquemaMatch().catch((error) => {
+  console.error('No se pudo preparar el esquema de Match:', error.message);
 });
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);

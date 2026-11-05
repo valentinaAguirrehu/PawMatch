@@ -255,8 +255,13 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
         if (siguientes.isNotEmpty) ...[
           const SizedBox(height: 22),
           Text(
-            'También podrían ser tu compañero',
+            'Nuevas coincidencias compatibles',
             style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'También podrían ser tu compañero sin reemplazar tu Match inicial.',
+            style: t.bodySmall?.copyWith(color: Colors.black54),
           ),
           const SizedBox(height: 12),
           LayoutBuilder(
@@ -412,7 +417,28 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
                 child: Column(
                   children: [
                     _medalla(porcentaje),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.rosaClaro,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.bordeRosa),
+                      ),
+                      child: Text(
+                        widget.match.esMatchInicial
+                            ? '💖 Tu Match Inicial'
+                            : '💖 Tu Match Principal',
+                        style: t.labelSmall?.copyWith(
+                          color: AppColors.rosa,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       pet.nombre,
                       textAlign: TextAlign.center,
@@ -667,12 +693,37 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '#${widget.puesto}',
-                            style: t.labelMedium?.copyWith(
-                              color: AppColors.rosa,
-                              fontWeight: FontWeight.w800,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                '#${widget.puesto}',
+                                style: t.labelMedium?.copyWith(
+                                  color: AppColors.rosa,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              if (pet.esNuevo) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.rosa,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Text(
+                                    '✨ NUEVO',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           Text(
                             pet.nombre,
