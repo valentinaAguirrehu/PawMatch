@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
@@ -196,48 +197,112 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
       );
       return;
     }
-    if (!mounted) return;
+      final esPdf = bytes.length >= 4 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46;
 
-    final esPdf = bytes.length >= 4 &&
-        bytes[0] == 0x25 &&
-        bytes[1] == 0x50 &&
-        bytes[2] == 0x44 &&
-        bytes[3] == 0x46;
-
-    if (esPdf) {
-      await Printing.layoutPdf(
-        onLayout: (_) => bytes,
-        name: 'Contrato_Adopcion_${solicitud.petName}.pdf',
-      );
-      return;
-    }
-
-    if (!mounted) return;
+      if (!mounted) return;
+    final titulo = 'Contrato de adopción - ${solicitud.petName}';
     await showDialog<void>(
-      context: context,
+        context: context,
       useRootNavigator: true,
-      builder: (ctx) => Dialog.fullscreen(
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            title: Text('Contrato de adopción - ${solicitud.petName}'),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
+        builder: (ctx) => Dialog.fullscreen(
+          child: Scaffold(
+          backgroundColor: esPdf ? const Color(0xFFF8F4F6) : Colors.black,
+            appBar: AppBar(
+            backgroundColor: esPdf ? Colors.white : Colors.black,
+            foregroundColor: esPdf ? AppColors.texto : Colors.white,
+            title: Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
               onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
             ),
+            actions: [
+              TextButton.icon(
+                onPressed: () => _descargarContrato(
+                  ctx,
+                  bytes,
+                  solicitud.petName,
+                  esPdf,
+                ),
+                icon: Icon(Icons.download_rounded, color: esPdf ? AppColors.rosa : Colors.white),
+                label: Text(
+                  'Descargar',
+                  style: TextStyle(
+                    color: esPdf ? AppColors.rosa : Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          body: Center(
-            child: InteractiveViewer(
-              minScale: 0.5,
-              maxScale: 4,
-              child: Image.memory(bytes, fit: BoxFit.contain),
+          body: esPdf
+              ? PdfPreview(
+                  build: (_) async => bytes,
+                  pdfFileName: _nombreArchivoContrato(solicitud.petName, true, bytes),
+                  useActions: false,
+                  allowPrinting: false,
+                  allowSharing: false,
+                  canChangeOrientation: false,
+                  canChangePageFormat: false,
+                )
+              : Center(
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4,
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
             ),
           ),
         ),
-      ),
     );
+  }
+
+  String _nombreArchivoContrato(String nombreMascota, bool esPdf, Uint8List bytes) {
+    final limpio = nombreMascota
+        .replaceAll(RegExp(r'[^\w\- ]', unicode: true), '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), '_');
+    final base = limpio.isEmpty ? 'Mascota' : limpio;
+    if (esPdf) return 'Contrato_Adopcion_$base.pdf';
+    final esPng = bytes.length >= 4 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47;
+    return 'Contrato_Adopcion_$base.${esPng ? 'png' : 'jpg'}';
+  }
+
+  Future<void> _descargarContrato(
+    BuildContext aviso,
+    Uint8List bytes,
+    String nombreMascota,
+    bool esPdf,
+  ) async {
+    final nombre = _nombreArchivoContrato(nombreMascota, esPdf, bytes);
+    final mime = esPdf
+        ? 'application/pdf'
+        : (nombre.endsWith('.png') ? 'image/png' : 'image/jpeg');
+    try {
+      final ruta = await FilePicker.saveFile(
+        dialogTitle: 'Descargar contrato de adopción',
+        fileName: nombre,
+        bytes: bytes,
+        mimeType: mime,
+      );
+      if (!aviso.mounted || ruta == null) return;
+      ScaffoldMessenger.of(aviso).showSnackBar(
+        const SnackBar(content: Text('Contrato de adopción descargado.')),
+      );
+    } catch (e) {
+      if (!aviso.mounted) return;
+      ScaffoldMessenger.of(aviso).showSnackBar(
+        SnackBar(content: Text('No se pudo descargar el contrato: $e')),
+      );
+    }
   }
 
   void _verMascota(AdoptionRequest s) {
@@ -280,35 +345,35 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
             ),
             Expanded(
               child: FutureBuilder<List<AdoptionRequest>>(
-                future: _future,
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator(color: AppColors.rosa));
-                  }
-                  if (snap.hasError) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Error al cargar tus adopciones: ${snap.error}',
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 12),
-                            FilledButton(
-                              style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
-                              onPressed: _recargar,
-                              child: const Text('Reintentar'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Error al cargar tus adopciones: ${snap.error}',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+                      onPressed: _recargar,
+                      child: const Text('Reintentar'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
 
                   final todas = snap.data ?? [];
                   final aprobadas = todas.where((s) => s.isApproved).toList();
@@ -345,9 +410,9 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                           child: Center(
                             child: ConstrainedBox(
                               constraints: BoxConstraints(maxWidth: maxAncho),
-                              child: Column(
+                child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
+                  children: [
                                   const SizedBox(height: 6),
                                   _pestanas(
                                     aprobadas: aprobadas.length,
@@ -399,11 +464,11 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                 },
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
+                  ],
+                ),
+              ),
+            );
+          }
 
   Widget _pestanas({
     required int aprobadas,
@@ -415,7 +480,7 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFFCE4EC)),
         boxShadow: [
           BoxShadow(
@@ -426,7 +491,7 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
         ],
       ),
       child: Row(
-        children: [
+                      children: [
           Expanded(child: _botonPestana(0, 'Aprobadas', aprobadas, esDesktop)),
           const SizedBox(width: 4),
           Expanded(child: _botonPestana(1, 'Pendientes', pendientes, esDesktop)),
@@ -450,7 +515,7 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: EdgeInsets.symmetric(vertical: esDesktop ? 12 : 9, horizontal: 6),
-          decoration: BoxDecoration(
+                              decoration: BoxDecoration(
             color: activa ? AppColors.rosa : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
             boxShadow: activa
@@ -462,16 +527,16 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
                     ),
                   ]
                 : null,
-          ),
-          child: Row(
+                              ),
+                              child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+                                children: [
               Flexible(
                 child: Text(
                   titulo,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                                    style: TextStyle(
                     fontWeight: activa ? FontWeight.w800 : FontWeight.w600,
                     fontSize: esDesktop ? 14 : 12.5,
                     color: activa ? Colors.white : const Color(0xFF64748B),
@@ -480,21 +545,21 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
               ),
               if (conteo > 0) ...[
                 const SizedBox(width: 6),
-                Container(
+                            Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                  decoration: BoxDecoration(
+                              decoration: BoxDecoration(
                     color: activa ? Colors.white.withValues(alpha: 0.25) : const Color(0xFFF1F5F9),
                     borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
+                              ),
+                              child: Text(
                     '$conteo',
-                    style: TextStyle(
-                      fontSize: 11,
+                                style: TextStyle(
+                                  fontSize: 11,
                       fontWeight: FontWeight.w800,
                       color: activa ? Colors.white : const Color(0xFF475569),
-                    ),
-                  ),
-                ),
+                                ),
+                              ),
+                            ),
               ],
             ],
           ),
@@ -512,14 +577,14 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
       child: Center(
-        child: Column(
+                          child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
+                            children: [
+                              Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
+                                decoration: BoxDecoration(
                 color: Colors.white,
-                shape: BoxShape.circle,
+                                  shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFFFCE4EC)),
               ),
               child: Icon(
@@ -533,10 +598,10 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
               ),
             ),
             const SizedBox(height: 14),
-            Text(
+                              Text(
               mensaje,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF64748B),
@@ -556,7 +621,7 @@ class _AvisoUnaSola extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
+                                decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFFCE4EC)),
@@ -566,15 +631,15 @@ class _AvisoUnaSola extends StatelessWidget {
           Icon(Icons.pets_rounded, color: AppColors.rosa, size: 18),
           SizedBox(width: 12),
           Expanded(
-            child: Text(
+                                child: Text(
               'Hasta el momento solo tienes una adopción.',
               style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
                 color: Color(0xFF4A1525),
-              ),
-            ),
-          ),
+                                  ),
+                                ),
+                              ),
         ],
       ),
     );
@@ -612,7 +677,6 @@ class _TarjetaAdopcion extends StatefulWidget {
 }
 
 class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
-  bool _respuestas = false;
   bool _seguimientos = false;
   Future<List<SeguimientoAdopcionItem>>? _historial;
 
@@ -671,8 +735,8 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          decoration: BoxDecoration(
+                          Container(
+                            decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFFFCE4EC), width: 1.2),
@@ -694,15 +758,15 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
                   _foto(s, tamano: widget.esDesktop ? 120 : 86),
                   SizedBox(width: widget.esDesktop ? 20 : 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
                             const Icon(Icons.pets_rounded, color: AppColors.rosa, size: 19),
                             const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
+                                    Expanded(
+                                      child: Text(
                                 s.petName.isEmpty ? 'Mascota' : s.petName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -710,12 +774,12 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
                                   fontWeight: FontWeight.w900,
                                   fontSize: 20,
                                   color: Color(0xFF1E293B),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
+                                  const SizedBox(height: 4),
                         _correo(s),
                         const SizedBox(height: 6),
                         Row(
@@ -741,23 +805,23 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
                         if (oficial) ...[
                           const SizedBox(height: 4),
                           const Row(
-                            children: [
+                                    children: [
                               Icon(Icons.workspace_premium_rounded, color: Color(0xFFD97706), size: 14),
                               SizedBox(width: 3),
                               Flexible(
-                                child: Text(
+                                        child: Text(
                                   'ADOPTANTE OFICIAL',
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                                          style: TextStyle(
                                     fontWeight: FontWeight.w800,
                                     fontSize: 10.5,
                                     color: Color(0xFFB45309),
                                     letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ),
-                            ],
-                          ),
                         ],
                       ],
                     ),
@@ -800,7 +864,7 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
               if (s.isApproved) ...[
                 _botonLinea(
                   icono: Icons.description_outlined,
-                  texto: s.hasContract ? 'Ver Contrato' : 'Contrato pendiente',
+                  texto: s.hasContract ? 'Ver contrato de adopción' : 'Contrato pendiente',
                   onPressed: widget.onContrato,
                 ),
                 const SizedBox(height: 8),
@@ -833,39 +897,10 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
               const SizedBox(height: 8),
               _botonLinea(
                 icono: Icons.picture_as_pdf_outlined,
-                texto: 'Descargar acta (PDF)',
+                texto: 'Descargar acta de compromiso',
                 cargando: widget.descargando,
                 onPressed: widget.descargando ? null : widget.onActa,
               ),
-              const SizedBox(height: 8),
-              _botonLinea(
-                icono: Icons.quiz_outlined,
-                texto: _respuestas ? 'Ocultar respuestas' : 'Tus respuestas',
-                flecha: true,
-                abierto: _respuestas,
-                onPressed: () => setState(() => _respuestas = !_respuestas),
-              ),
-              if (_respuestas) ...[
-                const SizedBox(height: 10),
-                for (final respuesta in s.answers)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          respuesta.question,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.rosa,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(respuesta.answer, style: const TextStyle(fontSize: 13)),
-                      ],
-                    ),
-                  ),
-              ],
             ],
           ),
         ),
@@ -895,9 +930,9 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
         if (lista.isEmpty) {
           return const Padding(
             padding: EdgeInsets.fromLTRB(4, 2, 4, 4),
-            child: Text(
+                                      child: Text(
               'Aún no hay visitas de seguimiento.',
-              style: TextStyle(
+                                        style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF92400E),
@@ -915,7 +950,7 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
+                                Text(
                 '${lista.length} ${lista.length == 1 ? 'seguimiento registrado' : 'seguimientos registrados'}',
                 style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
               ),
@@ -934,7 +969,7 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
                   texto: 'Ver reporte',
                   onPressed: () => _reporte(lista, descargar: false),
                 ),
-                const SizedBox(height: 8),
+                                  const SizedBox(height: 8),
                 _botonLinea(
                   icono: Icons.download_rounded,
                   texto: 'Descargar reporte',
@@ -1005,7 +1040,7 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
               color: verificado ? const Color(0xFF059669) : const Color(0xFFE11D48),
             ),
             const SizedBox(width: 4),
-            Text(
+                          Text(
               verificado ? 'Correo verificado' : 'Correo pendiente',
               style: TextStyle(
                 fontSize: 10.5,
@@ -1027,7 +1062,7 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
                       )
                     : const Text(
                         'Reenviar',
-                        style: TextStyle(
+                                  style: TextStyle(
                           fontSize: 10.5,
                           fontWeight: FontWeight.w800,
                           color: Color(0xFFBE123C),
@@ -1035,10 +1070,10 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
                         ),
                       ),
               ),
-            ],
-          ],
-        ),
-      ),
+                                ],
+                              ],
+                            ),
+                          ),
     );
   }
 
@@ -1073,7 +1108,7 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
           children: [
             Icon(icono, size: 14, color: texto),
             const SizedBox(width: 4),
-            Text(
+                        Text(
               etiqueta,
               style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: texto),
             ),
@@ -1104,23 +1139,23 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
           Text(emoji, style: const TextStyle(fontSize: 18)),
           const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
                   titulo,
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: colorTitulo),
                 ),
                 const SizedBox(height: 2),
-                Text(
+                                Text(
                   detalle,
                   style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: colorDetalle),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
+                                  ),
+                                ),
+                              ],
+                            ),
     );
   }
 
@@ -1145,20 +1180,20 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
     bool abierto = false,
   }) {
     return OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
+                          style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFF880E4F),
         side: const BorderSide(color: Color(0xFFF48FB1), width: 1.2),
-        minimumSize: const Size.fromHeight(42),
+                            minimumSize: const Size.fromHeight(42),
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
+                            ),
       onPressed: onPressed,
       icon: cargando
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
-            )
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
+                                )
           : Icon(icono, size: 17),
       label: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1246,11 +1281,11 @@ class _TarjetaOtraAdopcion extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
                         Expanded(
                           child: Text(
                             s.petName.isEmpty ? 'Mascota' : s.petName,
@@ -1271,10 +1306,10 @@ class _TarjetaOtraAdopcion extends StatelessWidget {
                           child: Text(
                             etiqueta,
                             style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: color),
-                          ),
-                        ),
-                      ],
-                    ),
+                ),
+              ),
+            ],
+          ),
                     const SizedBox(height: 3),
                     Text(
                       '${s.petAgeLabel}  •  ${s.petSpecies} • $raza',
@@ -1285,7 +1320,7 @@ class _TarjetaOtraAdopcion extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 4),
+          const SizedBox(height: 4),
                     Text(
                       'Solicitud: $fecha',
                       style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
@@ -1297,8 +1332,8 @@ class _TarjetaOtraAdopcion extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Row(
-            children: [
-              Expanded(
+        children: [
+          Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF64748B),

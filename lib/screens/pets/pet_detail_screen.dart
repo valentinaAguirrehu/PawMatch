@@ -849,6 +849,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   String _t(String? v) => v?.trim() ?? '';
 
+  String _iniciarMayuscula(String texto) {
+    final limpio = texto.trim();
+    if (limpio.isEmpty) return limpio;
+    return limpio[0].toUpperCase() + limpio.substring(1);
+  }
+
   String get _estadoAdopcion {
     final e = _t(_pet.estadoAdopcion);
     return e.isEmpty ? 'disponible' : e;
@@ -1321,8 +1327,8 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       const SizedBox(height: 8),
                       Text(
                         descripcion.isEmpty
-                            ? 'Hermoso ${p.especie.toLowerCase()} rescatado con amor por la Fundación Maritza Arévalo. Es cariñoso, sociable y está esperando a una familia responsable que le brinde un futuro lleno de protección y felicidad.'
-                            : descripcion,
+                            ? 'Hermoso ${_iniciarMayuscula(p.especie)} rescatado con amor por la Fundación Maritza Arévalo. Es cariñoso, sociable y está esperando a una familia responsable que le brinde un futuro lleno de protección y felicidad.'
+                            : _iniciarMayuscula(descripcion),
                         style: TextStyle(
                           fontSize: 14.5,
                           height: 1.5,
@@ -1812,7 +1818,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            valor,
+            _iniciarMayuscula(valor),
             style: const TextStyle(
               fontSize: 14.5,
               fontWeight: FontWeight.w600,
@@ -1868,9 +1874,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         var etiquetaAdoptar = switch (_estadoAdopcion) {
           'en_proceso' => 'En proceso',
           'adoptado' => 'Adoptado',
-          _ => 'Adoptar a ${p.nombre}',
+          _ => 'Adoptar',
         };
-        var iconoAdoptar = Icons.favorite_rounded;
+        var iconoAdoptar = Icons.pets_rounded;
         VoidCallback? accionAdoptar = _puedeAdoptar
             ? (widget.onAdoptar ?? _abrirFormularioAdopcion)
             : null;
@@ -1911,11 +1917,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             disabledForegroundColor: Colors.grey.shade500,
             minimumSize: const Size.fromHeight(48),
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
             elevation: 1,
           ),
-          icon: Icon(iconoAdoptar, size: 17),
+          icon: Icon(iconoAdoptar, size: 18),
           label: Text(etiquetaAdoptar, maxLines: 1, overflow: TextOverflow.ellipsis),
           onPressed: accionAdoptar,
         );
@@ -1937,7 +1943,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
         if (_estadoAdopcion == 'adoptado' && sinApadrinamientoActivo) {
           botonApadrinar = _AvisoYaEnFamilia(texto: _pet.mensajeFamiliaPara(Session.idUsuario));
         } else {
-          String etiquetaApadrinar = 'Apadrinar a ${p.nombre}';
+          String etiquetaApadrinar = 'Apadrinar';
           VoidCallback? accionApadrinar = _abrirFormularioApadrinar;
           Color colorFondoApadrinar = Colors.white;
           Color colorTextoApadrinar = AppColors.rosa;
@@ -1991,14 +1997,14 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                 foregroundColor: colorTextoApadrinar,
                 minimumSize: const Size.fromHeight(48),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
               ),
               onPressed: accionApadrinar,
               child: Text(etiquetaApadrinar, maxLines: 1, overflow: TextOverflow.ellipsis),
             );
           } else {
-            botonApadrinar = OutlinedButton(
+            botonApadrinar = OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: colorTextoApadrinar,
                 backgroundColor: Colors.white,
@@ -2009,11 +2015,12 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                 ),
                 minimumSize: const Size.fromHeight(48),
                 padding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
               ),
+              icon: const Icon(Icons.favorite_rounded, size: 18),
+              label: Text(etiquetaApadrinar, maxLines: 1, overflow: TextOverflow.ellipsis),
               onPressed: _puedeApadrinar ? accionApadrinar : null,
-              child: Text(etiquetaApadrinar, maxLines: 1, overflow: TextOverflow.ellipsis),
             );
           }
         }

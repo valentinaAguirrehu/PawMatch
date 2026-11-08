@@ -324,7 +324,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         Stack(
           children: [
             const Positioned.fill(
-              child: CustomPaint(painter: _FondoHeroPainter()),
+              child: CustomPaint(painter: FondoHeroPainter()),
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(pad, 8, pad, 16),
@@ -1347,8 +1347,8 @@ class _AdornoRescatista extends StatelessWidget {
 }
 
 /// Degradado rosado que termina en el mismo rosa pastel del resto de la página.
-class _FondoHeroPainter extends CustomPainter {
-  const _FondoHeroPainter();
+class FondoHeroPainter extends CustomPainter {
+  const FondoHeroPainter();
 
   @override
   void paint(Canvas canvas, Size size) {

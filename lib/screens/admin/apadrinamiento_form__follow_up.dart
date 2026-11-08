@@ -10,6 +10,7 @@ import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
+import 'package:paw_match/widgets/pet_card.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/star_rating_selector.dart';
 import 'package:paw_match/widgets/tarjeta_seguimiento.dart';
@@ -40,8 +41,8 @@ class _ApadrinamientoFormFollowUpState
   // Fecha de seguimiento: fija por defecto a hoy
   final DateTime _fechaHoy = DateTime.now();
 
-  // Calificación en estrellas (1 a 5, obligatoria)
-  int _calificacion = 5;
+  // Calificación en estrellas (1 a 5, obligatoria). 0 = ninguna marcada.
+  int _calificacion = 0;
 
   // Próximo seguimiento programado
   DateTime? _proximoSeguimiento;
@@ -54,19 +55,19 @@ class _ApadrinamientoFormFollowUpState
 
   // Estados de aportes comprometidos
   bool _aportaMonetarioPrometido = false;
-  bool _recibioMonetario = true;
+  bool? _recibioMonetario;
   String _medioMonetario = 'transferencia';
   final _montoRecibidoCtrl = TextEditingController();
   final _referenciaMonetarioCtrl = TextEditingController();
   final _observacionMonetarioCtrl = TextEditingController();
 
   bool _aportaEspeciePrometido = false;
-  bool _recibioEspecie = true;
+  bool? _recibioEspecie;
   final _detalleEspecieCtrl = TextEditingController();
   final _observacionEspecieCtrl = TextEditingController();
 
   bool _aportaOtroPrometido = false;
-  bool _recibioOtro = true;
+  bool? _recibioOtro;
   final _detalleOtroCtrl = TextEditingController();
   final _observacionOtroCtrl = TextEditingController();
 
@@ -188,10 +189,22 @@ class _ApadrinamientoFormFollowUpState
       return;
     }
 
+    if ((_aportaMonetarioPrometido && _recibioMonetario == null) ||
+        (_aportaEspeciePrometido && _recibioEspecie == null) ||
+        (_aportaOtroPrometido && _recibioOtro == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('Indica si se recibió cada aporte comprometido.'),
+        ),
+      );
+      return;
+    }
+
     // Comprobar si algún aporte fue marcado como NO recibido
-    final hayMonetarioNoRecibido = _aportaMonetarioPrometido && !_recibioMonetario;
-    final hayEspecieNoRecibido = _aportaEspeciePrometido && !_recibioEspecie;
-    final hayOtroNoRecibido = _aportaOtroPrometido && !_recibioOtro;
+    final hayMonetarioNoRecibido = _aportaMonetarioPrometido && _recibioMonetario == false;
+    final hayEspecieNoRecibido = _aportaEspeciePrometido && _recibioEspecie == false;
+    final hayOtroNoRecibido = _aportaOtroPrometido && _recibioOtro == false;
     final algunAporteNoRecibido =
         hayMonetarioNoRecibido || hayEspecieNoRecibido || hayOtroNoRecibido;
 
@@ -247,15 +260,15 @@ class _ApadrinamientoFormFollowUpState
           idSeguimiento: '',
           tipo: 'monetario',
           comprometido: comprometido,
-          recibido: _recibioMonetario,
-          medio: _recibioMonetario ? _medioMonetario : null,
-          montoRecibido: _recibioMonetario
+          recibido: _recibioMonetario == true,
+          medio: _recibioMonetario == true ? _medioMonetario : null,
+          montoRecibido: _recibioMonetario == true
               ? double.tryParse(_montoRecibidoCtrl.text.trim())
               : null,
-          referencia: _recibioMonetario
+          referencia: _recibioMonetario == true
               ? _referenciaMonetarioCtrl.text.trim()
               : null,
-          observacion: !_recibioMonetario
+          observacion: _recibioMonetario == false
               ? _observacionMonetarioCtrl.text.trim()
               : null,
         ),
@@ -270,11 +283,11 @@ class _ApadrinamientoFormFollowUpState
           idSeguimiento: '',
           tipo: 'especie',
           comprometido: comprometido,
-          recibido: _recibioEspecie,
-          detalleRecibido: _recibioEspecie
+          recibido: _recibioEspecie == true,
+          detalleRecibido: _recibioEspecie == true
               ? _detalleEspecieCtrl.text.trim()
               : null,
-          observacion: !_recibioEspecie
+          observacion: _recibioEspecie == false
               ? _observacionEspecieCtrl.text.trim()
               : null,
         ),
@@ -289,11 +302,11 @@ class _ApadrinamientoFormFollowUpState
           idSeguimiento: '',
           tipo: 'otro',
           comprometido: comprometido,
-          recibido: _recibioOtro,
-          detalleRecibido: _recibioOtro
+          recibido: _recibioOtro == true,
+          detalleRecibido: _recibioOtro == true
               ? _detalleOtroCtrl.text.trim()
               : null,
-          observacion: !_recibioOtro
+          observacion: _recibioOtro == false
               ? _observacionOtroCtrl.text.trim()
               : null,
         ),
@@ -478,11 +491,11 @@ class _ApadrinamientoFormFollowUpState
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _recibioMonetario ? const Color(0xFFF9FAFC) : const Color(0xFFFFEBEE),
+        color: _recibioMonetario == false ? const Color(0xFFFFEBEE) : const Color(0xFFF9FAFC),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _recibioMonetario ? const Color(0xFFE2E4EE) : Colors.red.shade300,
-          width: _recibioMonetario ? 1 : 1.4,
+          color: _recibioMonetario == false ? Colors.red.shade300 : const Color(0xFFE2E4EE),
+          width: _recibioMonetario == false ? 1.4 : 1,
         ),
       ),
       child: Column(
@@ -492,7 +505,7 @@ class _ApadrinamientoFormFollowUpState
             children: [
               Icon(
                 Icons.payments_rounded,
-                color: _recibioMonetario ? AppColors.rosa : Colors.red.shade700,
+                color: _recibioMonetario == false ? Colors.red.shade700 : AppColors.rosa,
                 size: 22,
               ),
               const SizedBox(width: 8),
@@ -512,10 +525,10 @@ class _ApadrinamientoFormFollowUpState
             children: [
               ChoiceChip(
                 label: const Text('Sí, recibido'),
-                selected: _recibioMonetario,
+                selected: _recibioMonetario == true,
                 selectedColor: Colors.green.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioMonetario ? Colors.green.shade900 : Colors.grey.shade700,
+                  color: _recibioMonetario == true ? Colors.green.shade900 : Colors.grey.shade700,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioMonetario = true),
@@ -523,18 +536,18 @@ class _ApadrinamientoFormFollowUpState
               const SizedBox(width: 8),
               ChoiceChip(
                 label: const Text('No recibido'),
-                selected: !_recibioMonetario,
+                selected: _recibioMonetario == false,
                 selectedColor: Colors.red.shade100,
                 labelStyle: TextStyle(
-                  color: !_recibioMonetario ? Colors.red.shade900 : Colors.grey.shade700,
+                  color: _recibioMonetario == false ? Colors.red.shade900 : Colors.grey.shade700,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioMonetario = false),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (_recibioMonetario) ...[
+          if (_recibioMonetario == true) ...[
+            const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: _medioMonetario,
               decoration: _decoracion('Medio de pago'),
@@ -553,11 +566,21 @@ class _ApadrinamientoFormFollowUpState
               decoration: _decoracion('Monto recibido (\$)'),
             ),
             const SizedBox(height: 10),
+            const Text(
+              'Número de referencia (Opcional)',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(height: 6),
             TextFormField(
               controller: _referenciaMonetarioCtrl,
-              decoration: _decoracion('Referencia o comprobante (Opcional)'),
+              decoration: _decoracion('').copyWith(labelText: null),
             ),
-          ] else ...[
+          ] else if (_recibioMonetario == false) ...[
+            const SizedBox(height: 12),
             TextFormField(
               controller: _observacionMonetarioCtrl,
               maxLines: 2,
@@ -582,11 +605,11 @@ class _ApadrinamientoFormFollowUpState
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _recibioEspecie ? const Color(0xFFF9FAFC) : const Color(0xFFFFEBEE),
+        color: _recibioEspecie == false ? const Color(0xFFFFEBEE) : const Color(0xFFF9FAFC),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _recibioEspecie ? const Color(0xFFE2E4EE) : Colors.red.shade300,
-          width: _recibioEspecie ? 1 : 1.4,
+          color: _recibioEspecie == false ? Colors.red.shade300 : const Color(0xFFE2E4EE),
+          width: _recibioEspecie == false ? 1.4 : 1,
         ),
       ),
       child: Column(
@@ -596,7 +619,7 @@ class _ApadrinamientoFormFollowUpState
             children: [
               Icon(
                 Icons.inventory_2_rounded,
-                color: _recibioEspecie ? AppColors.rosa : Colors.red.shade700,
+                color: _recibioEspecie == false ? Colors.red.shade700 : AppColors.rosa,
                 size: 22,
               ),
               const SizedBox(width: 8),
@@ -616,10 +639,10 @@ class _ApadrinamientoFormFollowUpState
             children: [
               ChoiceChip(
                 label: const Text('Sí, recibido'),
-                selected: _recibioEspecie,
+                selected: _recibioEspecie == true,
                 selectedColor: Colors.green.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioEspecie ? Colors.green.shade900 : Colors.grey.shade700,
+                  color: _recibioEspecie == true ? Colors.green.shade900 : Colors.grey.shade700,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioEspecie = true),
@@ -627,23 +650,24 @@ class _ApadrinamientoFormFollowUpState
               const SizedBox(width: 8),
               ChoiceChip(
                 label: const Text('No recibido'),
-                selected: !_recibioEspecie,
+                selected: _recibioEspecie == false,
                 selectedColor: Colors.red.shade100,
                 labelStyle: TextStyle(
-                  color: !_recibioEspecie ? Colors.red.shade900 : Colors.grey.shade700,
+                  color: _recibioEspecie == false ? Colors.red.shade900 : Colors.grey.shade700,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioEspecie = false),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (_recibioEspecie) ...[
+          if (_recibioEspecie == true) ...[
+            const SizedBox(height: 12),
             TextFormField(
               controller: _detalleEspecieCtrl,
               decoration: _decoracion('Qué se recibió (ej. 1 bulto de alimento 15kg)'),
             ),
-          ] else ...[
+          ] else if (_recibioEspecie == false) ...[
+            const SizedBox(height: 12),
             TextFormField(
               controller: _observacionEspecieCtrl,
               maxLines: 2,
@@ -668,11 +692,11 @@ class _ApadrinamientoFormFollowUpState
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _recibioOtro ? const Color(0xFFF9FAFC) : const Color(0xFFFFEBEE),
+        color: _recibioOtro == false ? const Color(0xFFFFEBEE) : const Color(0xFFF9FAFC),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _recibioOtro ? const Color(0xFFE2E4EE) : Colors.red.shade300,
-          width: _recibioOtro ? 1 : 1.4,
+          color: _recibioOtro == false ? Colors.red.shade300 : const Color(0xFFE2E4EE),
+          width: _recibioOtro == false ? 1.4 : 1,
         ),
       ),
       child: Column(
@@ -682,7 +706,7 @@ class _ApadrinamientoFormFollowUpState
             children: [
               Icon(
                 Icons.volunteer_activism_rounded,
-                color: _recibioOtro ? AppColors.rosa : Colors.red.shade700,
+                color: _recibioOtro == false ? Colors.red.shade700 : AppColors.rosa,
                 size: 22,
               ),
               const SizedBox(width: 8),
@@ -702,10 +726,10 @@ class _ApadrinamientoFormFollowUpState
             children: [
               ChoiceChip(
                 label: const Text('Sí, cumplió'),
-                selected: _recibioOtro,
+                selected: _recibioOtro == true,
                 selectedColor: Colors.green.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioOtro ? Colors.green.shade900 : Colors.grey.shade700,
+                  color: _recibioOtro == true ? Colors.green.shade900 : Colors.grey.shade700,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioOtro = true),
@@ -713,23 +737,24 @@ class _ApadrinamientoFormFollowUpState
               const SizedBox(width: 8),
               ChoiceChip(
                 label: const Text('No cumplió'),
-                selected: !_recibioOtro,
+                selected: _recibioOtro == false,
                 selectedColor: Colors.red.shade100,
                 labelStyle: TextStyle(
-                  color: !_recibioOtro ? Colors.red.shade900 : Colors.grey.shade700,
+                  color: _recibioOtro == false ? Colors.red.shade900 : Colors.grey.shade700,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioOtro = false),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          if (_recibioOtro) ...[
+          if (_recibioOtro == true) ...[
+            const SizedBox(height: 12),
             TextFormField(
               controller: _detalleOtroCtrl,
               decoration: _decoracion('En qué consistió la ayuda cumplida'),
             ),
-          ] else ...[
+          ] else if (_recibioOtro == false) ...[
+            const SizedBox(height: 12),
             TextFormField(
               controller: _observacionOtroCtrl,
               maxLines: 2,
@@ -881,20 +906,16 @@ class _ApadrinamientoFormFollowUpState
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundColor: AppColors.rosa.withValues(alpha: 0.15),
-                            child: ClipOval(
-                              child: mascota.foto != null && mascota.foto!.isNotEmpty
-                                  ? Image.network(
-                                      mascota.foto!,
-                                      width: 60,
-                                      height: 60,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
-                                          const Icon(Icons.pets, color: AppColors.rosa),
-                                    )
-                                  : const Icon(Icons.pets, color: AppColors.rosa),
+                          ClipOval(
+                            child: SizedBox(
+                              width: 60,
+                              height: 60,
+                              child: PetImage(
+                                url: (mascota.foto != null && mascota.foto!.trim().isNotEmpty)
+                                    ? mascota.foto
+                                    : solicitud.mascotaFotos,
+                                fit: BoxFit.cover,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -1011,32 +1032,6 @@ class _ApadrinamientoFormFollowUpState
 
                             const SizedBox(height: 18),
 
-                            // Calificación con 5 estrellas tocables (Obligatoria)
-                            const Text(
-                              'Calificación del padrino *',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Toca las estrellas para evaluar el cumplimiento (1 a 5)',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                            ),
-                            const SizedBox(height: 8),
-                            Center(
-                              child: StarRatingSelector(
-                                rating: _calificacion,
-                                starSize: 38,
-                                mostrarEtiqueta: true,
-                                onRatingChanged: (nuevaCalificacion) {
-                                  setState(() {
-                                    _calificacion = nuevaCalificacion;
-                                  });
-                                },
-                              ),
-                            ),
-
-                            const SizedBox(height: 18),
-
                             // SECCIÓN DE APORTES DEL PADRINO (CAMBIO 3)
                             if (tieneAportes) ...[
                               const Divider(height: 28),
@@ -1065,11 +1060,39 @@ class _ApadrinamientoFormFollowUpState
                               maxLines: 3,
                               decoration: _decoracion('Observaciones del seguimiento'),
                               validator: (valor) {
-                                if (_calificacion <= 2 && (valor == null || valor.trim().isEmpty)) {
+                                if (_calificacion >= 1 &&
+                                    _calificacion <= 2 &&
+                                    (valor == null || valor.trim().isEmpty)) {
                                   return 'Por favor explica en las observaciones el motivo de la baja calificación.';
                                 }
                                 return null;
                               },
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            // Calificación con 5 estrellas tocables (Obligatoria)
+                            const Text(
+                              'Calificación del padrino *',
+                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Toca las estrellas para evaluar el cumplimiento (1 a 5)',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                            const SizedBox(height: 8),
+                            Center(
+                              child: StarRatingSelector(
+                                rating: _calificacion,
+                                starSize: 38,
+                                mostrarEtiqueta: true,
+                                onRatingChanged: (nuevaCalificacion) {
+                                  setState(() {
+                                    _calificacion = nuevaCalificacion;
+                                  });
+                                },
+                              ),
                             ),
 
                             const SizedBox(height: 18),
@@ -1099,7 +1122,7 @@ class _ApadrinamientoFormFollowUpState
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           const Text(
-                                            'Próximo seguimiento programado (desde el mes siguiente)',
+                                            'Próximo seguimiento programado',
                                             style: TextStyle(
                                                 fontSize: 11,
                                                 color: Colors.grey,

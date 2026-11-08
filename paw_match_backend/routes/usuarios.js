@@ -16,6 +16,7 @@ const {
 const {
   asegurarEsquemaMatch,
   sincronizarMatchDeUsuario,
+  marcarAvisoReasignacionVisto,
 } = require('../utils/match_persistencia');
 const { generoValido } = require('../utils/genero_usuario');
 const {
@@ -483,6 +484,19 @@ router.get('/:id/match-sincronizar', async (req, res) => {
   } catch (error) {
     console.error('Error en /match-sincronizar:', error);
     res.status(500).json({ error: 'No se pudo sincronizar el Match del usuario' });
+  }
+});
+
+// PATCH /api/usuarios/:id/match-reasignacion/vista
+// La persona ya leyó el aviso de que su Match Ideal fue adoptado y se le asignó otro.
+router.patch('/:id/match-reasignacion/vista', async (req, res) => {
+  try {
+    const idAviso = req.body?.id_aviso;
+    await marcarAvisoReasignacionVisto(req.params.id, idAviso);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error en /match-reasignacion/vista:', error);
+    res.status(500).json({ error: 'No se pudo cerrar el aviso de reasignación' });
   }
 });
 

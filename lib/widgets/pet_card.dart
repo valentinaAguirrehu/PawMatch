@@ -156,6 +156,7 @@ class PetCard extends StatelessWidget {
   final double? porcentajeMatch;
   final bool esMejorMatch;
   final bool esMatchInicial;
+  final bool esNuevoMatchEncontrado;
   final bool esFavorito;
   final VoidCallback? onToggleFavorito;
   final bool ocultarMatch;
@@ -167,6 +168,7 @@ class PetCard extends StatelessWidget {
     this.porcentajeMatch,
     this.esMejorMatch = false,
     this.esMatchInicial = false,
+    this.esNuevoMatchEncontrado = false,
     this.esFavorito = false,
     this.onToggleFavorito,
     this.ocultarMatch = false,
@@ -219,14 +221,8 @@ class PetCard extends StatelessWidget {
       }
       return pet.edadTexto;
     }
-    if (!tienePersonalidad && pet.edad == null && pet.fechaNacimiento == null) {
-      return pet.esCachorro ? 'Bebé' : 'En proceso';
-    }
-    if (!tienePersonalidad && pet.esCachorro) {
-      return 'Bebé';
-    }
     if (pet.edad == null && pet.fechaNacimiento == null) {
-      return 'En proceso';
+      return pet.esCachorro ? 'Bebé' : 'En proceso';
     }
     return pet.edadTexto;
   }
@@ -244,7 +240,12 @@ class PetCard extends StatelessWidget {
     final esMacho = sexoRaw.startsWith('m');
     final esHembra = sexoRaw.startsWith('h');
     final esVistaAdmin = ocultarMatch || Session.esAdmin;
-    final destacada = !esVistaAdmin && (esMejorMatch || esMatchInicial);
+    final esNuevoEncontrado = !esVistaAdmin && esNuevoMatchEncontrado;
+    final esIdeal = !esVistaAdmin && (esMejorMatch || esMatchInicial);
+    final destacada = esIdeal || esNuevoEncontrado;
+    final personalidadEnDesarrollo = !esVistaAdmin && porcentajeMatch == null;
+    const moradoMatch = Color(0xFF7C3AED);
+    final colorAcento = esNuevoEncontrado ? moradoMatch : AppColors.rosa;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -261,27 +262,31 @@ class PetCard extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 gradient: destacada
-                    ? const LinearGradient(
+                    ? LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFFFFD8EB),
-                          Color(0xFFFFEAF4),
-                          Color(0xFFFFF4F9),
-                        ],
+                        colors: esNuevoEncontrado
+                            ? const [
+                                Color(0xFFEDE9FE),
+                                Color(0xFFF5F3FF),
+                                Color(0xFFFAF5FF),
+                              ]
+                            : const [
+                                Color(0xFFFFD8EB),
+                                Color(0xFFFFEAF4),
+                                Color(0xFFFFF4F9),
+                              ],
                       )
                     : null,
                 color: destacada ? null : Colors.white,
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: destacada
-                      ? AppColors.rosa
-                      : const Color(0xFFF8C6DC),
+                  color: destacada ? colorAcento : const Color(0xFFF8C6DC),
                   width: destacada ? 2.0 : 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.rosa.withValues(
+                    color: colorAcento.withValues(
                       alpha: destacada ? 0.22 : 0.08,
                     ),
                     blurRadius: destacada ? 16 : 12,
@@ -300,6 +305,49 @@ class PetCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        if (esIdeal || esNuevoEncontrado) ...[
+                          Text(
+                            esNuevoEncontrado
+                                ? 'Nuevo match encontrado'
+                                : 'Mi match ideal',
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Nunito',
+                              color: colorAcento,
+                              fontWeight: FontWeight.w800,
+                              fontSize: muyCompacto ? 11 : 12,
+                              height: 1.15,
+                            ),
+                          ),
+                          SizedBox(height: muyCompacto ? 4 : 6),
+                        ],
+                        if (personalidadEnDesarrollo) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.auto_awesome_rounded,
+                                size: muyCompacto ? 14 : 16,
+                                color: AppColors.rosa,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Personalidad\nen desarrollo',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'Nunito',
+                                  color: AppColors.rosa,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: muyCompacto ? 11 : 12,
+                                  height: 1.15,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: muyCompacto ? 4 : 6),
+                        ],
                         // 1. Fotografía en la parte superior ocupando todo el ancho de la tarjeta
                         Expanded(
                           flex: 52,
@@ -311,7 +359,7 @@ class PetCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: destacada
-                                    ? AppColors.rosa.withValues(alpha: 0.40)
+                                    ? colorAcento.withValues(alpha: 0.40)
                                     : const Color(0xFFFCE4EF),
                                 width: 1.2,
                               ),
@@ -341,38 +389,70 @@ class PetCard extends StatelessWidget {
                                 // Esquina superior derecha:
                                 // - Usuario: Porcentaje real de Match
                                 // - Administrador: Estado administrativo (Disponible, En proceso, Apadrinada, Adoptada)
-                                Positioned(
-                                  top: 6,
-                                  right: 6,
-                                  child: ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: ancho * (pet.esNuevo ? 0.54 : 0.78),
+                                if (esVistaAdmin || porcentajeMatch != null)
+                                  Positioned(
+                                    top: 6,
+                                    right: 6,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: ancho * (pet.esNuevo ? 0.54 : 0.78),
+                                      ),
+                                      child: esVistaAdmin
+                                          ? _InsigniaEstadoAdmin(
+                                              pet: pet,
+                                              compacto: compacto,
+                                            )
+                                          : _InsigniaMatch(
+                                              porcentaje: porcentajeMatch,
+                                              esMejorMatch: esMejorMatch,
+                                              esMatchInicial: esMatchInicial,
+                                              compacto: compacto,
+                                            ),
                                     ),
-                                    child: esVistaAdmin
-                                        ? _InsigniaEstadoAdmin(
-                                            pet: pet,
-                                            compacto: compacto,
-                                          )
-                                        : _InsigniaMatch(
-                                            porcentaje: porcentajeMatch,
-                                            esMejorMatch: esMejorMatch,
-                                            esMatchInicial: esMatchInicial,
-                                            compacto: compacto,
-                                          ),
                                   ),
-                                ),
+
+                                if (!esVistaAdmin && onToggleFavorito != null)
+                                  Positioned(
+                                    left: 6,
+                                    bottom: 6,
+                                    child: GestureDetector(
+                                      onTap: onToggleFavorito,
+                                      child: Container(
+                                        width: muyCompacto ? 26 : 28,
+                                        height: muyCompacto ? 26 : 28,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white.withValues(alpha: 0.95),
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              color: Colors.black12,
+                                              blurRadius: 4,
+                                              offset: Offset(0, 1),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Icon(
+                                          esFavorito
+                                              ? Icons.favorite_rounded
+                                              : Icons.favorite_border_rounded,
+                                          size: muyCompacto ? 14 : 15,
+                                          color: esFavorito
+                                              ? AppColors.rosa
+                                              : Colors.grey.shade400,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
                         ),
-                        SizedBox(height: muyCompacto ? 6 : 8),
+                        SizedBox(height: muyCompacto ? 4 : 5),
 
                         // 2. Debajo de la fotografía: Nombre completo + Sexo
-                        Align(
-                          alignment: Alignment.centerLeft,
+                        Center(
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.center,
@@ -387,7 +467,7 @@ class PetCard extends StatelessWidget {
                                         : (compacto ? 16.0 : 17.0),
                                     fontWeight: FontWeight.w800,
                                     color: const Color(0xFF1F2937),
-                                    height: 1.15,
+                                    height: 1.05,
                                   ),
                                 ),
                                 if (esMacho || esHembra) ...[
@@ -406,10 +486,10 @@ class PetCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        SizedBox(height: muyCompacto ? 4 : 5),
+                        const SizedBox(height: 6),
 
-                        // 3. Edad y Tamaño
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.pets_rounded,
@@ -425,67 +505,91 @@ class PetCard extends StatelessWidget {
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: muyCompacto ? 11.0 : 12.0,
                                   fontWeight: FontWeight.w600,
                                   color: const Color(0xFF4B5563),
-                                  height: 1.15,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Transform.rotate(
-                              angle: -0.6,
-                              child: Icon(
-                                Icons.local_offer_outlined,
-                                size: muyCompacto ? 12 : 13.5,
-                                color: AppColors.rosa,
-                              ),
-                            ),
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                _textoTamano(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: muyCompacto ? 11.0 : 12.0,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF4B5563),
-                                  height: 1.15,
+                                  height: 1.05,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        SizedBox(height: muyCompacto ? 5 : 6),
+                        const SizedBox(height: 1),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.straighten_rounded,
+                              size: muyCompacto ? 12 : 13.5,
+                              color: AppColors.rosa,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                _textoTamano(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: muyCompacto ? 11.0 : 12.0,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF4B5563),
+                                  height: 1.05,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (personalidadEnDesarrollo && pet.esCachorro) ...[
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.favorite_rounded,
+                                size: muyCompacto ? 14 : 16,
+                                color: AppColors.rosa,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Bebé',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: 'Nunito',
+                                  color: AppColors.rosa,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: muyCompacto ? 12 : 13,
+                                  height: 1.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        SizedBox(height: muyCompacto ? 3 : 4),
 
                         // 4. Personalidad cuando esté registrada o etiqueta en proceso
                         SizedBox(
-                          height: muyCompacto ? 40 : 44,
+                          height: muyCompacto ? 32 : 34,
                           child: Align(
                             alignment: Alignment.centerLeft,
-                            child: tienePersonalidad
-                                ? Text(
-                                    _textoPersonalidadReal(),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: muyCompacto ? 10.5 : 11.5,
-                                      height: 1.25,
-                                      fontWeight: FontWeight.w500,
-                                      color: const Color(0xFF4B5563),
-                                    ),
-                                  )
-                                : _EtiquetaSinPersonalidad(
-                                    esCachorro: pet.esCachorro,
-                                    muyCompacto: muyCompacto,
-                                  ),
+                            child: Text(
+                              _textoPersonalidadReal(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: muyCompacto ? 10.5 : 11.5,
+                                height: 1.15,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF4B5563),
+                              ),
+                            ),
                           ),
                         ),
 
                         // 5. Botón «Ver perfil >» en la parte inferior
-                        SizedBox(height: muyCompacto ? 6 : 8),
+                        SizedBox(height: muyCompacto ? 4 : 5),
                         _botonVerPerfil(muyCompacto: muyCompacto),
                       ],
                     ),
@@ -720,12 +824,13 @@ class _InsigniaMatch extends StatelessWidget {
             ),
             const SizedBox(width: 3.5),
             Text(
-              tieneValor ? '$valorEntero% Match' : 'Compatibilidad en proceso',
+              tieneValor ? '$valorEntero% Match' : 'Personalidad en desarrollo',
               maxLines: 1,
               style: TextStyle(
+                fontFamily: 'Nunito',
                 fontSize: tieneValor
                     ? (compacto ? 10.5 : 11.5)
-                    : (compacto ? 9.0 : 10.0),
+                    : (compacto ? 11 : 12),
                 fontWeight: FontWeight.w800,
                 color: colorTexto,
                 height: 1.1,
@@ -830,97 +935,6 @@ class _InsigniaEstadoAdmin extends StatelessWidget {
   }
 }
 
-/// Etiqueta visual inferior cuando la mascota aún no tiene personalidad registrada:
-/// - Cachorro: «Bebé en proceso» (Aún no tiene personalidad definida.)
-/// - Otra mascota: «Mascota en proceso de encontrar personalidad»
-class _EtiquetaSinPersonalidad extends StatelessWidget {
-  final bool esCachorro;
-  final bool muyCompacto;
-
-  const _EtiquetaSinPersonalidad({
-    required this.esCachorro,
-    required this.muyCompacto,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: muyCompacto ? 7 : 9,
-        vertical: muyCompacto ? 4 : 5,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFDCEB).withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFF9B8D4),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (esCachorro)
-            SizedBox(
-              width: muyCompacto ? 17 : 20,
-              height: muyCompacto ? 17 : 20,
-              child: const CustomPaint(painter: _BiberonPainter()),
-            )
-          else
-            Icon(
-              Icons.pets_rounded,
-              size: muyCompacto ? 16 : 18,
-              color: AppColors.rosa,
-            ),
-          SizedBox(width: muyCompacto ? 6 : 7),
-          Expanded(
-            child: esCachorro
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Bebé en proceso',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: muyCompacto ? 9.8 : 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF1F2937),
-                          height: 1.1,
-                        ),
-                      ),
-                      Text(
-                        'Aún no tiene personalidad definida.',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: muyCompacto ? 8.6 : 9.3,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF4B5563),
-                          height: 1.12,
-                        ),
-                      ),
-                    ],
-                  )
-                : Text(
-                    'Mascota en proceso de encontrar personalidad',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: muyCompacto ? 9.2 : 10.0,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF374151),
-                      height: 1.15,
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Dibuja los 3 destellos rosados en la esquina superior derecha del Mejor Match.
 class _DestellosMejorMatchPainter extends CustomPainter {
   const _DestellosMejorMatchPainter();
@@ -953,63 +967,3 @@ class _DestellosMejorMatchPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// Dibuja el ícono de biberón rosado (idéntico al diseño de «Bebé en proceso»).
-class _BiberonPainter extends CustomPainter {
-  const _BiberonPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-    canvas.rotate(0.55);
-    canvas.translate(-size.width / 2, -size.height / 2);
-
-    final w = size.width;
-    final h = size.height;
-
-    final relleno = Paint()
-      ..color = AppColors.rosa.withValues(alpha: 0.25)
-      ..style = PaintingStyle.fill;
-    final trazo = Paint()
-      ..color = AppColors.rosa
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final cuerpo = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.28, h * 0.36, w * 0.44, h * 0.52),
-      Radius.circular(w * 0.10),
-    );
-    canvas.drawRRect(cuerpo, relleno);
-    canvas.drawRRect(cuerpo, trazo);
-
-    final anillo = RRect.fromRectAndRadius(
-      Rect.fromLTWH(w * 0.24, h * 0.27, w * 0.52, h * 0.10),
-      Radius.circular(w * 0.04),
-    );
-    canvas.drawRRect(anillo, Paint()..color = AppColors.rosa);
-
-    final tetina = Path()
-      ..moveTo(w * 0.38, h * 0.27)
-      ..quadraticBezierTo(w * 0.38, h * 0.10, w * 0.50, h * 0.10)
-      ..quadraticBezierTo(w * 0.62, h * 0.10, w * 0.62, h * 0.27);
-    canvas.drawPath(tetina, trazo);
-
-    canvas.drawLine(
-      Offset(w * 0.38, h * 0.52),
-      Offset(w * 0.50, h * 0.52),
-      trazo,
-    );
-    canvas.drawLine(
-      Offset(w * 0.38, h * 0.66),
-      Offset(w * 0.54, h * 0.66),
-      trazo,
-    );
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

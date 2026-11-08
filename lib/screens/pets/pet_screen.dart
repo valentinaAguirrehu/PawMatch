@@ -5,6 +5,7 @@ import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/screens/admin/gpt_luna_mascota_screen.dart';
 import 'package:paw_match/screens/admin/pets_form_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
+import 'package:paw_match/screens/match/aviso_reasignacion_match.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
@@ -43,8 +44,8 @@ class _PetScreenState extends State<PetScreen> {
   /// Notificaciones de nuevas coincidencias compatibles pendientes por mostrar en esta vista.
   List<NotificacionMatchMascota> _notificacionesPendientes = const [];
 
-  /// IDs de mascotas marcadas como favoritas por el usuario actual.
-  final Set<String> _favoritosIds = <String>{};
+  /// IDs de favoritos del usuario. El más reciente queda al inicio.
+  final List<String> _favoritosIds = <String>[];
 
   /// Mascota recién creada: se muestra primera aunque el listado tarde en refrescarse.
   Pet? _recienAgregada;
@@ -58,7 +59,8 @@ class _PetScreenState extends State<PetScreen> {
   String _tamano = 'Todos'; // 'Todos', 'Pequeño', 'Mediano', 'Grande'
   String _edad = 'Todos'; // 'Todos', 'Cachorro', 'Adulto'
   /// Categorías horizontales: 'Todas', 'Disponibles', 'Apadrinadas' o 'Adopción'.
-  String _estado = 'Todas';
+  /// Al entrar, Disponibles queda marcado e incluye también a las apadrinadas.
+  String _estado = 'Disponibles';
 
   @override
   void initState() {
@@ -85,6 +87,10 @@ class _PetScreenState extends State<PetScreen> {
     setState(() {
       _listaVisible = enMemoria;
     });
+    final id = _idMascotaMatchInicial;
+    if (id == null || Session.esAdmin) return;
+    final idealAdoptado = enMemoria.any((p) => p.id == id && p.estaAdoptada);
+    if (idealAdoptado) _sincronizarMatchYNotificaciones();
   }
 
   void _onMatchEstadoActualizado() {
@@ -101,24 +107,37 @@ class _PetScreenState extends State<PetScreen> {
   Future<void> _cargarFavoritos() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final guardados = prefs.getStringList(_claveFavoritos) ?? const <String>[];
+      final guardados =
+          prefs.getStringList(_claveFavoritos) ?? const <String>[];
+      final claveOrden = '${_claveFavoritos}_reciente';
+      final yaOrdenado = prefs.getBool(claveOrden) ?? false;
+      final ordenados = yaOrdenado ? guardados : guardados.reversed.toList();
       if (!mounted) return;
       setState(() {
         _favoritosIds
           ..clear()
-          ..addAll(guardados);
+          ..addAll(ordenados);
       });
+      if (!yaOrdenado) {
+        await prefs.setStringList(_claveFavoritos, List<String>.from(_favoritosIds));
+        await prefs.setBool(claveOrden, true);
+      }
     } catch (_) {}
   }
 
-  Future<void> _alternarFavorito(String idMascota) async {
+  Future<void> _alternarFavorito(Pet mascota) async {
+    final yaEraFavorito = _favoritosIds.contains(mascota.id);
     setState(() {
-      if (_favoritosIds.contains(idMascota)) {
-        _favoritosIds.remove(idMascota);
-      } else {
-        _favoritosIds.add(idMascota);
+      _favoritosIds.remove(mascota.id);
+      if (!yaEraFavorito) {
+        _favoritosIds.insert(0, mascota.id);
       }
     });
+    _avisoFavorito(
+      yaEraFavorito
+          ? 'Eliminaste a ${mascota.nombre} de favoritos 🤍'
+          : '¡Añadiste a ${mascota.nombre} a favoritos! 💖',
+    );
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(
@@ -126,6 +145,23 @@ class _PetScreenState extends State<PetScreen> {
         _favoritosIds.toList(),
       );
     } catch (_) {}
+  }
+
+  void _avisoFavorito(String mensaje) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          mensaje,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+        ),
+        backgroundColor: AppColors.rosa,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   Future<void> _sincronizarMatchYNotificaciones() async {
@@ -140,6 +176,11 @@ class _PetScreenState extends State<PetScreen> {
         _idMascotaMatchInicial = sync.idMascotaMatchInicial;
         _notificacionesPendientes = pendientes;
       });
+      mostrarAvisoReasignacionMatch(
+        context,
+        idAviso: sync.idAvisoReasignacion,
+        nombreAnterior: sync.nombreMatchAnterior,
+      );
     } catch (_) {}
   }
 
@@ -160,6 +201,11 @@ class _PetScreenState extends State<PetScreen> {
             .toList();
         if (mounted) {
           setState(() {});
+          mostrarAvisoReasignacionMatch(
+            context,
+            idAviso: sync.idAvisoReasignacion,
+            nombreAnterior: sync.nombreMatchAnterior,
+          );
         }
       } catch (_) {}
     }
@@ -220,7 +266,6 @@ class _PetScreenState extends State<PetScreen> {
     if (_sexo != 'Todos') c++;
     if (_tamano != 'Todos') c++;
     if (_edad != 'Todos' && _edad != 'Todas') c++;
-    if (_estado != 'Todas') c++;
     return c;
   }
 
@@ -230,7 +275,6 @@ class _PetScreenState extends State<PetScreen> {
       _sexo = 'Todos';
       _tamano = 'Todos';
       _edad = 'Todos';
-      _estado = 'Todas';
     });
   }
 
@@ -506,9 +550,31 @@ class _PetScreenState extends State<PetScreen> {
   }
 
   /// Ordena las mascotas:
-  /// - Si es ADMINISTRADOR: ordena por estado administrativo sin calcular ni mostrar Match.
-  /// - Si es USUARIO: ordena automáticamente de mayor a menor porcentaje de compatibilidad.
+  /// - Disponibles primero, luego apadrinadas y al final las que ya tienen hogar,
+  ///   aunque el match sea alto o la haya adoptado la misma persona.
+  /// - Dentro de cada grupo, de mayor a menor porcentaje de compatibilidad.
+  /// - Si es administrador, solo por estado, sin mostrar Match.
   List<_ItemMascotaMatch> _ordenarPorCompatibilidad(List<Pet> pets) {
+    if (_estado == 'Favoritos') {
+      final orden = <String, int>{
+        for (var i = 0; i < _favoritosIds.length; i++) _favoritosIds[i]: i,
+      };
+      final favoritos = pets
+          .map(
+            (p) => _ItemMascotaMatch(
+              pet: p,
+              match: Session.esAdmin ? null : _calcularPorcentajeMatch(p),
+            ),
+          )
+          .toList();
+      favoritos.sort((a, b) {
+        final ia = orden[a.pet.id] ?? 1 << 30;
+        final ib = orden[b.pet.id] ?? 1 << 30;
+        return ia.compareTo(ib);
+      });
+      return favoritos;
+    }
+
     if (Session.esAdmin) {
       return ordenarMascotasPorEstado(pets)
           .map((p) => _ItemMascotaMatch(pet: p, match: null))
@@ -520,10 +586,15 @@ class _PetScreenState extends State<PetScreen> {
         .toList();
 
     conMatch.sort((a, b) {
+      final porEstado = a.pet.ordenEstadoListado.compareTo(
+        b.pet.ordenEstadoListado,
+      );
+      if (porEstado != 0) return porEstado;
+
       final ma = a.match;
       final mb = b.match;
       if (ma != null && mb != null) {
-        final cmp = mb.compareTo(ma); // Mayor a menor porcentaje de Match
+        final cmp = mb.compareTo(ma);
         if (cmp != 0) return cmp;
       } else if (ma != null && mb == null) {
         return -1;
@@ -531,15 +602,73 @@ class _PetScreenState extends State<PetScreen> {
         return 1;
       }
 
-      // Desempate por estado (Disponibles -> Apadrinadas -> Adoptadas) y por ID.
-      final porEstado = a.pet.ordenEstadoListado.compareTo(
-        b.pet.ordenEstadoListado,
-      );
-      if (porEstado != 0) return porEstado;
       return b.pet.id.compareTo(a.pet.id);
     });
 
-    return conMatch;
+    return _destacarMatches(conMatch);
+  }
+
+  /// El match de la persona va primero. El segundo puesto, durante 5 días,
+  /// lo ocupa un peludito recién ingresado con un match alto.
+  List<_ItemMascotaMatch> _destacarMatches(List<_ItemMascotaMatch> lista) {
+    final pendientes = List<_ItemMascotaMatch>.from(lista);
+
+    _ItemMascotaMatch? ideal;
+    final idIdeal = _idMascotaMatchInicial;
+    if (idIdeal != null) {
+      final i = pendientes.indexWhere((e) => e.pet.id == idIdeal);
+      if (i >= 0) ideal = pendientes.removeAt(i);
+    }
+    if (ideal == null) {
+      var mejorIndice = -1;
+      double? mejor;
+      for (var i = 0; i < pendientes.length; i++) {
+        final item = pendientes[i];
+        final valor = item.match;
+        if (item.pet.estaAdoptada || valor == null) continue;
+        if (mejor == null || valor > mejor) {
+          mejor = valor;
+          mejorIndice = i;
+        }
+      }
+      if (mejorIndice >= 0) ideal = pendientes.removeAt(mejorIndice);
+    }
+
+    _ItemMascotaMatch? nuevo;
+    var mejorNuevo = -1;
+    double? mejorValor;
+    for (var i = 0; i < pendientes.length; i++) {
+      final item = pendientes[i];
+      final valor = item.match;
+      if (item.pet.estaAdoptada || valor == null || valor < 70) continue;
+      if (!_ingresadoEnCincoDias(item.pet)) continue;
+      if (mejorValor == null || valor > mejorValor) {
+        mejorValor = valor;
+        mejorNuevo = i;
+      }
+    }
+    if (mejorNuevo >= 0) nuevo = pendientes.removeAt(mejorNuevo);
+
+    return [
+      if (ideal != null)
+        _ItemMascotaMatch(pet: ideal.pet, match: ideal.match, esMatchIdeal: true),
+      if (nuevo != null)
+        _ItemMascotaMatch(
+          pet: nuevo.pet,
+          match: nuevo.match,
+          esNuevoMatchEncontrado: true,
+        ),
+      ...pendientes,
+    ];
+  }
+
+  bool _ingresadoEnCincoDias(Pet pet) {
+    final raw = pet.fechaCreacion?.trim();
+    if (raw == null || raw.isEmpty) return false;
+    final creado = DateTime.tryParse(raw);
+    if (creado == null) return false;
+    final transcurrido = DateTime.now().difference(creado.toLocal());
+    return transcurrido >= Duration.zero && transcurrido <= const Duration(days: 5);
   }
 
   List<Pet> _filtrar(List<Pet> pets) {
@@ -583,10 +712,13 @@ class _PetScreenState extends State<PetScreen> {
     }).toList();
   }
 
-  /// Todas muestra todos los grupos. El resto filtra según la categoría seleccionada.
+  /// Disponibles muestra disponibles y apadrinadas. Favoritos, los marcados.
+  /// Adopción, las que ya tienen hogar.
   bool _coincideEstado(Pet p) {
     return switch (_estado) {
-      'Disponibles' => p.ordenEstadoListado == 0,
+      'Disponibles' =>
+        p.ordenEstadoListado == 0 || p.ordenEstadoListado == 1,
+      'Favoritos' => _favoritosIds.contains(p.id),
       'Apadrinadas' => p.ordenEstadoListado == 1,
       'Adopción' || 'Adoptadas' => p.ordenEstadoListado == 2 || p.estaAdoptada,
       _ => true,
@@ -924,9 +1056,15 @@ class _PetScreenState extends State<PetScreen> {
     );
   }
 
-  /// Categorías horizontales: Todas, Disponibles, Apadrinadas y Adopción.
+  /// Categorías horizontales: Todas, Disponibles, Favoritos, Apadrinadas y Adopción.
   Widget _barraEstado() {
-    const opciones = ['Todas', 'Disponibles', 'Apadrinadas', 'Adopción'];
+    const opciones = [
+      'Todas',
+      'Disponibles',
+      'Favoritos',
+      'Apadrinadas',
+      'Adopción',
+    ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
       child: SizedBox(
@@ -936,11 +1074,8 @@ class _PetScreenState extends State<PetScreen> {
             final compacto = constraints.maxWidth < 390;
             return SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: List.generate(opciones.length, (i) {
+              child: Row(
+                children: List.generate(opciones.length, (i) {
                     final valor = opciones[i];
                     final sel = _estado == valor;
                     return Padding(
@@ -997,7 +1132,6 @@ class _PetScreenState extends State<PetScreen> {
                       ),
                     );
                   }),
-                ),
               ),
             );
           },
@@ -1012,7 +1146,6 @@ class _PetScreenState extends State<PetScreen> {
     required double crossAxisSpacing,
     required double mainAxisExtent,
     required EdgeInsets padding,
-    required String? idMejorMatch,
   }) {
     return SliverPadding(
       padding: padding,
@@ -1028,24 +1161,14 @@ class _PetScreenState extends State<PetScreen> {
             final item = items[i];
             final pet = item.pet;
             final esAdmin = Session.esAdmin;
-            final esMejor =
-                !esAdmin &&
-                idMejorMatch != null &&
-                pet.id == idMejorMatch &&
-                item.match != null;
-            final esInicial =
-                !esAdmin &&
-                _idMascotaMatchInicial != null &&
-                pet.id == _idMascotaMatchInicial;
-
             return PetCard(
               pet: pet,
               porcentajeMatch: esAdmin ? null : item.match,
-              esMejorMatch: esMejor,
-              esMatchInicial: esInicial,
+              esMejorMatch: !esAdmin && item.esMatchIdeal,
+              esNuevoMatchEncontrado: !esAdmin && item.esNuevoMatchEncontrado,
               ocultarMatch: esAdmin,
               esFavorito: _favoritosIds.contains(pet.id),
-              onToggleFavorito: () => _alternarFavorito(pet.id),
+              onToggleFavorito: () => _alternarFavorito(pet),
               onTap: () async {
                 await Navigator.push(
                   context,
@@ -1116,8 +1239,7 @@ class _PetScreenState extends State<PetScreen> {
                 (_especie != 'Todas' && _especie != 'Todos' ? 1 : 0) +
                 (_sexo != 'Todos' ? 1 : 0) +
                 (_tamano != 'Todos' ? 1 : 0) +
-                (_edad != 'Todos' && _edad != 'Todas' ? 1 : 0) +
-                (_estado != 'Todas' ? 1 : 0);
+                (_edad != 'Todos' && _edad != 'Todas' ? 1 : 0);
 
             Widget seccionTitulo(String titulo) {
               return Padding(
@@ -1239,6 +1361,7 @@ class _PetScreenState extends State<PetScreen> {
                       children: [
                         'Todas',
                         'Disponibles',
+                        'Favoritos',
                         'Apadrinadas',
                         'Adopción',
                       ].map((estado) {
@@ -1343,8 +1466,6 @@ class _PetScreenState extends State<PetScreen> {
               _chipActivo(_tamano, () => setState(() => _tamano = 'Todos')),
             if (_edad != 'Todos' && _edad != 'Todas')
               _chipActivo(_edad, () => setState(() => _edad = 'Todos')),
-            if (_estado != 'Todas')
-              _chipActivo(_estado, () => setState(() => _estado = 'Todas')),
             GestureDetector(
               onTap: _limpiarFiltros,
               child: Container(
@@ -1399,6 +1520,14 @@ class _PetScreenState extends State<PetScreen> {
   }
 
   Widget _vistaVacia() {
+    final sinFavoritos = _estado == 'Favoritos' && _favoritosIds.isEmpty;
+    final titulo = sinFavoritos
+        ? '¡Aún no tiene peluditos marcados como favoritos!'
+        : 'No encontramos mascotas con este criterio';
+    final subtitulo = sinFavoritos
+        ? 'Guarde aquí a las mascotas que más le enamoren para adoptarlas o apadrinarlas cuando guste.'
+        : 'Intenta cambiar los filtros o el término de búsqueda.';
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -1425,24 +1554,30 @@ class _PetScreenState extends State<PetScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'No encontramos mascotas con este criterio',
+            Text(
+              titulo,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF2D3436),
+                height: 1.3,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              'Intenta cambiar los filtros o el término de búsqueda.',
+              subtitulo,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: Colors.grey.shade600,
+              ),
             ),
-            if (_filtrosActivosCount > 0 ||
-                _busqueda.isNotEmpty ||
-                _especie != 'Todas') ...[
+            if (!sinFavoritos &&
+                (_filtrosActivosCount > 0 ||
+                    _busqueda.isNotEmpty ||
+                    _especie != 'Todas')) ...[
               const SizedBox(height: 14),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
@@ -1526,7 +1661,7 @@ class _PetScreenState extends State<PetScreen> {
                             final double crossAxisSpacing =
                                 constraints.maxWidth < 400 ? 10.0 : 14.0;
                             final double mainAxisExtent =
-                                constraints.maxWidth < 380 ? 314.0 : 326.0;
+                                constraints.maxWidth < 380 ? 336.0 : 348.0;
 
                             Widget contenidoSliver;
 
@@ -1571,19 +1706,12 @@ class _PetScreenState extends State<PetScreen> {
                                   child: _vistaVacia(),
                                 );
                               } else {
-                                // Identificar la mascota con el mayor porcentaje de compatibilidad (#1 Mejor Match)
-                                String? idMejorMatch;
-                                if (ordenadas.first.match != null) {
-                                  idMejorMatch = ordenadas.first.pet.id;
-                                }
-
                                 final inferior = esAdmin ? 88.0 : 28.0;
                                 contenidoSliver = _grillaMascotas(
                                   items: ordenadas,
                                   crossAxisCount: crossAxisCount,
                                   crossAxisSpacing: crossAxisSpacing,
                                   mainAxisExtent: mainAxisExtent,
-                                  idMejorMatch: idMejorMatch,
                                   padding: EdgeInsets.fromLTRB(
                                     12,
                                     8,
@@ -1644,9 +1772,13 @@ class _PetScreenState extends State<PetScreen> {
 class _ItemMascotaMatch {
   final Pet pet;
   final double? match;
+  final bool esMatchIdeal;
+  final bool esNuevoMatchEncontrado;
 
   const _ItemMascotaMatch({
     required this.pet,
     required this.match,
+    this.esMatchIdeal = false,
+    this.esNuevoMatchEncontrado = false,
   });
 }
