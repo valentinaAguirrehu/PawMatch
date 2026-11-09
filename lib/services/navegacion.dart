@@ -9,6 +9,9 @@ class Navegacion {
 
   static void Function(Widget pagina)? mostrar;
 
+  /// Vuelve a la pestaña Mis Notificaciones y cierra la pantalla abierta encima.
+  static void Function()? volverANotificaciones;
+
   static void ir(BuildContext context, Widget pagina) {
     final navigator = Navigator.of(context, rootNavigator: true);
     final tecladoAbierto = MediaQuery.maybeViewInsetsOf(context)?.bottom ?? 0;

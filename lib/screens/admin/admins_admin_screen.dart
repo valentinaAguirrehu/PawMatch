@@ -368,11 +368,11 @@ class _TarjetaAdministrador extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         'Celular: $celular',
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                        style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                       ),
                       Text(
                         'Correo: $correo',
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                        style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                       ),
                     ],
                   ),

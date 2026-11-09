@@ -179,7 +179,7 @@ class _DogPersonalityState extends State<DogPersonality> {
         const Text(
           'Evalúa a la mascota de 1 a 5 en cada rasgo. Estas respuestas se '
           'usan para calcular el match con los adoptantes.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
+          style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
         ),
         if (controller.cargando)
           const Padding(
@@ -246,7 +246,7 @@ class _DogPersonalityState extends State<DogPersonality> {
                         '1 · ${r.minimoPara(widget.sexo)}',
                         style: const TextStyle(
                           fontSize: 11,
-                          color: Colors.black54,
+                          color: AppColors.grisTexto,
                         ),
                       ),
                     ),
@@ -257,7 +257,7 @@ class _DogPersonalityState extends State<DogPersonality> {
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontSize: 11,
-                          color: Colors.black54,
+                          color: AppColors.grisTexto,
                         ),
                       ),
                     ),

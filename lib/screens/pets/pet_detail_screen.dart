@@ -261,7 +261,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     Text(
                       'Documento de tu solicitud de adopción.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                      style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
                     ),
                   ],
                 ),
@@ -319,7 +319,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     Text(
                       'Documento oficial de tu solicitud de apadrinamiento.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                      style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
                     ),
                   ],
                 ),
@@ -355,7 +355,10 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   Future<void> _abrirFormularioAdopcion() async {
     final listo = await perfilListoParaAdoptar(context);
     if (!listo || !mounted) return;
-    final seguir = await PasosAdopcionScreen.mostrar(context);
+    final seguir = await PasosAdopcionScreen.mostrar(
+      context,
+      nombreMascota: _pet.nombre,
+    );
     if (!seguir || !mounted) return;
     final enviada = await AdoptionFormScreen.mostrar(context, pet: _pet);
     if (enviada == true && mounted) _consultarMiAdopcion();
@@ -805,7 +808,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               const SizedBox(height: 10),
               const Text(
                 'El administrador está evaluando tu solicitud y recibirás una notificación al ser aprobada.',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
+                style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
               ),
             ],
           ),
@@ -1305,7 +1308,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                               '${FundacionInfo.nombre} · ${FundacionInfo.ciudad}',
                               style: TextStyle(
                                 fontSize: 13.5,
-                                color: Colors.grey.shade600,
+                                color: AppColors.grisTexto,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -1332,7 +1335,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         style: TextStyle(
                           fontSize: 14.5,
                           height: 1.5,
-                          color: Colors.grey.shade700,
+                          color: AppColors.grisTexto,
                         ),
                       ),
 
@@ -1617,7 +1620,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                                         style: TextStyle(
                                           fontSize: 11.5,
                                           fontWeight: FontWeight.w600,
-                                          color: Colors.black54,
+                                          color: AppColors.grisTexto,
                                         ),
                                       ),
                                       const SizedBox(height: 4),
@@ -1696,7 +1699,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         style: TextStyle(
                           fontSize: 13,
                           height: 1.45,
-                          color: Colors.grey.shade600,
+                          color: AppColors.grisTexto,
                         ),
                       ),
                     ],
@@ -1914,7 +1917,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
             backgroundColor: fondoAdoptar ?? AppColors.rosa,
             foregroundColor: Colors.white,
             disabledBackgroundColor: Colors.grey.shade300,
-            disabledForegroundColor: Colors.grey.shade500,
+            disabledForegroundColor: AppColors.grisTexto,
             minimumSize: const Size.fromHeight(48),
             padding: const EdgeInsets.symmetric(horizontal: 10),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),

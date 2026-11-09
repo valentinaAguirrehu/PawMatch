@@ -63,7 +63,7 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
           Text(
             detalle,
             textAlign: TextAlign.center,
-            style: t.bodyMedium?.copyWith(color: Colors.black54),
+            style: t.bodyMedium?.copyWith(color: AppColors.grisTexto),
           ),
         ],
       ),
@@ -137,7 +137,7 @@ class TarjetaRasgoUsuario extends StatelessWidget {
               Flexible(
                 child: Text(
                   '1 · ${rasgo.minimoUsuarioPara(Session.genero)}',
-                  style: t.bodySmall?.copyWith(color: Colors.black54),
+                  style: t.bodySmall?.copyWith(color: AppColors.grisTexto),
                 ),
               ),
               const SizedBox(width: 8),
@@ -145,7 +145,7 @@ class TarjetaRasgoUsuario extends StatelessWidget {
                 child: Text(
                   '5 · ${rasgo.maximoUsuarioPara(Session.genero)}',
                   textAlign: TextAlign.right,
-                  style: t.bodySmall?.copyWith(color: Colors.black54),
+                  style: t.bodySmall?.copyWith(color: AppColors.grisTexto),
                 ),
               ),
             ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:paw_match/core/app_colors.dart';
 
 /// Clipper con corte diagonal en la parte inferior, idéntico a la referencia visual.
 class DiagonalBottomClipper extends CustomClipper<Path> {
@@ -121,7 +122,7 @@ class BannerHeroInicio extends StatelessWidget {
                         height: 1.45,
                         shadows: const [
                           Shadow(
-                            color: Colors.black54,
+                            color: AppColors.grisTexto,
                             blurRadius: 6,
                             offset: Offset(0, 1),
                           ),

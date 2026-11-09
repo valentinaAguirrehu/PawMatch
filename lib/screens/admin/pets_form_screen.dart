@@ -428,7 +428,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
             Text(
               'Fecha calculada con la edad que ya estaba registrada ($edadAnterior). '
               'Puedes corregir el día si lo conoces.',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: const TextStyle(fontSize: 12, color: AppColors.grisTexto),
             ),
           ],
         ],
@@ -575,7 +575,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Text(
                       'Selecciona todas las opciones aplicables. Las condiciones incompatibles se actualizan automáticamente.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.3),
+                      style: TextStyle(fontSize: 12, color: AppColors.grisTexto, height: 1.3),
                     ),
                   ),
                   const SizedBox(height: 10),

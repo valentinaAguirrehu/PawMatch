@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:paw_match/models/seguimiento_apadrinamiento.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -165,6 +166,59 @@ class SeguimientoApadrinamientoService {
     return lista
         .map((j) => ItemCalendarioSeguimiento.fromJson(j as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Cancela el apadrinamiento desde el historial y devuelve la mascota a disponible.
+  static Future<Map<String, dynamic>> cancelarConFormulario({
+    required String idSolicitud,
+    required DateTime fechaCancelacion,
+    required String motivo,
+    required String observacion,
+    Uint8List? foto,
+    String? nombreFoto,
+  }) async {
+    final req = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_urlPrincipal/$idSolicitud/finalizar'),
+    );
+    req.headers['x-usuario-id'] = Session.idUsuario ?? '';
+    final dia = fechaCancelacion.day.toString().padLeft(2, '0');
+    final mes = fechaCancelacion.month.toString().padLeft(2, '0');
+    req.fields.addAll({
+      'fecha_cancelacion': '${fechaCancelacion.year}-$mes-$dia',
+      'motivo': motivo,
+      'observacion': observacion.trim(),
+    });
+    if (foto != null) {
+      final nombre = (nombreFoto == null || nombreFoto.trim().isEmpty)
+          ? 'evidencia.jpg'
+          : nombreFoto.trim();
+      final conExtension = nombre.contains('.') ? nombre : '$nombre.jpg';
+      final ext = conExtension.split('.').last.toLowerCase();
+      final subtipo = switch (ext) {
+        'png' => 'png',
+        'gif' => 'gif',
+        'webp' => 'webp',
+        _ => 'jpeg',
+      };
+      req.files.add(http.MultipartFile.fromBytes(
+        'foto',
+        foto,
+        filename: conExtension,
+        contentType: MediaType('image', subtipo),
+      ));
+    }
+    final res = await http.Response.fromStream(await req.send());
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      String error = 'No se pudo cancelar el apadrinamiento';
+      try {
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
+        if (data is Map && data['error'] != null) error = data['error'].toString();
+      } catch (_) {}
+      throw Exception(error);
+    }
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    return data is Map<String, dynamic> ? data : <String, dynamic>{};
   }
 
   /// Cancela el apadrinamiento con motivo obligatorio y bloqueo opcional.

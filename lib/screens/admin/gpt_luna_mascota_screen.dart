@@ -9,7 +9,6 @@ import 'package:paw_match/screens/match/dog_personality.dart';
 import 'package:paw_match/services/entrevista_mascota_luna_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
-import 'package:paw_match/screens/users/voz_asistente_screen.dart';
 import 'package:paw_match/services/voz_asistente_service.dart';
 import 'package:paw_match/services/voz_entrevista.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
@@ -94,6 +93,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
       if (mounted) setState(() {});
     };
     unawaited(VozAsistenteService.vozGuardada());
+    unawaited(_voz.cambiarVelocidad(1.5));
     _iniciarConversacion();
   }
 
@@ -222,12 +222,6 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
 
   Future<void> _cambiarVelocidadVoz(double velocidad) async {
     await _voz.cambiarVelocidad(velocidad);
-    if (!mounted) return;
-    setState(() {});
-  }
-
-  Future<void> _alternarVelocidadCiclica() async {
-    await _voz.siguienteVelocidad();
     if (!mounted) return;
     setState(() {});
   }
@@ -392,6 +386,53 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
 
   // ---------------- Paso a Ficha de Revisión Editable (Fase 2) ----------------
 
+  String _razaParaGuardar(String? texto) {
+    final limpio = (texto ?? '').trim();
+    if (limpio.isEmpty || _esRazaMestiza(limpio)) return 'Mestizo';
+    return limpio;
+  }
+
+  bool _esRazaMestiza(String texto) {
+    final limpio = texto
+        .toLowerCase()
+        .replaceAll(RegExp(r'[áàä]'), 'a')
+        .replaceAll(RegExp(r'[éèë]'), 'e')
+        .replaceAll(RegExp(r'[íìï]'), 'i')
+        .replaceAll(RegExp(r'[óòö]'), 'o')
+        .replaceAll(RegExp(r'[úùü]'), 'u')
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final indefinida = RegExp(
+      r'\b(mestiz[oa]s?|crioll[oa]s?|combinad[oa]s?|cruzad[oa]s?|cruce|mixt[oa]s?|mezcl[oa]s?|mezcla|callej[oa]s?|desconocid[oa]s?|corriente|ordinari[oa]|comun|indefinid[oa]s?|variad[oa]s?)\b',
+    ).hasMatch(limpio) ||
+        RegExp(
+          r'sin raza|no tiene raza|no se sabe|no la se|no conozco|no es de raza|sin definir|sin pedigree|de la calle|ninguna raza|ningun raza|no aplica',
+        ).hasMatch(limpio);
+    const relleno = {
+      'es', 'un', 'una', 'el', 'la', 'lo', 'los', 'las', 'de', 'del', 'al', 'y', 'o',
+      'con', 'que', 'se', 'su', 'sus', 'por', 'para', 'como', 'tipo', 'parece', 'creo',
+      'dice', 'mascota', 'perro', 'perra', 'perrito', 'perrita', 'gato', 'gata',
+      'gatito', 'gatita', 'raza', 'tiene', 'tener', 'no', 'si', 'muy', 'solo', 'sola',
+      'puro', 'pura', 'definida', 'definido', 'algo', 'parecido', 'parecida', 'tambien',
+      'nuestro', 'nuestra',
+    };
+    const genericos = {
+      'mestizo', 'mestiza', 'mestizos', 'mestizas', 'criollo', 'criolla', 'criollos',
+      'criollas', 'combinado', 'combinada', 'combinados', 'combinadas', 'cruzado',
+      'cruzada', 'cruzados', 'cruzadas', 'cruce', 'mixto', 'mixta', 'mixtos', 'mixtas',
+      'mezcla', 'mezclado', 'mezclada', 'mezclados', 'mezcladas', 'callejero',
+      'callejera', 'callejeros', 'callejeras', 'desconocido', 'desconocida',
+      'desconocidos', 'desconocidas', 'ninguno', 'ninguna', 'comun', 'corriente',
+      'ordinario', 'ordinaria', 'indefinido', 'indefinida', 'variado', 'variada',
+      'varias', 'varios', 'sin', 'sabe', 'conozco', 'aplica', 'pedigree', 'calle',
+    };
+    final especificos = limpio
+        .split(' ')
+        .where((t) => t.isNotEmpty && !relleno.contains(t) && !genericos.contains(t));
+    return indefinida && especificos.isEmpty;
+  }
+
   void _irAFaseRevision() {
     _voz.callar();
     _revNombre.text = _ficha.nombre ?? '';
@@ -400,7 +441,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
         : 'Perro';
     _revSexo = _sexos.contains(_ficha.sexo) ? _ficha.sexo! : 'Macho';
     _revTamano = _tamanos.contains(_ficha.tamano) ? _ficha.tamano! : 'Mediano';
-    _revRaza.text = _ficha.raza ?? 'Mestizo';
+    _revRaza.text = _razaParaGuardar(_ficha.raza);
     _revFechaNacimiento = _ficha.calcularFechaNacimiento();
     _revDescripcion.text = _ficha.descripcion ?? '';
     _revDetalleSalud.text = _ficha.detalleSalud ?? '';
@@ -411,9 +452,10 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
     }
     _revEstadosSalud = estados;
 
-    _revPersonalidadEnProceso =
-        _ficha.esCachorroEnProceso == true ||
-        _ficha.personalidadDefinida == false;
+    final tieneRasgos = _ficha.personalidad.isNotEmpty;
+    _revPersonalidadEnProceso = !tieneRasgos &&
+        (_ficha.esCachorroEnProceso == true ||
+            _ficha.personalidadDefinida == false);
 
     for (final r in rasgosMascota) {
       final v = _ficha.personalidad[r.clave];
@@ -447,7 +489,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
       sexo: _revSexo,
       edad: anos >= 1 ? anos : (meses <= 0 ? 1 : meses),
       unidadEdad: anos >= 1 ? 'anos' : 'meses',
-      raza: _revRaza.text.trim().isEmpty ? 'Desconocida' : _revRaza.text.trim(),
+      raza: _razaParaGuardar(_revRaza.text),
       tamano: _revTamano,
       esCachorroEnProceso: _revPersonalidadEnProceso,
       personalidadDefinida: !_revPersonalidadEnProceso,
@@ -616,7 +658,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
         id: '',
         nombre: _revNombre.text.trim(),
         especie: _revEspecie,
-        raza: _revRaza.text.trim().isEmpty ? 'Mestizo' : _revRaza.text.trim(),
+        raza: _razaParaGuardar(_revRaza.text),
         fechaNacimiento: _revFechaNacimiento,
         edad: anos >= 1 ? anos : (meses <= 0 ? 1 : meses),
         unidadEdad: anos >= 1 ? 'anos' : 'meses',
@@ -722,7 +764,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Asistente de Paw Match 🐾',
+                  'Agregar Mascota',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -732,14 +774,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
                   ),
                 ),
                 Text(
-                  switch (_fase) {
-                    _FaseRegistroLuna.conversacion =>
-                      'Registro inteligente de mascotas',
-                    _FaseRegistroLuna.revision =>
-                      'Registro inteligente de mascotas · Revisar ficha',
-                    _FaseRegistroLuna.fotografia =>
-                      'Registro inteligente de mascotas · Fotografía',
-                  },
+                  'Asistente Virtual',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -759,36 +794,6 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
             icon: const Icon(
               Icons.restart_alt_rounded,
               color: Colors.white,
-            ),
-          ),
-          const MarcaVozAsistente(),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _alternarVelocidadCiclica,
-            child: Tooltip(
-              message: 'Cambiar velocidad de voz (X1, X1.5, X2, X3)',
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.24),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    width: 1.2,
-                  ),
-                ),
-                child: Text(
-                  _voz.etiquetaVelocidad.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
             ),
           ),
           IconButton(
@@ -1474,6 +1479,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
   }
 
   Widget _barraEntradaVozYTexto() {
+    final fichaLista = _ficha.porcentajeProgreso >= 100 && !_cargandoTurno;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
@@ -1564,7 +1570,27 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
                 ],
               ),
             ),
-          Row(
+          if (fichaLista)
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.rosa,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: _irAFaseRevision,
+                child: const Text(
+                  'Continuar',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+                ),
+              ),
+            )
+          else
+            Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               // Botón de micrófono para hablar con GPT Luna
@@ -1727,6 +1753,69 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
       borderSide: const BorderSide(color: AppColors.rosa, width: 2),
     ),
   );
+
+  Widget _opcionPersonalidad({
+    required bool seleccionada,
+    required String titulo,
+    required String detalle,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: seleccionada ? const Color(0xFFFFF0F6) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: seleccionada ? AppColors.rosa : const Color(0xFFF8C6DC),
+              width: seleccionada ? 2 : 1.2,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                seleccionada
+                    ? Icons.check_circle_rounded
+                    : Icons.circle_outlined,
+                color: seleccionada ? AppColors.rosa : const Color(0xFFF8C6DC),
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      titulo,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: seleccionada ? AppColors.rosa : AppColors.texto,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      detalle,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Color(0xFF6B7280),
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _vistaRevisionEditable() {
     final tieneNecesidades = _revEstadosSalud.any(
@@ -2065,27 +2154,22 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
                   ),
                 ),
                 const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  activeThumbColor: AppColors.rosa,
-                  title: const Text(
-                    'Bebé en proceso / Personalidad en desarrollo',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.texto,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Actívalo si es un cachorro o mascota cuya personalidad aún está en desarrollo.',
-                    style: TextStyle(fontSize: 11.5),
-                  ),
-                  value: _revPersonalidadEnProceso,
-                  onChanged: (v) =>
-                      setState(() => _revPersonalidadEnProceso = v),
+                _opcionPersonalidad(
+                  seleccionada: !_revPersonalidadEnProceso,
+                  titulo: 'Personalidad',
+                  detalle: 'Rasgos de 1 a 5 para el sistema Match.',
+                  onTap: () => setState(() => _revPersonalidadEnProceso = false),
+                ),
+                const SizedBox(height: 8),
+                _opcionPersonalidad(
+                  seleccionada: _revPersonalidadEnProceso,
+                  titulo: 'Bebé en proceso / Personalidad en desarrollo',
+                  detalle:
+                      'Actívalo si es un cachorro o mascota cuya personalidad aún está en desarrollo.',
+                  onTap: () => setState(() => _revPersonalidadEnProceso = true),
                 ),
                 if (!_revPersonalidadEnProceso) ...[
-                  const Divider(height: 16),
+                  const Divider(height: 20),
                   DogPersonality(
                     controller: _revPersonalidadCtrl,
                     sexo: _revSexo,
@@ -2095,50 +2179,26 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
             ),
           ),
           const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.rosa,
-                    side: const BorderSide(color: AppColors.rosa, width: 1.5),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () =>
-                      setState(() => _fase = _FaseRegistroLuna.conversacion),
-                  icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                  label: const Text(
-                    'Seguir conversando',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.rosa,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.rosa,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: _confirmarRevisionEIrAFotografia,
-                  icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
-                  label: const Text(
-                    'Confirmar y agregar foto',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14.5,
-                    ),
-                  ),
+              onPressed: _confirmarRevisionEIrAFotografia,
+              icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+              label: const Text(
+                'Confirmar y continuar',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.5,
                 ),
               ),
-            ],
+            ),
           ),
         ],
       ),
@@ -2244,7 +2304,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
                               'Vista previa inmediata · JPG, PNG o WebP',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.black54,
+                                color: AppColors.grisTexto,
                               ),
                             ),
                           ],

@@ -29,56 +29,16 @@ class PasosApadrinamientoScreen extends StatefulWidget {
 }
 
 class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
-  final ScrollController _scrollController = ScrollController();
   bool _aceptoCondiciones = false;
-  bool _haLlegadoAlFinal = false;
 
   bool get _puedeContinuar => _aceptoCondiciones;
 
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scrollController.hasClients) {
-        if (_scrollController.position.maxScrollExtent <= 20) {
-          setState(() => _haLlegadoAlFinal = true);
-        }
-      }
-    });
-  }
-
-  void _onScroll() {
-    if (!_haLlegadoAlFinal && _scrollController.hasClients) {
-      final pos = _scrollController.position;
-      if (pos.pixels >= (pos.maxScrollExtent - 40)) {
-        setState(() => _haLlegadoAlFinal = true);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  static const List<String> _beneficios = [
-    'Realizar el aporte que elijas, de acuerdo con tus posibilidades y las modalidades disponibles.',
-    'Visitar a tu ahijado o ahijada, de acuerdo con los horarios y las condiciones establecidas por el albergue.',
-    'Contribuir a su bienestar emocional y socialización.',
-    'Recibir actualizaciones periódicas sobre su estado y evolución.',
-    'Ayudar a cubrir necesidades de la mascota y contribuir al bienestar de otros animales rescatados del albergue.',
-  ];
-
   static const List<String> _requisitos = [
-    'Proporcionar información personal y de contacto verídica y actualizada.',
-    'Indicar una modalidad de ayuda que pueda cumplir de manera responsable.',
-    'Si ofrece un aporte recurrente, comprometerse con la frecuencia que acuerde con el albergue.',
-    'Aceptar las condiciones de contacto, coordinación de entregas y visitas establecidas por el albergue.',
-    'Comprender que el bienestar de la mascota requiere compromiso, responsabilidad y respeto por sus necesidades.',
-    'Aceptar el tratamiento de los datos personales de acuerdo con la política de privacidad del sistema.',
+    'Brindar información personal verídica y actualizada.',
+    'Cumplir de manera responsable con la modalidad de ayuda elegida.',
+    'Respetar los canales de contacto y coordinación del albergue.',
+    'Asumir el compromiso con respeto hacia las necesidades de la mascota.',
+    'Aceptar el tratamiento de datos personales según la política de privacidad.',
   ];
 
   @override
@@ -86,6 +46,17 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
     final nombreMascota = widget.pet.nombre.trim().isNotEmpty
         ? widget.pet.nombre.trim()
         : 'la mascota';
+    final sexo = (widget.pet.sexo ?? '').trim().toLowerCase();
+    final visita = sexo.startsWith('m')
+        ? 'Visitarlo en los horarios establecidos por el albergue.'
+        : 'Visitarla en los horarios establecidos por el albergue.';
+    final beneficios = [
+      'Realizar aportes según tus posibilidades.',
+      visita,
+      'Contribuir a su bienestar emocional y socialización.',
+      'Recibir actualizaciones periódicas sobre su evolución.',
+      'Apoyar las necesidades de la mascota y del albergue.',
+    ];
 
     final pasos = [
       (
@@ -158,8 +129,7 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
             // Contenido desplazable
             Expanded(
               child: ListView(
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 children: [
                   // Sección 1: ¿En qué consiste el apadrinamiento?
                   Container(
@@ -208,7 +178,7 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'El apadrinamiento es una forma voluntaria de solidaridad que te permite contribuir al bienestar de $nombreMascota, rescatada del maltrato o el abandono. Con tu ayuda, puedes hacer parte de su recuperación y brindarle mejores condiciones de vida mientras espera encontrar una familia definitiva.',
+                          'El apadrinamiento es un acto voluntario para contribuir al bienestar de $nombreMascota mientras encuentra un hogar definitivo.',
                           style: const TextStyle(
                             fontSize: 13.5,
                             height: 1.45,
@@ -225,7 +195,7 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        for (final b in _beneficios) ...[
+                        for (final b in beneficios) ...[
                           Padding(
                             padding: const EdgeInsets.only(bottom: 6),
                             child: Row(
@@ -255,7 +225,7 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
                         ],
                         const SizedBox(height: 8),
                         Text(
-                          'Tu colaboración no solo beneficia a $nombreMascota, sino que también ayuda a que el albergue continúe ofreciendo protección, cuidado y mejores condiciones de vida a los animales que todavía esperan un hogar definitivo.\n\nRecuerda que cada aporte es valioso. Te invitamos a conocer el albergue, a sus habitantes y la labor que realizamos para transformar la vida de los animales rescatados.',
+                          'Tu ayuda no solo beneficia a $nombreMascota, sino también a otros animales que esperan una familia. ¡Cada aporte cuenta!',
                           style: const TextStyle(
                             fontSize: 13,
                             height: 1.45,
@@ -303,156 +273,62 @@ class _PasosApadrinamientoScreenState extends State<PasosApadrinamientoScreen> {
                     _RequisitoApadrinamiento(texto: req),
                     const SizedBox(height: 8),
                   ],
-
-                  const SizedBox(height: 14),
-
-                  // Cita motivacional
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.rosaSuave,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppColors.bordeRosa),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 16, 8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => setState(() => _aceptoCondiciones = !_aceptoCondiciones),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _aceptoCondiciones,
+                      activeColor: AppColors.rosa,
+                      side: const BorderSide(color: AppColors.rosa, width: 1.6),
+                      onChanged: (valor) => setState(() => _aceptoCondiciones = valor ?? false),
                     ),
-                    child: Text(
-                      '“Apadrinar es transformar una vida con amor y constancia; tu apoyo le devuelve la esperanza a $nombreMascota mientras encuentra un hogar definitivo.”',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.45,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.texto,
+                    const Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text(
+                          'He leído, comprendo el proceso y acepto los requisitos y condiciones del apadrinamiento.',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.texto,
+                          ),
+                        ),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.rosa,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppColors.rosa.withValues(alpha: 0.35),
+                    disabledForegroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-
-                  const SizedBox(height: 18),
-
-                  // Sección 4: Confirmación de lectura y aceptación
-                  // Aparece cuando el usuario ha bajado hasta el final del texto
-                  if (!_haLlegadoAlFinal)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                            color: AppColors.bordeRosa.withValues(alpha: 0.6)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.arrow_downward_rounded,
-                            size: 18,
-                            color: AppColors.rosa,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              'Baja hasta el final del texto para habilitar la confirmación',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.texto.withValues(alpha: 0.85),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border:
-                            Border.all(color: AppColors.bordeRosa, width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          InkWell(
-                            borderRadius: BorderRadius.circular(10),
-                            onTap: () => setState(
-                                () => _aceptoCondiciones = !_aceptoCondiciones),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Checkbox(
-                                    value: _aceptoCondiciones,
-                                    activeColor: AppColors.rosa,
-                                    side: const BorderSide(
-                                        color: AppColors.rosa, width: 1.6),
-                                    onChanged: (val) => setState(() =>
-                                        _aceptoCondiciones = val ?? false),
-                                  ),
-                                  const Expanded(
-                                    child: Text(
-                                      'He leído, comprendo el proceso y acepto los requisitos y condiciones del apadrinamiento.',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        height: 1.35,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.texto,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: FilledButton(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.rosa,
-                                foregroundColor: Colors.white,
-                                disabledBackgroundColor:
-                                    AppColors.rosa.withValues(alpha: 0.35),
-                                disabledForegroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              onPressed: _puedeContinuar
-                                  ? () => Navigator.pop(context, true)
-                                  : null,
-                              child: const Text(
-                                'Continuar al formulario',
-                                style: TextStyle(
-                                  fontSize: 15.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  const SizedBox(height: 16),
-                ],
+                  onPressed: _puedeContinuar ? () => Navigator.pop(context, true) : null,
+                  child: const Text(
+                    'Continuar al formulario',
+                    style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w800),
+                  ),
+                ),
               ),
             ),
           ],

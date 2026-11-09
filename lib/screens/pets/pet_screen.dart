@@ -345,7 +345,7 @@ class _PetScreenState extends State<PetScreen> {
                 const Text(
                   'Elige el método que prefieras para agregar un nuevo peludito.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                  style: TextStyle(fontSize: 13, color: AppColors.grisTexto),
                 ),
                 const SizedBox(height: 16),
                 // Opción 1: Agregar mascota con asistente virtual
@@ -503,7 +503,7 @@ class _PetScreenState extends State<PetScreen> {
       _sexo = 'Todos';
       _tamano = 'Todos';
       _edad = 'Todos';
-      _estado = 'Todas';
+      _estado = 'Todos';
     });
     _programarIrAlInicio();
   }
@@ -1056,15 +1056,53 @@ class _PetScreenState extends State<PetScreen> {
     );
   }
 
-  /// Categorías horizontales: Todas, Disponibles, Favoritos, Apadrinadas y Adopción.
+  /// Categorías horizontales. «Todos» queda fijo al inicio para no verse cortado.
   Widget _barraEstado() {
-    const opciones = [
-      'Todas',
-      'Disponibles',
-      'Favoritos',
-      'Apadrinadas',
-      'Adopción',
-    ];
+    const fijo = 'Todos';
+    const resto = ['Disponibles', 'Favoritos', 'Apadrinadas', 'Adoptadas'];
+
+    Widget chip(String valor, {required bool compacto}) {
+      final sel = _estado == valor;
+      return GestureDetector(
+        onTap: () => setState(() => _estado = valor),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: EdgeInsets.symmetric(
+            horizontal: compacto ? 12 : 15,
+            vertical: 7,
+          ),
+          decoration: BoxDecoration(
+            gradient: sel
+                ? const LinearGradient(
+                    colors: [Color(0xFFFF6FB3), AppColors.rosa],
+                  )
+                : null,
+            color: sel ? null : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: sel ? AppColors.rosa : const Color(0xFFF8C4DC),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.rosa.withValues(alpha: sel ? 0.25 : 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            valor,
+            style: TextStyle(
+              fontSize: compacto ? 12.0 : 12.5,
+              fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+              color: sel ? Colors.white : const Color(0xFF374151),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
       child: SizedBox(
@@ -1072,67 +1110,24 @@ class _PetScreenState extends State<PetScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compacto = constraints.maxWidth < 390;
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(opciones.length, (i) {
-                    final valor = opciones[i];
-                    final sel = _estado == valor;
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        right: i < opciones.length - 1 ? 6 : 0,
-                      ),
-                      child: GestureDetector(
-                        onTap: () => setState(() => _estado = valor),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: compacto ? 12 : 15,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: sel
-                                ? const LinearGradient(
-                                    colors: [
-                                      Color(0xFFFF6FB3),
-                                      AppColors.rosa,
-                                    ],
-                                  )
-                                : null,
-                            color: sel ? null : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: sel
-                                  ? AppColors.rosa
-                                  : const Color(0xFFF8C4DC),
-                              width: 1.2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.rosa.withValues(
-                                  alpha: sel ? 0.25 : 0.06,
-                                ),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            valor,
-                            style: TextStyle(
-                              fontSize: compacto ? 12.0 : 12.5,
-                              fontWeight:
-                                  sel ? FontWeight.w800 : FontWeight.w600,
-                              color: sel
-                                  ? Colors.white
-                                  : const Color(0xFF374151),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-              ),
+            return Row(
+              children: [
+                chip(fijo, compacto: compacto),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < resto.length; i++) ...[
+                          chip(resto[i], compacto: compacto),
+                          if (i < resto.length - 1) const SizedBox(width: 6),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -1167,6 +1162,7 @@ class _PetScreenState extends State<PetScreen> {
               esMejorMatch: !esAdmin && item.esMatchIdeal,
               esNuevoMatchEncontrado: !esAdmin && item.esNuevoMatchEncontrado,
               ocultarMatch: esAdmin,
+              insigniaNuevo: _recienAgregada?.id == pet.id,
               esFavorito: _favoritosIds.contains(pet.id),
               onToggleFavorito: () => _alternarFavorito(pet),
               onTap: () async {
@@ -1359,11 +1355,11 @@ class _PetScreenState extends State<PetScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        'Todas',
+                        'Todos',
                         'Disponibles',
                         'Favoritos',
                         'Apadrinadas',
-                        'Adopción',
+                        'Adoptadas',
                       ].map((estado) {
                         return chipFiltro(estado, _estado, (v) => _estado = v);
                       }).toList(),
@@ -1571,7 +1567,7 @@ class _PetScreenState extends State<PetScreen> {
               style: TextStyle(
                 fontSize: 13,
                 height: 1.4,
-                color: Colors.grey.shade600,
+                color: AppColors.grisTexto,
               ),
             ),
             if (!sinFavoritos &&
@@ -1611,8 +1607,16 @@ class _PetScreenState extends State<PetScreen> {
       floatingActionButton: esAdmin
           ? FloatingActionButton.extended(
               onPressed: _abrirFormularioNuevaMascota,
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar mascota'),
+              elevation: 6,
+              icon: const Icon(Icons.add, size: 22),
+              label: const Text(
+                'Agregar mascota',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: const BorderSide(color: Colors.white, width: 3),
+              ),
             )
           : null,
       body: Container(

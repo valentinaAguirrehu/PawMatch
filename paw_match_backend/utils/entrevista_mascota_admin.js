@@ -398,6 +398,49 @@ function calcularPorcentajeProgreso(ficha) {
   return Math.max(0, Math.min(100, Math.round(puntos)));
 }
 
+function canonRaza(valor, maxRaza = 50) {
+  if (valor == null) return null;
+  const original = String(valor).trim();
+  if (!original) return null;
+  const limpio = original
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const indefinida =
+    /\b(mestiz[oa]s?|crioll[oa]s?|combinad[oa]s?|cruzad[oa]s?|cruce|mixt[oa]s?|mezcl[oa]s?|mezcla|callej[oa]s?|desconocid[oa]s?|corriente|ordinari[oa]|comun|indefinid[oa]s?|variad[oa]s?)\b/.test(
+      limpio,
+    ) ||
+    /sin raza|no tiene raza|no se sabe|no la se|no conozco|no es de raza|sin definir|sin pedigree|de la calle|ninguna raza|ningun raza|no aplica/.test(
+      limpio,
+    );
+  const relleno = new Set([
+    'es', 'un', 'una', 'el', 'la', 'lo', 'los', 'las', 'de', 'del', 'al', 'y', 'o',
+    'con', 'que', 'se', 'su', 'sus', 'por', 'para', 'como', 'tipo', 'parece', 'creo',
+    'dice', 'mascota', 'perro', 'perra', 'perrito', 'perrita', 'gato', 'gata',
+    'gatito', 'gatita', 'raza', 'tiene', 'tener', 'no', 'si', 'muy', 'solo', 'sola',
+    'puro', 'pura', 'definida', 'definido', 'algo', 'parecido', 'parecida', 'tambien',
+    'nuestro', 'nuestra',
+  ]);
+  const genericos = new Set([
+    'mestizo', 'mestiza', 'mestizos', 'mestizas', 'criollo', 'criolla', 'criollos',
+    'criollas', 'combinado', 'combinada', 'combinados', 'combinadas', 'cruzado',
+    'cruzada', 'cruzados', 'cruzadas', 'cruce', 'mixto', 'mixta', 'mixtos', 'mixtas',
+    'mezcla', 'mezclado', 'mezclada', 'mezclados', 'mezcladas', 'callejero',
+    'callejera', 'callejeros', 'callejeras', 'desconocido', 'desconocida',
+    'desconocidos', 'desconocidas', 'ninguno', 'ninguna', 'comun', 'corriente',
+    'ordinario', 'ordinaria', 'indefinido', 'indefinida', 'variado', 'variada',
+    'varias', 'varios', 'sin', 'sabe', 'conozco', 'aplica', 'pedigree', 'calle',
+  ]);
+  const especificos = limpio
+    .split(' ')
+    .filter((t) => t && !relleno.has(t) && !genericos.has(t));
+  if (indefinida && especificos.length === 0) return 'Mestizo';
+  return original.length <= maxRaza ? original : original.slice(0, maxRaza);
+}
+
 function normalizarFicha(raw = {}, fichaPrevia = {}, limites = {}) {
   const maxNombre = limites.nombre || 50;
   const maxRaza = limites.raza || 50;
@@ -499,17 +542,7 @@ function normalizarFicha(raw = {}, fichaPrevia = {}, limites = {}) {
 
   if (raw.raza !== undefined && raw.raza !== null) {
     const r = String(raw.raza).trim();
-    if (r) {
-      if (
-        /^(no se sabe|no la se|no la sé|no conozco|desconocid[oa]|crioll[oa]|mestiz[oa]|sin raza|ninguna)$/i.test(
-          r,
-        )
-      ) {
-        base.raza = 'Desconocida / Mestizo';
-      } else if (r.length <= maxRaza) {
-        base.raza = r;
-      }
-    }
+    if (r) base.raza = canonRaza(r, maxRaza);
   }
 
   const tamanoRaw = limpiarTexto(raw.tamano);
@@ -650,6 +683,8 @@ function normalizarFicha(raw = {}, fichaPrevia = {}, limites = {}) {
   if (base.salud_consultada && base.estado_salud.length === 0) {
     base.estado_salud = ['No presenta necesidades veterinarias pendientes.'];
   }
+
+  base.raza = canonRaza(base.raza, maxRaza);
 
   return base;
 }
@@ -833,7 +868,7 @@ function construirMensajesPasoAPaso({
         '   - `sexo`: "Macho" o "Hembra" (infiérelo también de artículos y adjetivos como "el perrito", "es juguetón", "la gatita", "es cariñosa").',
         '   - `edad`: entero positivo, y `unidad_edad`: "meses" o "anos".',
         '   - `tamano`: "Pequeño", "Mediano" o "Grande".',
-        '   - `raza`: si la menciona ponla, si no la menciona o dice mestizo/criollo déjala o pon "Desconocida / Mestizo".',
+        '   - `raza`: si menciona una raza concreta ponla. Si dice que no tiene raza, que es criollo, mestizo, combinado, cruzado, mixto, callejero, desconocida o algo parecido, pon exactamente "Mestizo". Nunca uses "Desconocida".',
         '   - `personalidad`: valores enteros de 1 a 5 en `nivel_energia`, `sociabilidad_personas`, `sociabilidad_mascotas`, `independencia`, `nivel_juego`, `carino`, `proteccion`, `tolerancia_soledad`, `adaptabilidad`. Si es un cachorro muy pequeño con personalidad en desarrollo, pon `es_cachorro_en_proceso: true` y `personalidad_definida: false`.',
         '   - `salud_consultada`: `true` cuando responda sobre salud, vacunas o esterilización. Asigna `vacunas: true/false`, `esterilizado: true/false`, `detalle_salud` (sin inventar diagnósticos) y `estado_salud` usando solo valores de:',
         '     ["No presenta necesidades veterinarias pendientes.", "Requiere vacunación.", "Vacunación al día.", "Requiere esterilización.", "Esterilización realizada.", "Requiere desparasitación.", "Requiere exámenes médicos.", "Necesita medicamentos.", "Se encuentra en tratamiento veterinario.", "Requiere cuidados especiales."]',
@@ -1025,7 +1060,9 @@ async function procesarTurnoEntrevistaMascota({
   const siguientePaso = determinarSiguientePaso(fichaActualizada);
   const completada = !necesitaAclaracion && siguientePaso === null;
   if (completada && !fichaActualizada.raza) {
-    fichaActualizada.raza = 'Desconocida / Mestizo';
+    fichaActualizada.raza = 'Mestizo';
+  } else if (fichaActualizada.raza) {
+    fichaActualizada.raza = canonRaza(fichaActualizada.raza, limites.raza || 50);
   }
   const faltantes = camposFaltantes(fichaActualizada);
   const porcentajeProgreso = calcularPorcentajeProgreso(fichaActualizada);

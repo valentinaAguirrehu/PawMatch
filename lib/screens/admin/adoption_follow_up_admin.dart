@@ -306,7 +306,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
                               ),
                               Text(
                                 'Adoptante: ${item.adoptanteNombre}',
-                                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                                style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                               ),
                             ],
                           ),
@@ -350,7 +350,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
                               Text(
                                 'No se han registrado seguimientos para esta adopción.',
                                 textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.grey.shade600),
+                                style: TextStyle(color: AppColors.grisTexto),
                               ),
                             ],
                           );
@@ -481,7 +481,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
                       const SizedBox(height: 4),
                       Text(
                         'Registró: ${datos.adminNombre}',
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                        style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                       ),
                       const SizedBox(height: 14),
                       _datoCancelacion('Fecha de cancelación', _formatearFecha(datos.fechaCancelacion)),
@@ -698,7 +698,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(etiqueta, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+          Text(etiqueta, style: TextStyle(fontSize: 12, color: AppColors.grisTexto)),
           const SizedBox(height: 3),
           Text(valor, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.texto)),
         ],
@@ -931,7 +931,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
           const SizedBox(height: 4),
           Text(
             'Registró: ${seg.adminNombre}',
-            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 11.5, color: AppColors.grisTexto),
           ),
         ],
       ),
@@ -956,7 +956,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
       Column(
         children: [
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -967,15 +967,22 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
               indicatorColor: AppColors.rosa,
               indicatorSize: TabBarIndicatorSize.tab,
               labelColor: AppColors.rosa,
-              unselectedLabelColor: Colors.grey.shade600,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+              unselectedLabelColor: AppColors.grisTexto,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
               labelPadding: const EdgeInsets.symmetric(horizontal: 4),
               tabs: [
                 Tab(
-                  icon: const Icon(Icons.list_alt_rounded),
+                  height: 48,
+                  iconMargin: const EdgeInsets.only(bottom: 2),
+                  icon: const Icon(Icons.list_alt_rounded, size: 18),
                   text: _verCanceladas ? 'Adopciones Canceladas' : 'Adopciones activas',
                 ),
-                const Tab(icon: Icon(Icons.calendar_month_rounded), text: 'Próximos seguimientos'),
+                const Tab(
+                  height: 48,
+                  iconMargin: EdgeInsets.only(bottom: 2),
+                  icon: Icon(Icons.calendar_month_rounded, size: 18),
+                  text: 'Próximos seguimientos',
+                ),
               ],
             ),
           ),
@@ -1018,7 +1025,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
                   child: TextField(
                     onChanged: (valor) => setState(() => _busqueda = valor),
                     decoration: InputDecoration(
@@ -1026,7 +1033,8 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
                       prefixIcon: const Icon(Icons.search, color: AppColors.rosa),
                       filled: true,
                       fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
                         borderSide: const BorderSide(color: Color(0xFFF0E5EC)),
@@ -1039,7 +1047,7 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+                  padding: const EdgeInsets.fromLTRB(16, 2, 8, 0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1220,7 +1228,7 @@ class _TarjetaAdopcion extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         item.resumenMascota,
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                        style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1277,7 +1285,7 @@ class _TarjetaAdopcion extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.history, size: 15, color: Colors.grey.shade600),
+                        Icon(Icons.history, size: 15, color: AppColors.grisTexto),
                         const SizedBox(width: 5),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1399,7 +1407,7 @@ class _Vacio extends StatelessWidget {
           Text(
             texto,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+            style: TextStyle(color: AppColors.grisTexto, fontSize: 15),
           ),
         ],
       ),
@@ -1433,7 +1441,7 @@ class _ErrorCarga extends StatelessWidget {
             Text(
               detalle,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
             ),
             const SizedBox(height: 12),
             FilledButton(

@@ -259,7 +259,7 @@ class _CancelacionAdopcionFormState extends State<CancelacionAdopcionForm> {
                     const SizedBox(height: 4),
                     Text(
                       'Puedes adjuntar hasta 2 fotos como evidencia. Es opcional.',
-                      style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                      style: TextStyle(fontSize: 12.5, color: AppColors.grisTexto),
                     ),
                     const SizedBox(height: 8),
                     _FotoEvidencia(
@@ -346,7 +346,7 @@ class _CancelacionAdopcionFormState extends State<CancelacionAdopcionForm> {
                 ),
                 Text(
                   'Inicio: $inicio',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.grisTexto),
                 ),
                 const SizedBox(height: 4),
                 const Text(
@@ -509,7 +509,7 @@ class _FechaCampo extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(etiqueta, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                    Text(etiqueta, style: TextStyle(fontSize: 12, color: AppColors.grisTexto)),
                     Text(valor, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.texto)),
                   ],
                 ),

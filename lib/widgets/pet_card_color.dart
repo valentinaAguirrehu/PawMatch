@@ -122,7 +122,7 @@ class PetCardColor extends StatelessWidget {
                     datos,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: t.bodySmall?.copyWith(color: Colors.black54),
+                    style: t.bodySmall?.copyWith(color: AppColors.grisTexto),
                   ),
 
                 const SizedBox(height: 10),
