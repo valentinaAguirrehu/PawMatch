@@ -1,10 +1,10 @@
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
-import 'package:paw_match/core/enlaces.dart';
-import 'package:paw_match/core/fundacion_info.dart';
+import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/seguimiento_apadrinamiento.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
@@ -13,11 +13,11 @@ import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/navegacion.dart';
-import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/reporte_padrino_pdf_service.dart';
 import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
+import 'package:paw_match/widgets/dialogo_carga.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
@@ -167,98 +167,150 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
     }
   }
 
-  void _contactarWhatsApp(SolicitudApadrinamiento s) {
-    final numero = FundacionInfo.whatsappNumero.isNotEmpty
-        ? FundacionInfo.whatsappNumero
-        : '573136177747';
-    final mensaje =
-        'Hola Fundación Maritza Arévalo, soy el padrino de ${s.mascotaNombre} y vengo de la app Paw Match para coordinar los detalles de mi apadrinamiento.';
-    final url = 'https://wa.me/$numero?text=${Uri.encodeComponent(mensaje)}';
-    abrirEnlace(context, url, nombre: 'WhatsApp de la Fundación');
-  }
-
-  Future<void> _verDetallesMascota(String idMascota) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.rosa)),
+  void _verDetallesMascota(SolicitudApadrinamiento s) {
+    if (s.idMascota.isEmpty) return;
+    final pet = Pet(
+      id: s.idMascota,
+      nombre: s.mascotaNombre.isEmpty ? 'Mascota' : s.mascotaNombre,
+      especie: s.mascotaEspecie.isEmpty ? 'Perro' : s.mascotaEspecie,
+      raza: s.mascotaRaza.isEmpty ? null : s.mascotaRaza,
+      edad: s.mascotaEdad,
+      foto: s.mascotaFotos.isEmpty ? null : s.mascotaFotos,
+      estadoAdopcion: s.esAprobada ? 'adoptado' : 'disponible',
     );
-    try {
-      final pet = await PetsService.obtener(idMascota);
-      if (!mounted) return;
-      Navigator.pop(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PetDetailScreen(pet: pet),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No se pudo cargar la mascota: $e')),
-      );
-    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PetDetailScreen(pet: pet)),
+    );
   }
 
   Future<void> _verContrato(SolicitudApadrinamiento s) async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.rosa)),
-    );
+    late final Uint8List bytes;
     try {
-      final bytes = await ApadrinamientoService.obtenerBytesContrato(s.id);
-      if (!mounted) return;
-      Navigator.pop(context);
-
-      final esPdf = bytes.length >= 4 &&
-          bytes[0] == 0x25 &&
-          bytes[1] == 0x50 &&
-          bytes[2] == 0x44 &&
-          bytes[3] == 0x46;
-
-      if (esPdf) {
-        await Printing.layoutPdf(
-          onLayout: (_) => bytes,
-          name: 'Contrato_Apadrinamiento_${s.mascotaNombre}.pdf',
-        );
-        return;
-      }
-
-      showDialog(
-        context: context,
-        builder: (ctx) => Dialog.fullscreen(
-          child: Scaffold(
-            backgroundColor: Colors.black,
-            appBar: AppBar(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              title: Text('Contrato de Apadrinamiento - ${s.mascotaNombre}'),
-              leading: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ),
-            body: Center(
-              child: InteractiveViewer(
-                minScale: 0.5,
-                maxScale: 4.0,
-                child: Image.memory(bytes, fit: BoxFit.contain),
-              ),
-            ),
-          ),
-        ),
+      bytes = await DialogoCarga.mientras(
+        context,
+        () => ApadrinamientoService.obtenerBytesContrato(s.id),
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.redAccent,
           content: Text('Error al cargar contrato: $e'),
         ),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    final esPdf = bytes.length >= 4 &&
+        bytes[0] == 0x25 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x44 &&
+        bytes[3] == 0x46;
+    final titulo = 'Contrato de Apadrinamiento - ${s.mascotaNombre}';
+
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: esPdf ? const Color(0xFFF8F4F6) : Colors.black,
+          appBar: AppBar(
+            backgroundColor: esPdf ? Colors.white : Colors.black,
+            foregroundColor: esPdf ? AppColors.texto : Colors.white,
+            title: Text(
+              titulo,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
+            ),
+            actions: [
+              TextButton.icon(
+                onPressed: () => _descargarContrato(
+                  ctx,
+                  bytes,
+                  s.mascotaNombre,
+                  esPdf,
+                ),
+                icon: Icon(
+                  Icons.download_rounded,
+                  color: esPdf ? AppColors.rosa : Colors.white,
+                ),
+                label: Text(
+                  'Descargar',
+                  style: TextStyle(
+                    color: esPdf ? AppColors.rosa : Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ),
+          body: esPdf
+              ? PdfPreview(
+                  build: (_) async => bytes,
+                  pdfFileName: _nombreArchivoContrato(s.mascotaNombre, true, bytes),
+                  useActions: false,
+                  allowPrinting: false,
+                  allowSharing: false,
+                  canChangeOrientation: false,
+                  canChangePageFormat: false,
+                )
+              : Center(
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Image.memory(bytes, fit: BoxFit.contain),
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  String _nombreArchivoContrato(String nombreMascota, bool esPdf, Uint8List bytes) {
+    final limpio = nombreMascota
+        .replaceAll(RegExp(r'[^\w\- ]', unicode: true), '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), '_');
+    final base = limpio.isEmpty ? 'Mascota' : limpio;
+    if (esPdf) return 'Contrato_Apadrinamiento_$base.pdf';
+    final esPng = bytes.length >= 4 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47;
+    return 'Contrato_Apadrinamiento_$base.${esPng ? 'png' : 'jpg'}';
+  }
+
+  Future<void> _descargarContrato(
+    BuildContext aviso,
+    Uint8List bytes,
+    String nombreMascota,
+    bool esPdf,
+  ) async {
+    final nombre = _nombreArchivoContrato(nombreMascota, esPdf, bytes);
+    final mime = esPdf
+        ? 'application/pdf'
+        : (nombre.endsWith('.png') ? 'image/png' : 'image/jpeg');
+    try {
+      final ruta = await FilePicker.saveFile(
+        dialogTitle: 'Descargar contrato de apadrinamiento',
+        fileName: nombre,
+        bytes: bytes,
+        mimeType: mime,
+      );
+      if (!aviso.mounted || ruta == null) return;
+      ScaffoldMessenger.of(aviso).showSnackBar(
+        const SnackBar(content: Text('Contrato de apadrinamiento descargado.')),
+      );
+    } catch (e) {
+      if (!aviso.mounted) return;
+      ScaffoldMessenger.of(aviso).showSnackBar(
+        SnackBar(content: Text('No se pudo descargar el contrato: $e')),
       );
     }
   }
@@ -464,11 +516,9 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                                             _reenviarVerificacion(solicitudPrincipal!),
                                         onDescargarAcuerdoPdf: () =>
                                             _descargarAcuerdoPdf(solicitudPrincipal!),
-                                        onContactarWhatsApp: () =>
-                                            _contactarWhatsApp(solicitudPrincipal!),
                                         onVerContrato: () => _verContrato(solicitudPrincipal!),
                                         onVerDetallesMascota: () =>
-                                            _verDetallesMascota(solicitudPrincipal!.idMascota),
+                                            _verDetallesMascota(solicitudPrincipal!),
                                       ),
 
                                     // Lista / Cuadrícula de Otras Apadrinaciones (SOLO si hay más de 1 en esta categoría)
@@ -740,7 +790,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                       _idSolicitudSeleccionada = s.id;
                     });
                   },
-                  onVerDetalles: () => _verDetallesMascota(s.idMascota),
+                  onVerDetalles: () => _verDetallesMascota(s),
                 ),
               );
             }).toList(),
@@ -761,7 +811,7 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
                 _idSolicitudSeleccionada = s.id;
               });
             },
-            onVerDetalles: () => _verDetallesMascota(s.idMascota),
+            onVerDetalles: () => _verDetallesMascota(s),
           ),
         );
       }).toList(),
@@ -838,7 +888,6 @@ class _TarjetaApadrinamientoPrincipal extends StatefulWidget {
   final String? descargandoPdfId;
   final VoidCallback onReenviarVerificacion;
   final VoidCallback onDescargarAcuerdoPdf;
-  final VoidCallback onContactarWhatsApp;
   final VoidCallback onVerContrato;
   final VoidCallback onVerDetallesMascota;
 
@@ -849,7 +898,6 @@ class _TarjetaApadrinamientoPrincipal extends StatefulWidget {
     required this.descargandoPdfId,
     required this.onReenviarVerificacion,
     required this.onDescargarAcuerdoPdf,
-    required this.onContactarWhatsApp,
     required this.onVerContrato,
     required this.onVerDetallesMascota,
   });
@@ -867,10 +915,9 @@ class _TarjetaApadrinamientoPrincipalState
   bool _mostrarSeguimientosYReportes = false;
 
   // Secciones individuales colapsables
-  bool _expandirCiclos = true;
-  bool _expandirReportes = true;
+  bool _expandirCiclos = false;
+  bool _expandirReportes = false;
   bool _expandirHistorial = false;
-  bool _expandirMotivacion = false;
 
   @override
   void initState() {
@@ -1044,50 +1091,25 @@ class _TarjetaApadrinamientoPrincipalState
 
                   const SizedBox(height: 14),
 
-                  // Acciones principales: WhatsApp, Ver Contrato y NUEVO BOTÓN "Ver Seguimientos y Reportes"
+                  // Acciones: contrato de apadrinamiento y seguimientos
                   if (s.esAprobada && s.tieneContrato) ...[
-                    // Botón principal Fucsia de WhatsApp
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.rosa,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size.fromHeight(46),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        elevation: 2,
-                        shadowColor: AppColors.rosa.withValues(alpha: 0.4),
-                      ),
-                      icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-                      label: const Text(
-                        'Contactar por WhatsApp',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14.5,
-                        ),
-                      ),
-                      onPressed: widget.onContactarWhatsApp,
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Botón secundario: Ver Contrato
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF880E4F),
                         side: const BorderSide(color: Color(0xFFF48FB1), width: 1.2),
-                        minimumSize: const Size.fromHeight(42),
+                        minimumSize: const Size.fromHeight(46),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
                         backgroundColor: Colors.white,
                       ),
-                      icon: const Icon(Icons.description_outlined, size: 17),
+                      icon: const Icon(Icons.description_outlined, size: 18),
                       label: const Text(
-                        'Ver Contrato',
+                        'Ver contrato de apadrinación',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 13.5,
-                          decoration: TextDecoration.underline,
                         ),
                       ),
                       onPressed: widget.onVerContrato,
@@ -1102,6 +1124,11 @@ class _TarjetaApadrinamientoPrincipalState
                         onTap: () {
                           setState(() {
                             _mostrarSeguimientosYReportes = !_mostrarSeguimientosYReportes;
+                            if (_mostrarSeguimientosYReportes) {
+                              _expandirCiclos = false;
+                              _expandirReportes = false;
+                              _expandirHistorial = false;
+                            }
                           });
                         },
                         child: AnimatedContainer(
@@ -1132,8 +1159,8 @@ class _TarjetaApadrinamientoPrincipalState
                               const SizedBox(width: 8),
                               Text(
                                 _mostrarSeguimientosYReportes
-                                    ? 'Ocultar Seguimientos y Reportes'
-                                    : 'Ver Seguimientos y Reportes',
+                                    ? 'Ocultar seguimientos'
+                                    : 'Ver seguimientos',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w800,
                                   fontSize: 13.5,
@@ -1152,6 +1179,274 @@ class _TarjetaApadrinamientoPrincipalState
                           ),
                         ),
                       ),
+                    ),
+                    // ---------------- SECCIÓN DESPLEGABLE COMPLETA (ACTIVADA POR EL NUEVO BOTÓN) ----------------
+                    AnimatedCrossFade(
+                      duration: const Duration(milliseconds: 250),
+                      crossFadeState: (s.esAprobada && _mostrarSeguimientosYReportes)
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      firstChild: const SizedBox.shrink(),
+                      secondChild: Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // 1. Seguimiento de Ciclos
+                            _construirSeccionDesplegable(
+                              expandida: _expandirCiclos,
+                              onToggle: () => setState(() => _expandirCiclos = !_expandirCiclos),
+                              icono: Icons.calendar_month_rounded,
+                              titulo: 'Detalle de ciclos',
+                              subtitulo: '${s.seguimientosEnCiclo} de 3',
+                              trailingHeader: _construirIndicadorEtapas(
+                                etapaActual: s.seguimientosEnCiclo,
+                                proximo: proximo != null
+                                    ? _MisApadrinamientosScreenState.formatearFechaCorta(proximo)
+                                    : null,
+                              ),
+                              contenido: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  const Text(
+                                    'Cada ciclo de apadrinamiento incluye 3 seguimientos realizados por parte de la Fundación Maritza Arévalo para verificar el proceso de la apadrinación.',
+                                    style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.35),
+                                  ),
+                                  if (proximo != null) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Próxima fecha programada: ${_MisApadrinamientosScreenState.formatearFechaLarga(proximo)}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.rosa,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 10),
+                                  ..._tarjetasCiclo(s),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+
+                            // 2. Reportes de Apadrinamiento
+                            _construirSeccionDesplegable(
+                              expandida: _expandirReportes,
+                              onToggle: () => setState(() => _expandirReportes = !_expandirReportes),
+                              icono: Icons.description_rounded,
+                              titulo: 'Reportes de Apadrinamiento',
+                              etiquetaTitulo: primerReporte != null && !primerReporte.vistoPorUsuario
+                                  ? 'Nuevo'
+                                  : null,
+                              subtitulo: primerReporte != null
+                                  ? 'Reporte del ciclo ${primerReporte.ciclo} • Promedio: ${primerReporte.promedio.toStringAsFixed(1)}/5'
+                                  : 'Reporte a partir de 3 seguimientos (${s.seguimientosEnCiclo}/3)',
+                              etiquetaSubtitulo: primerReporte != null
+                                  ? primerReporte.puntuacion.toUpperCase()
+                                  : null,
+                              trailingHeader: primerReporte != null
+                                  ? OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.rosa,
+                                        side: const BorderSide(color: Color(0xFFF48FB1)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.download_rounded, size: 15),
+                                      label: const Text('Descargar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                                      onPressed: () => _abrirReporte(primerReporte, descargar: true),
+                                    )
+                                  : null,
+                              contenido: s.evaluacionesCiclos.isEmpty
+                                  ? const Text(
+                                      'El reporte oficial se genera automáticamente al completar los 3 seguimientos de cada ciclo.',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    )
+                                  : Column(
+                                      children: s.evaluacionesCiclos.map((ev) {
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFF9FC),
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(color: const Color(0xFFFCE4EC)),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.picture_as_pdf_rounded, color: AppColors.rosa, size: 24),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      'Reporte del Ciclo ${ev.ciclo}',
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.w800,
+                                                        fontSize: 13,
+                                                        color: Color(0xFF1E293B),
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      'Promedio: ${ev.promedio.toStringAsFixed(1)}/5 • ${ev.puntuacion.toUpperCase()}',
+                                                      style: const TextStyle(
+                                                        fontSize: 11.5,
+                                                        color: Color(0xFF64748B),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => _abrirReporte(ev, descargar: false),
+                                                child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.rosa)),
+                                              ),
+                                              FilledButton(
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor: AppColors.rosa,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                                ),
+                                                onPressed: () => _abrirReporte(ev, descargar: true),
+                                                child: const Text('Descargar', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                            ),
+                            const SizedBox(height: 10),
+
+                            // 3. Historial de Seguimientos
+                            _construirSeccionDesplegable(
+                              expandida: _expandirHistorial,
+                              onToggle: () => setState(() => _expandirHistorial = !_expandirHistorial),
+                              icono: Icons.history_rounded,
+                              titulo: 'Historial de Seguimientos',
+                              subtitulo: ultimo != null
+                                  ? 'Último: #${ultimo.numeroSeguimiento} • ${ultimo.cumplimiento ? "Cumplió" : "Pendiente"} • ${_MisApadrinamientosScreenState.parsearYFormatearFecha(ultimo.fechaSeguimiento.toIso8601String())}'
+                                  : 'Sin seguimientos registrados aún',
+                              contenido: historial.isEmpty
+                                  ? const Text(
+                                      'Pronto el administrador registrará el primer seguimiento de tu apadrinamiento.',
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    )
+                                  : Column(
+                                      children: historial.map((it) {
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFFF9FC),
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(color: const Color(0xFFFCE4EC)),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Text(
+                                                    'Seguimiento #${it.numeroSeguimiento} • Ciclo ${it.ciclo}',
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.w800,
+                                                      fontSize: 13,
+                                                      color: Color(0xFF1E293B),
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: it.cumplimiento
+                                                          ? const Color(0xFFDCFCE7)
+                                                          : const Color(0xFFFEE2E2),
+                                                      borderRadius: BorderRadius.circular(10),
+                                                    ),
+                                                    child: Text(
+                                                      it.cumplimiento ? 'Cumplió' : 'No cumplió',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        fontWeight: FontWeight.w800,
+                                                        color: it.cumplimiento
+                                                            ? const Color(0xFF15803D)
+                                                            : const Color(0xFFB91C1C),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Fecha: ${_MisApadrinamientosScreenState.formatearFechaLarga(it.fechaSeguimiento)}',
+                                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                                              ),
+                                              Text(
+                                                'Calificación: ${it.calificacion}/5  •  Revisado por: ${it.adminNombre}',
+                                                style: const TextStyle(fontSize: 11.5, color: Color(0xFF475569)),
+                                              ),
+                                              if (it.observaciones.trim().isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Comentario: ${it.observaciones}',
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontStyle: FontStyle.italic,
+                                                    color: Color(0xFF334155),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF880E4F),
+                        side: const BorderSide(color: Color(0xFFF48FB1), width: 1.2),
+                        minimumSize: const Size.fromHeight(46),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        backgroundColor: Colors.white,
+                      ),
+                      icon: widget.descargandoPdfId == s.id
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.rosa,
+                              ),
+                            )
+                          : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                      label: const Text(
+                        'Descargar acuerdo de compromiso',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      onPressed: widget.descargandoPdfId == s.id
+                          ? null
+                          : widget.onDescargarAcuerdoPdf,
                     ),
                   ] else ...[
                     // Estado pendiente o rechazado
@@ -1186,333 +1481,6 @@ class _TarjetaApadrinamientoPrincipalState
               ),
             ),
 
-            // ---------------- SECCIÓN DESPLEGABLE COMPLETA (ACTIVADA POR EL NUEVO BOTÓN) ----------------
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 250),
-              crossFadeState: (s.esAprobada && _mostrarSeguimientosYReportes)
-                  ? CrossFadeState.showSecond
-                  : CrossFadeState.showFirst,
-              firstChild: const SizedBox.shrink(),
-              secondChild: Padding(
-                padding: const EdgeInsets.only(top: 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 1. Seguimiento de Ciclos
-                    _construirSeccionDesplegable(
-                      expandida: _expandirCiclos,
-                      onToggle: () => setState(() => _expandirCiclos = !_expandirCiclos),
-                      icono: Icons.calendar_month_rounded,
-                      titulo: 'Seguimiento de Ciclos',
-                      subtitulo: 'Ciclo ${s.cicloActual} • ${s.seguimientosEnCiclo} de 3 seguimientos',
-                      trailingHeader: _construirIndicadorEtapas(
-                        etapaActual: s.seguimientosEnCiclo,
-                        proximo: proximo != null
-                            ? _MisApadrinamientosScreenState.formatearFechaCorta(proximo)
-                            : null,
-                      ),
-                      contenido: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (s.seguimientosEnCiclo == 0 && s.cicloActual > 1)
-                            Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFECFDF5),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFA7F3D0)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.check_circle_outline, color: Color(0xFF059669), size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      '¡El ciclo anterior finalizó formalmente! Comenzarás con el ciclo ${s.cicloActual}.',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFF065F46),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          const Text(
-                            'Cada ciclo de apadrinamiento consta de 3 seguimientos periódicos por parte del equipo de la Fundación Maritza Arévalo para verificar el bienestar del peludito.',
-                            style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.35),
-                          ),
-                          if (proximo != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Próxima fecha programada: ${_MisApadrinamientosScreenState.formatearFechaLarga(proximo)}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.rosa,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 2. Reportes de Apadrinamiento
-                    _construirSeccionDesplegable(
-                      expandida: _expandirReportes,
-                      onToggle: () => setState(() => _expandirReportes = !_expandirReportes),
-                      icono: Icons.description_rounded,
-                      titulo: 'Reportes de Apadrinamiento',
-                      etiquetaTitulo: primerReporte != null && !primerReporte.vistoPorUsuario
-                          ? 'Nuevo'
-                          : null,
-                      subtitulo: primerReporte != null
-                          ? 'Reporte del ciclo ${primerReporte.ciclo} • Promedio: ${primerReporte.promedio.toStringAsFixed(1)}/5'
-                          : 'Reporte a partir de 3 seguimientos (${s.seguimientosEnCiclo}/3)',
-                      etiquetaSubtitulo: primerReporte != null
-                          ? primerReporte.puntuacion.toUpperCase()
-                          : null,
-                      trailingHeader: primerReporte != null
-                          ? OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.rosa,
-                                side: const BorderSide(color: Color(0xFFF48FB1)),
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              icon: const Icon(Icons.download_rounded, size: 15),
-                              label: const Text('Descargar', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                              onPressed: () => _abrirReporte(primerReporte, descargar: true),
-                            )
-                          : null,
-                      contenido: s.evaluacionesCiclos.isEmpty
-                          ? const Text(
-                              'El reporte oficial se genera automáticamente al completar los 3 seguimientos de cada ciclo.',
-                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                            )
-                          : Column(
-                              children: s.evaluacionesCiclos.map((ev) {
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF9FC),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: const Color(0xFFFCE4EC)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.picture_as_pdf_rounded, color: AppColors.rosa, size: 24),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Reporte del Ciclo ${ev.ciclo}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 13,
-                                                color: Color(0xFF1E293B),
-                                              ),
-                                            ),
-                                            Text(
-                                              'Promedio: ${ev.promedio.toStringAsFixed(1)}/5 • ${ev.puntuacion.toUpperCase()}',
-                                              style: const TextStyle(
-                                                fontSize: 11.5,
-                                                color: Color(0xFF64748B),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: () => _abrirReporte(ev, descargar: false),
-                                        child: const Text('Ver', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.rosa)),
-                                      ),
-                                      FilledButton(
-                                        style: FilledButton.styleFrom(
-                                          backgroundColor: AppColors.rosa,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                          minimumSize: Size.zero,
-                                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                        ),
-                                        onPressed: () => _abrirReporte(ev, descargar: true),
-                                        child: const Text('Descargar', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 3. Historial de Seguimientos
-                    _construirSeccionDesplegable(
-                      expandida: _expandirHistorial,
-                      onToggle: () => setState(() => _expandirHistorial = !_expandirHistorial),
-                      icono: Icons.history_rounded,
-                      titulo: 'Historial de Seguimientos',
-                      subtitulo: ultimo != null
-                          ? 'Último: #${ultimo.numeroSeguimiento} • ${ultimo.cumplimiento ? "Cumplió" : "Pendiente"} • ${_MisApadrinamientosScreenState.parsearYFormatearFecha(ultimo.fechaSeguimiento.toIso8601String())}'
-                          : 'Sin seguimientos registrados aún',
-                      contenido: historial.isEmpty
-                          ? const Text(
-                              'Pronto el administrador registrará el primer seguimiento de tu apadrinamiento.',
-                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                            )
-                          : Column(
-                              children: historial.map((it) {
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF9FC),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: const Color(0xFFFCE4EC)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            'Seguimiento #${it.numeroSeguimiento} • Ciclo ${it.ciclo}',
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 13,
-                                              color: Color(0xFF1E293B),
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: it.cumplimiento
-                                                  ? const Color(0xFFDCFCE7)
-                                                  : const Color(0xFFFEE2E2),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            child: Text(
-                                              it.cumplimiento ? 'Cumplió' : 'No cumplió',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w800,
-                                                color: it.cumplimiento
-                                                    ? const Color(0xFF15803D)
-                                                    : const Color(0xFFB91C1C),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Fecha: ${_MisApadrinamientosScreenState.formatearFechaLarga(it.fechaSeguimiento)}',
-                                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
-                                      ),
-                                      Text(
-                                        'Calificación: ${it.calificacion}/5  •  Revisado por: ${it.adminNombre}',
-                                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF475569)),
-                                      ),
-                                      if (it.observaciones.trim().isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Comentario: ${it.observaciones}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontStyle: FontStyle.italic,
-                                            color: Color(0xFF334155),
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    // 4. Tu motivación registrada
-                    _construirSeccionDesplegable(
-                      expandida: _expandirMotivacion,
-                      onToggle: () => setState(() => _expandirMotivacion = !_expandirMotivacion),
-                      icono: Icons.favorite_rounded,
-                      titulo: 'Tu motivación registrada',
-                      subtitulo: s.motivacion.trim().isNotEmpty
-                          ? (s.motivacion.length > 35
-                              ? '${s.motivacion.substring(0, 35)}...'
-                              : s.motivacion)
-                          : 'Sin motivación registrada',
-                      contenido: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF9FC),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFFCE4EC)),
-                        ),
-                        child: Text(
-                          s.motivacion.trim().isNotEmpty
-                              ? s.motivacion
-                              : 'No se registró texto de motivación.',
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontStyle: FontStyle.italic,
-                            color: Color(0xFF475569),
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // 5. Botón de descarga de acuerdo en PDF
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFDE8F1),
-                        foregroundColor: const Color(0xFF880E4F),
-                        side: const BorderSide(color: Color(0xFFF9A8D4), width: 1.1),
-                        minimumSize: const Size.fromHeight(44),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      icon: widget.descargandoPdfId == s.id
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.rosa,
-                              ),
-                            )
-                          : const Icon(Icons.description_rounded, size: 18),
-                      label: const Text(
-                        'Descargar acuerdo de apadrinamiento (PDF)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 13,
-                        ),
-                      ),
-                      onPressed: widget.descargandoPdfId == s.id
-                          ? null
-                          : widget.onDescargarAcuerdoPdf,
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ],
         );
       },
@@ -1778,6 +1746,152 @@ class _TarjetaApadrinamientoPrincipalState
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  List<Widget> _tarjetasCiclo(SolicitudApadrinamiento s) {
+    final porCiclo = <int, CicloEvaluacionItem>{
+      for (final ev in s.evaluacionesCiclos) ev.ciclo: ev,
+    };
+    final completados = <int>{
+      for (var n = 1; n < s.cicloActual; n++) n,
+      if (s.seguimientosEnCiclo >= 3) s.cicloActual,
+      ...porCiclo.keys,
+    }.toList()
+      ..sort((a, b) => b.compareTo(a));
+    final enProceso = s.seguimientosEnCiclo < 3 && !completados.contains(s.cicloActual);
+    return [
+      if (enProceso) _tarjetaCicloEnProceso(s.cicloActual),
+      for (final n in completados)
+        porCiclo[n] != null
+            ? _tarjetaCicloCompletado(porCiclo[n]!)
+            : _tarjetaCicloSoloCompletado(n),
+    ];
+  }
+
+  Widget _tarjetaCicloSoloCompletado(int ciclo) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDE8F1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF48FB1)),
+      ),
+      child: Text(
+        'Ciclo $ciclo completado',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          color: AppColors.rosa,
+        ),
+      ),
+    );
+  }
+
+  Widget _tarjetaCicloEnProceso(int ciclo) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDE8F1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF48FB1)),
+      ),
+      child: Text(
+        'Ciclo $ciclo en proceso',
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          color: AppColors.rosa,
+        ),
+      ),
+    );
+  }
+
+  Widget _tarjetaCicloCompletado(CicloEvaluacionItem ev) {
+    final buena = ev.promedio >= 4;
+    final regular = !buena && ev.promedio >= 3;
+    final fondo = buena
+        ? const Color(0xFFE8F5E9)
+        : (regular ? const Color(0xFFFFF3E0) : const Color(0xFFFFEBEE));
+    final borde = buena
+        ? const Color(0xFF2E7D32)
+        : (regular ? const Color(0xFFEF6C00) : const Color(0xFFC62828));
+    final texto = buena
+        ? const Color(0xFF1B5E20)
+        : (regular ? const Color(0xFFE65100) : const Color(0xFFB71C1C));
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDE8F1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF48FB1), width: 1.4),
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Ciclo ${ev.ciclo} completado',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: AppColors.rosa,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: fondo,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borde),
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  'PUNTUACIÓN DEL CICLO',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  ev.clasificacionTexto,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: texto,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${ev.promedio.toStringAsFixed(1)} / 5',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: borde,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

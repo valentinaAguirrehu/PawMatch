@@ -42,7 +42,10 @@ function asegurarEsquemaMatch() {
         ALTER TABLE personalidadusuario
           ADD COLUMN IF NOT EXISTS id_mascota_match_inicial UUID REFERENCES mascota(id_mascota) ON DELETE SET NULL,
           ADD COLUMN IF NOT EXISTS porcentaje_match_inicial NUMERIC(5,2),
-          ADD COLUMN IF NOT EXISTS fecha_match_inicial TIMESTAMPTZ;
+          ADD COLUMN IF NOT EXISTS fecha_match_inicial TIMESTAMPTZ,
+          ADD COLUMN IF NOT EXISTS aviso_reasignacion_pendiente BOOLEAN NOT NULL DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS nombre_match_anterior TEXT,
+          ADD COLUMN IF NOT EXISTS id_aviso_reasignacion TEXT;
       `);
 
       // 3. Tabla de notificaciones de nuevas mascotas compatibles
@@ -92,12 +95,43 @@ function calcularPorcentajeCompatibilidad(usuarioRow, mascotaRow) {
   return Math.min(100, Math.max(0, Math.round(porcentaje * 100) / 100));
 }
 
+function estaAdoptada(mascota) {
+  return String(mascota?.estado_adopcion || '').trim().toLowerCase() === 'adoptado';
+}
+
 /**
- * Sincroniza el Match inicial del usuario y sus notificaciones de nuevas coincidencias:
- * - Si el usuario aún no tiene `id_mascota_match_inicial`, busca la mascota disponible
- *   con mayor compatibilidad y la guarda permanentemente como su Match inicial.
- * - Si ya tiene `id_mascota_match_inicial`, lo conserva sin reemplazarlo nunca por nuevas mascotas.
- * - Detecta mascotas nuevas (<= 48h) con alta compatibilidad (>= 75%) distintas del Match inicial
+ * La mascota no adoptada (disponible o apadrinada) con mayor compatibilidad.
+ * En empate gana el nombre, para que la elección no cambie entre consultas.
+ */
+function elegirMejorMascotaDisponible(perfil, mascotas, excluirId) {
+  let mejor = null;
+  let mejorPorcentaje = -1;
+
+  for (const mascota of mascotas) {
+    if (excluirId && mascota.id_mascota === excluirId) continue;
+    if (estaAdoptada(mascota)) continue;
+    const pct = calcularPorcentajeCompatibilidad(perfil, mascota);
+    if (pct == null) continue;
+    const nombre = String(mascota.nombre || '');
+    const mejorNombre = mejor ? String(mejor.nombre || '') : '';
+    const empate = pct === mejorPorcentaje && nombre.localeCompare(mejorNombre, 'es') < 0;
+    if (pct > mejorPorcentaje || empate) {
+      mejorPorcentaje = pct;
+      mejor = mascota;
+    }
+  }
+
+  if (!mejor) return null;
+  return { id: mejor.id_mascota, porcentaje: mejorPorcentaje };
+}
+
+/**
+ * Sincroniza el Match Ideal del usuario y sus notificaciones de nuevas coincidencias:
+ * - Si aún no tiene Match Ideal, guarda la mascota no adoptada con mayor compatibilidad.
+ * - Ese Match se conserva hasta que la mascota es adoptada, por él o por otra persona.
+ * - Si fue adoptada, se reemplaza por la no adoptada de mayor compatibilidad y queda
+ *   un aviso pendiente para contárselo al usuario.
+ * - Detecta mascotas nuevas (<= 48h) con alta compatibilidad (>= 75%) distintas del Match
  *   y registra la notificación una única vez por mascota y usuario.
  */
 async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
@@ -105,7 +139,8 @@ async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
 
   const resPerfil = await client.query(
     `SELECT id_perfil_usuario, id_usuario, ${personalityColumns.join(', ')},
-            id_mascota_match_inicial, porcentaje_match_inicial, fecha_match_inicial
+            id_mascota_match_inicial, porcentaje_match_inicial, fecha_match_inicial,
+            aviso_reasignacion_pendiente, nombre_match_anterior, id_aviso_reasignacion
      FROM personalidadusuario
      WHERE id_usuario = $1`,
     [idUsuario],
@@ -117,6 +152,7 @@ async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
       id_mascota_match_inicial: null,
       porcentaje_match_inicial: null,
       fecha_match_inicial: null,
+      aviso_reasignacion: null,
       notificaciones: [],
       no_leidas: 0,
     };
@@ -128,6 +164,9 @@ async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
     ? Number(perfil.porcentaje_match_inicial)
     : null;
   let fechaMatchInicial = perfil.fecha_match_inicial;
+  let avisoPendiente = perfil.aviso_reasignacion_pendiente === true;
+  let nombreMatchAnterior = perfil.nombre_match_anterior;
+  let idAvisoReasignacion = perfil.id_aviso_reasignacion;
 
   // Consultar mascotas disponibles con personalidad definida
   const resMascotas = await client.query(`
@@ -141,24 +180,14 @@ async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
     WHERE m.personalidad_definida = TRUE
   `);
 
-  // 1. Si aún no tiene Match inicial guardado, asignarle el mejor disponible en este momento
+  // 1. Sin Match Ideal: se guarda el mejor entre disponibles y apadrinados.
+  //    Si el Match Ideal ya fue adoptado, se reemplaza por el siguiente mejor
+  //    y se deja el aviso hasta que la persona lo lea.
   if (!idMatchInicial) {
-    let mejorMascotaId = null;
-    let mejorPorcentaje = -1;
-
-    for (const m of resMascotas.rows) {
-      if (String(m.estado_adopcion || '').trim().toLowerCase() === 'adoptado') continue;
-      const pct = calcularPorcentajeCompatibilidad(perfil, m);
-      if (pct == null) continue;
-      if (pct > mejorPorcentaje) {
-        mejorPorcentaje = pct;
-        mejorMascotaId = m.id_mascota;
-      }
-    }
-
-    if (mejorMascotaId) {
-      idMatchInicial = mejorMascotaId;
-      porcentajeInicial = mejorPorcentaje;
+    const mejor = elegirMejorMascotaDisponible(perfil, resMascotas.rows);
+    if (mejor) {
+      idMatchInicial = mejor.id;
+      porcentajeInicial = mejor.porcentaje;
       const upd = await client.query(
         `UPDATE personalidadusuario
          SET id_mascota_match_inicial = $1,
@@ -175,9 +204,64 @@ async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
       }
     }
   } else {
-    // Si ya tiene Match inicial guardado, recalcular su porcentaje real si estaba en null
-    const mascotaInicial = resMascotas.rows.find((m) => m.id_mascota === idMatchInicial);
-    if (mascotaInicial) {
+    let mascotaInicial = resMascotas.rows.find((m) => m.id_mascota === idMatchInicial);
+    if (!mascotaInicial) {
+      const suelta = await client.query(
+        `SELECT id_mascota, nombre, estado_adopcion
+         FROM mascota
+         WHERE id_mascota = $1`,
+        [idMatchInicial],
+      );
+      mascotaInicial = suelta.rows[0] || null;
+    }
+
+    if (mascotaInicial && estaAdoptada(mascotaInicial)) {
+      const mejor = elegirMejorMascotaDisponible(
+        perfil,
+        resMascotas.rows,
+        idMatchInicial,
+      );
+      const nombreAdoptado = String(mascotaInicial.nombre || '').trim();
+      if (mejor && nombreAdoptado) {
+        const nombreAviso = avisoPendiente && nombreMatchAnterior
+          ? nombreMatchAnterior
+          : nombreAdoptado;
+        const idAviso = avisoPendiente && idAvisoReasignacion
+          ? idAvisoReasignacion
+          : randomUUID();
+        const upd = await client.query(
+          `UPDATE personalidadusuario
+           SET id_mascota_match_inicial = $1,
+               porcentaje_match_inicial = $2,
+               fecha_match_inicial = CURRENT_TIMESTAMP,
+               aviso_reasignacion_pendiente = TRUE,
+               nombre_match_anterior = $3,
+               id_aviso_reasignacion = $4
+           WHERE id_usuario = $5
+             AND id_mascota_match_inicial = $6
+           RETURNING id_mascota_match_inicial, porcentaje_match_inicial, fecha_match_inicial,
+                     aviso_reasignacion_pendiente, nombre_match_anterior, id_aviso_reasignacion`,
+          [mejor.id, mejor.porcentaje, nombreAviso, idAviso, idUsuario, idMatchInicial],
+        );
+        const fila = upd.rows[0] || (await client.query(
+          `SELECT id_mascota_match_inicial, porcentaje_match_inicial, fecha_match_inicial,
+                  aviso_reasignacion_pendiente, nombre_match_anterior, id_aviso_reasignacion
+           FROM personalidadusuario
+           WHERE id_usuario = $1`,
+          [idUsuario],
+        )).rows[0];
+        if (fila) {
+          idMatchInicial = fila.id_mascota_match_inicial;
+          porcentajeInicial = fila.porcentaje_match_inicial != null
+            ? Number(fila.porcentaje_match_inicial)
+            : null;
+          fechaMatchInicial = fila.fecha_match_inicial;
+          avisoPendiente = fila.aviso_reasignacion_pendiente === true;
+          nombreMatchAnterior = fila.nombre_match_anterior;
+          idAvisoReasignacion = fila.id_aviso_reasignacion;
+        }
+      }
+    } else if (mascotaInicial && resMascotas.rows.some((m) => m.id_mascota === idMatchInicial)) {
       const pctActual = calcularPorcentajeCompatibilidad(perfil, mascotaInicial);
       if (pctActual != null && porcentajeInicial == null) {
         porcentajeInicial = pctActual;
@@ -195,7 +279,7 @@ async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
     for (const m of resMascotas.rows) {
       if (!m.es_nuevo) continue;
       if (m.id_mascota === idMatchInicial) continue;
-      if (String(m.estado_adopcion || '').trim().toLowerCase() === 'adoptado') continue;
+      if (estaAdoptada(m)) continue;
       // Si la mascota fue creada después o es nueva, verificamos compatibilidad
       const pct = calcularPorcentajeCompatibilidad(perfil, m);
       if (pct != null && pct >= UMBRAL_NUEVA_COINCIDENCIA) {
@@ -247,14 +331,34 @@ async function sincronizarMatchDeUsuario(idUsuario, client = pool) {
 
   const noLeidas = notificaciones.filter((n) => !n.leida).length;
 
+  const avisoReasignacion = avisoPendiente && nombreMatchAnterior && idAvisoReasignacion
+    ? {
+        id: idAvisoReasignacion,
+        nombre_anterior: nombreMatchAnterior,
+      }
+    : null;
+
   return {
     tiene_personalidad: true,
     id_mascota_match_inicial: idMatchInicial,
     porcentaje_match_inicial: porcentajeInicial,
     fecha_match_inicial: fechaMatchInicial,
+    aviso_reasignacion: avisoReasignacion,
     notificaciones,
     no_leidas: noLeidas,
   };
+}
+
+async function marcarAvisoReasignacionVisto(idUsuario, idAviso, client = pool) {
+  await asegurarEsquemaMatch();
+  await client.query(
+    `UPDATE personalidadusuario
+     SET aviso_reasignacion_pendiente = FALSE
+     WHERE id_usuario = $1
+       AND aviso_reasignacion_pendiente = TRUE
+       AND ($2::text IS NULL OR id_aviso_reasignacion = $2)`,
+    [idUsuario, idAviso || null],
+  );
 }
 
 /**
@@ -282,7 +386,7 @@ async function procesarNuevaMascotaParaUsuarios(idMascota, client = pool) {
   if (resMascota.rows.length === 0) return;
   const mascota = resMascota.rows[0];
   if (!mascota.personalidad_definida) return;
-  if (String(mascota.estado_adopcion || '').trim().toLowerCase() === 'adoptado') return;
+  if (estaAdoptada(mascota)) return;
 
   const resUsuarios = await client.query(
     `SELECT id_usuario, id_mascota_match_inicial, ${personalityColumns.join(', ')}
@@ -319,6 +423,7 @@ module.exports = {
   asegurarEsquemaMatch,
   calcularPorcentajeCompatibilidad,
   sincronizarMatchDeUsuario,
+  marcarAvisoReasignacionVisto,
   procesarNuevaMascotaParaUsuarios,
 };
 

@@ -68,13 +68,25 @@ class SincronizacionMatchUsuario {
   final List<NotificacionMatchMascota> notificaciones;
   final int noLeidas;
 
+  /// Aviso pendiente porque el Match Ideal fue adoptado y ya hay uno nuevo.
+  final String? idAvisoReasignacion;
+  final String? nombreMatchAnterior;
+
   const SincronizacionMatchUsuario({
     required this.tienePersonalidad,
     this.idMascotaMatchInicial,
     this.porcentajeMatchInicial,
     this.notificaciones = const [],
     this.noLeidas = 0,
+    this.idAvisoReasignacion,
+    this.nombreMatchAnterior,
   });
+
+  bool get tieneAvisoReasignacion {
+    final id = idAvisoReasignacion?.trim() ?? '';
+    final nombre = nombreMatchAnterior?.trim() ?? '';
+    return id.isNotEmpty && nombre.isNotEmpty;
+  }
 }
 
 /// Una mascota y su `porcentaje_match` (tabla `Match`, de 0 a 100).
@@ -107,6 +119,8 @@ class RankingMatch {
   final Map<String, int> usuario;
   final List<CompatibilidadMatch> mejores;
   final String? idMascotaMatchInicial;
+  final String? idAvisoReasignacion;
+  final String? nombreMatchAnterior;
 
   const RankingMatch({
     required this.tienePersonalidad,
@@ -114,6 +128,8 @@ class RankingMatch {
     required this.usuario,
     required this.mejores,
     this.idMascotaMatchInicial,
+    this.idAvisoReasignacion,
+    this.nombreMatchAnterior,
   });
 }
 
@@ -175,6 +191,10 @@ class MatchService {
           : double.tryParse('${rawPct ?? ''}');
 
       final idInicialRaw = data['id_mascota_match_inicial']?.toString().trim();
+      final aviso = data['aviso_reasignacion'];
+      final avisoMap = aviso is Map ? Map<String, dynamic>.from(aviso) : null;
+      final idAviso = avisoMap?['id']?.toString().trim();
+      final nombreAnterior = avisoMap?['nombre_anterior']?.toString().trim();
 
       return SincronizacionMatchUsuario(
         tienePersonalidad: data['tiene_personalidad'] == true,
@@ -185,6 +205,12 @@ class MatchService {
         porcentajeMatchInicial: pctInicial,
         notificaciones: notifs,
         noLeidas: noLeidas,
+        idAvisoReasignacion:
+            (idAviso != null && idAviso.isNotEmpty) ? idAviso : null,
+        nombreMatchAnterior:
+            (nombreAnterior != null && nombreAnterior.isNotEmpty)
+                ? nombreAnterior
+                : null,
       );
     } catch (_) {
       return const SincronizacionMatchUsuario(tienePersonalidad: false);
@@ -213,6 +239,22 @@ class MatchService {
         }),
       );
       await sincronizar();
+    } catch (_) {}
+  }
+
+  /// Cierra el aviso de que el Match Ideal fue adoptado y ya hay uno nuevo.
+  static Future<void> marcarAvisoReasignacionVisto(String idAviso) async {
+    final id = Session.idUsuario;
+    if (id == null || id.isEmpty) return;
+    try {
+      await http.patch(
+        Uri.parse('${ApiService.baseUrl}/usuarios/$id/match-reasignacion/vista'),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-usuario-id': id,
+        },
+        body: jsonEncode({'id_aviso': idAviso}),
+      );
     } catch (_) {}
   }
 
@@ -274,8 +316,8 @@ class MatchService {
       );
     });
 
-    // El Match inicial siempre va primero como «Mi Match Perfecto»,
-    // seguido de las mejores nuevas coincidencias sin reemplazar nunca el Match inicial.
+    // El Match Ideal guardado va primero. Si ese peludito ya fue adoptado,
+    // la sincronización lo reemplazó por el de mayor compatibilidad disponible.
     final listaFinal = <CompatibilidadMatch>[
       if (matchInicialGuardado != null) matchInicialGuardado,
       ...resultados,
@@ -288,6 +330,8 @@ class MatchService {
       idMascotaMatchInicial:
           matchInicialGuardado?.mascota.id ??
           (listaFinal.isNotEmpty ? listaFinal.first.mascota.id : null),
+      idAvisoReasignacion: sync.idAvisoReasignacion,
+      nombreMatchAnterior: sync.nombreMatchAnterior,
       mejores: listaFinal.length <= limite
           ? listaFinal
           : listaFinal.sublist(0, limite),

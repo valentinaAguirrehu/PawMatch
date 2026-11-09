@@ -766,13 +766,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
           ),
         ],
-        const SizedBox(height: 28),
-        Text(
-          'Voz del asistente',
-          style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
-        const BotonElegirVoz(),
+        if (Session.isAdmin) ...[
+          const SizedBox(height: 28),
+          Text(
+            'Voz del asistente',
+            style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          const BotonElegirVoz(),
+        ],
         const SizedBox(height: 28),
       Text(
         'Contraseña',

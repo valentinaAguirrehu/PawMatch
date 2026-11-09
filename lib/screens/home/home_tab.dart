@@ -1,4 +1,5 @@
-import 'dart:math' as math;
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/layout.dart';
@@ -37,14 +38,14 @@ class _HomeTabState extends State<HomeTab> {
   // Colores exactos del Welcome Screen
   static const Color _rosaWelcomeTop = Color(0xFFFFA3C8);
   static const Color _rosaWelcomeMid = Color(0xFFF98BB8);
-  static const Color _rosaWelcomeSoft = Color(0xFFFDE4EF);
   static const Color _rosaPrincipal = AppColors.rosa; // #ED4F9D
-  static const Color _rosaFondo = Color(0xFFFFF0F5);
+  static const Color _rosaFondo = AppColors.rosaSuave;
   static const Color _textoOscuro = Color(0xFF2E2A2C);
   static const Color _textoGris = Color(0xFF7A6E75);
 
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _esperandoHogarKey = GlobalKey();
+  final GlobalKey _noticiasKey = GlobalKey();
 
   late Future<List<Pet>> _futureMascotas;
   late Future<List<Noticia>> _futureNoticias;
@@ -92,17 +93,16 @@ class _HomeTabState extends State<HomeTab> {
     }
   }
 
-  void _scrollHaciaEsperandoHogar() {
-    final ctx = _esperandoHogarKey.currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeInOutCubic,
-      );
-    } else {
-      widget.onVerMascotas();
-    }
+  void _scrollHasta(GlobalKey clave) {
+    final contexto = clave.currentContext;
+    if (contexto == null) return;
+    Scrollable.ensureVisible(
+      contexto,
+      alignment: 0,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+      duration: const Duration(milliseconds: 550),
+      curve: Curves.easeInOutCubic,
+    );
   }
 
   void _toggleFavoritoMascota(Pet pet) {
@@ -192,7 +192,7 @@ class _HomeTabState extends State<HomeTab> {
             final totalLikes = _noticiasLikeCounts[noticia.id] ?? noticia.totalLikes;
             final categoria = _categoriaNoticia(noticia);
             final fecha = _formatearFecha(noticia.fecha);
-            final tiempoLectura = _tiempoLectura(noticia.contenido);
+            final publicadoHace = _publicadoHace(noticia);
             final fotoUrl = _obtenerFotoNoticia(noticia, index);
 
             return Center(
@@ -232,13 +232,57 @@ class _HomeTabState extends State<HomeTab> {
                             borderRadius: BorderRadius.circular(20),
                             child: AspectRatio(
                               aspectRatio: 16 / 10,
-                              child: Image.network(
-                                fotoUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  color: _rosaFondo,
-                                  child: const Icon(Icons.pets_rounded, color: _rosaPrincipal, size: 40),
-                                ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Image.network(
+                                    fotoUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      color: _rosaFondo,
+                                      child: const Icon(Icons.pets_rounded, color: _rosaPrincipal, size: 40),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: 10,
+                                    bottom: 10,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withValues(alpha: 0.28),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: Colors.white.withValues(alpha: 0.75),
+                                              width: 1.2,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.favorite_rounded, color: _rosaPrincipal, size: 16),
+                                              const SizedBox(width: 5),
+                                              Text(
+                                                '$totalLikes',
+                                                style: const TextStyle(
+                                                  fontFamily: 'Nunito',
+                                                  color: _rosaPrincipal,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 15,
+                                                  height: 1,
+                                                  letterSpacing: 0.2,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -277,7 +321,7 @@ class _HomeTabState extends State<HomeTab> {
                               const Text('•', style: TextStyle(color: Colors.grey)),
                               const SizedBox(width: 6),
                               Text(
-                                tiempoLectura,
+                                publicadoHace,
                                 style: const TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w700,
@@ -313,78 +357,87 @@ class _HomeTabState extends State<HomeTab> {
                     ),
 
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         border: Border(top: BorderSide(color: _rosaWelcomeTop.withValues(alpha: 0.4))),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          InkWell(
-                            onTap: () => _toggleLikeNoticia(noticia, setModalState),
-                            borderRadius: BorderRadius.circular(24),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: dioLike ? _rosaFondo : Colors.grey.shade50,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(
-                                  color: dioLike ? _rosaPrincipal : Colors.grey.shade300,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    dioLike ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                    color: dioLike ? _rosaPrincipal : Colors.grey.shade600,
-                                    size: 19,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    dioLike ? '¡Te gusta!' : 'Me gusta',
-                                    style: TextStyle(
-                                      color: dioLike ? _rosaPrincipal : Colors.grey.shade700,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => _toggleLikeNoticia(noticia, setModalState),
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 320),
+                                    curve: Curves.easeOutCubic,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: dioLike ? _rosaPrincipal : Colors.grey.shade300,
-                                      borderRadius: BorderRadius.circular(10),
+                                      color: dioLike ? _rosaFondo : Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: dioLike ? _rosaPrincipal : Colors.grey.shade300,
+                                        width: 1.5,
+                                      ),
                                     ),
-                                    child: Text(
-                                      '$totalLikes',
-                                      style: TextStyle(
-                                        color: dioLike ? Colors.white : Colors.grey.shade800,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 11,
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(milliseconds: 280),
+                                      switchInCurve: Curves.easeOutBack,
+                                      switchOutCurve: Curves.easeIn,
+                                      transitionBuilder: (child, animation) {
+                                        return FadeTransition(
+                                          opacity: animation,
+                                          child: ScaleTransition(
+                                            scale: Tween<double>(begin: 0.86, end: 1).animate(animation),
+                                            child: child,
+                                          ),
+                                        );
+                                      },
+                                      child: Row(
+                                        key: ValueKey(dioLike),
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            dioLike ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                                            color: dioLike ? _rosaPrincipal : Colors.grey.shade600,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              dioLike ? '¡Te gusta!' : 'Dar me gusta',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: dioLike ? _rosaPrincipal : Colors.grey.shade700,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
-
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: _rosaPrincipal,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            ),
-                            child: const Text(
-                              'Listo',
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-                            ),
-                          ),
-                        ],
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: _rosaPrincipal,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  ),
+                                  icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                                  label: const Text(
+                                    'Volver',
+                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                            ],
                       ),
                     ),
                   ],
@@ -437,80 +490,59 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ),
 
-            // ==========================================
-            // 2. HERO BANNER CURVADO CON DEGRADADO Y BURBUJAS (IDÉNTICO A WELCOME)
-            // ==========================================
-            Stack(
+            // Mismo bloque y degradado de welcome_screen.dart (_hero / FondoHeroPainter).
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: Layout.anchoMaximo),
+                child: Stack(
               children: [
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _FondoHeroWelcomePainter(
-                      colorTop: _rosaWelcomeTop,
-                      colorMid: _rosaWelcomeMid,
-                      colorBottom: _rosaWelcomeSoft,
-                      colorFondo: Colors.white,
-                    ),
-                  ),
+                const Positioned.fill(
+                  child: CustomPaint(painter: FondoHeroPainter()),
                 ),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: anchoMaximoContenido),
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        esEscritorio ? 36 : 20,
-                        esEscritorio ? 14 : 10,
-                        esEscritorio ? 36 : 20,
-                        esEscritorio ? 58 : 50,
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    esEscritorio ? 36 : (anchoTotal < 380 ? 14 : 20),
+                    8,
+                    esEscritorio ? 36 : (anchoTotal < 380 ? 14 : 20),
+                    16,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'CONOCE NUESTRA',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.94),
+                          fontFamily: 'Nunito',
+                          fontSize: esEscritorio ? 14 : 11.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 2.4,
+                          height: 1.1,
+                        ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'CONOCE NUESTRA',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: esEscritorio ? 14 : 12,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'Nunito',
-                              color: Colors.white.withValues(alpha: 0.95),
-                              letterSpacing: 2.8,
-                              height: 1.1,
-                              shadows: const [
-                                Shadow(
-                                  color: Color(0x35000000),
-                                  blurRadius: 4,
-                                  offset: Offset(0, 1),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'FUNDACIÓN\nMARITZA\nARÉVALO',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: esEscritorio ? 46.0 : 34.0,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'Nunito',
-                              color: Colors.white,
-                              height: 1.05,
-                              letterSpacing: 0.4,
-                              shadows: const [
-                                Shadow(
-                                  color: Color(0x40000000),
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 6),
+                      Text(
+                        'FUNDACIÓN\nMARITZA\nARÉVALO',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Nunito',
+                          color: Colors.white,
+                          fontSize: anchoTotal < 360
+                              ? 26
+                              : (esEscritorio ? 44 : 32),
+                          fontWeight: FontWeight.w800,
+                          height: 1.06,
+                          letterSpacing: 0.4,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ],
+                ),
+              ),
             ),
 
             const SizedBox(height: 10),
@@ -536,16 +568,13 @@ class _HomeTabState extends State<HomeTab> {
 
                       SizedBox(height: esEscritorio ? 26 : 20),
 
-                      // 4. SECCIÓN "ESPERANDO UN HOGAR" (SIN OVERFLOWS)
-                      Container(
-                        key: _esperandoHogarKey,
-                        child: _construirSeccionEsperandoUnHogar(esEscritorio),
-                      ),
+                      // 4. SECCIÓN NOTICIAS DE LA FUNDACIÓN (CON FOTOS)
+                      _construirSeccionNoticias(esEscritorio),
 
                       SizedBox(height: esEscritorio ? 26 : 20),
 
-                      // 5. SECCIÓN NOTICIAS DE LA FUNDACIÓN (CON FOTOS)
-                      _construirSeccionNoticias(esEscritorio),
+                      // 5. SECCIÓN "ESPERANDO UN HOGAR" (SIN OVERFLOWS)
+                      _construirSeccionEsperandoUnHogar(esEscritorio),
 
                       SizedBox(height: esEscritorio ? 36 : 28),
 
@@ -790,7 +819,7 @@ class _HomeTabState extends State<HomeTab> {
                 icono: Icons.pets_rounded,
                 colorIcono: _rosaPrincipal,
                 esEscritorio: esEscritorio,
-                onTap: widget.onVerMascotas,
+                onTap: () => _scrollHasta(_esperandoHogarKey),
               ),
             ),
             SizedBox(width: esEscritorio ? 12 : 8),
@@ -803,20 +832,20 @@ class _HomeTabState extends State<HomeTab> {
                 icono: Icons.volunteer_activism_rounded,
                 colorIcono: _rosaWelcomeMid,
                 esEscritorio: esEscritorio,
-                onTap: widget.onVerMascotas,
+                onTap: () => _scrollHasta(_esperandoHogarKey),
               ),
             ),
             SizedBox(width: esEscritorio ? 12 : 8),
 
-            // 3. Esperando hogar
+            // 3. Difunde
             Expanded(
               child: _BotonAccionCompacto(
-                titulo: 'Esperando',
-                subtitulo: 'hogar',
-                icono: Icons.home_outlined,
+                titulo: 'Difunde',
+                subtitulo: 'Comparte y salva',
+                icono: Icons.share_outlined,
                 colorIcono: _rosaWelcomeTop,
                 esEscritorio: esEscritorio,
-                onTap: _scrollHaciaEsperandoHogar,
+                onTap: () => _scrollHasta(_noticiasKey),
               ),
             ),
           ],
@@ -832,7 +861,9 @@ class _HomeTabState extends State<HomeTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        KeyedSubtree(
+          key: _esperandoHogarKey,
+          child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
@@ -898,6 +929,7 @@ class _HomeTabState extends State<HomeTab> {
             ),
           ],
         ),
+        ),
         SizedBox(height: esEscritorio ? 12 : 8),
 
         // Carrusel Horizontal de Mascotas
@@ -951,7 +983,9 @@ class _HomeTabState extends State<HomeTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        KeyedSubtree(
+          key: _noticiasKey,
+          child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(
@@ -1005,7 +1039,7 @@ class _HomeTabState extends State<HomeTab> {
                 border: Border.all(color: _rosaWelcomeTop.withValues(alpha: 0.6)),
               ),
               child: Text(
-                'Rosa Noticias ✨',
+                'Importante',
                 style: TextStyle(
                   fontSize: esEscritorio ? 12 : 10,
                   fontWeight: FontWeight.w800,
@@ -1014,6 +1048,7 @@ class _HomeTabState extends State<HomeTab> {
               ),
             ),
           ],
+        ),
         ),
         SizedBox(height: esEscritorio ? 16 : 12),
 
@@ -1058,7 +1093,7 @@ class _HomeTabState extends State<HomeTab> {
                       totalLikes: _noticiasLikeCounts[destacada.id] ?? destacada.totalLikes,
                       categoria: _categoriaNoticia(destacada),
                       fechaTexto: _formatearFecha(destacada.fecha),
-                      tiempoLecturaTexto: _tiempoLectura(destacada.contenido),
+                      tiempoLecturaTexto: _publicadoHace(destacada),
                       esEscritorio: true,
                       onTap: () => _abrirModalNoticia(destacada, 0),
                     ),
@@ -1080,7 +1115,7 @@ class _HomeTabState extends State<HomeTab> {
                             totalLikes: _noticiasLikeCounts[n.id] ?? n.totalLikes,
                             categoria: _categoriaNoticia(n),
                             fechaTexto: _formatearFecha(n.fecha),
-                            tiempoLecturaTexto: _tiempoLectura(n.contenido),
+                            tiempoLecturaTexto: _publicadoHace(n),
                             esEscritorio: true,
                             onTap: () => _abrirModalNoticia(n, idx),
                             onToggleLike: () => _toggleLikeNoticia(n),
@@ -1103,7 +1138,7 @@ class _HomeTabState extends State<HomeTab> {
                   totalLikes: _noticiasLikeCounts[destacada.id] ?? destacada.totalLikes,
                   categoria: _categoriaNoticia(destacada),
                   fechaTexto: _formatearFecha(destacada.fecha),
-                  tiempoLecturaTexto: _tiempoLectura(destacada.contenido),
+                  tiempoLecturaTexto: _publicadoHace(destacada),
                   esEscritorio: false,
                   onTap: () => _abrirModalNoticia(destacada, 0),
                 ),
@@ -1123,7 +1158,7 @@ class _HomeTabState extends State<HomeTab> {
                       totalLikes: _noticiasLikeCounts[n.id] ?? n.totalLikes,
                       categoria: _categoriaNoticia(n),
                       fechaTexto: _formatearFecha(n.fecha),
-                      tiempoLecturaTexto: _tiempoLectura(n.contenido),
+                      tiempoLecturaTexto: _publicadoHace(n),
                       esEscritorio: false,
                       onTap: () => _abrirModalNoticia(n, idx),
                       onToggleLike: () => _toggleLikeNoticia(n),
@@ -1219,10 +1254,42 @@ class _HomeTabState extends State<HomeTab> {
     return fechaRaw.isNotEmpty ? fechaRaw : '28 Oct, 2026';
   }
 
-  String _tiempoLectura(String contenido) {
-    final palabras = contenido.trim().split(RegExp(r'\s+')).length;
-    final min = (palabras / 40).ceil().clamp(1, 10);
-    return '$min min de lectura';
+  String _publicadoHace(Noticia noticia) {
+    final momento = _momentoPublicacion(noticia);
+    if (momento == null) return 'publicado recientemente';
+    final diff = DateTime.now().difference(momento);
+    if (diff.isNegative || diff.inMinutes < 1) return 'publicado hace un momento';
+    if (diff.inMinutes < 60) {
+      final minutos = diff.inMinutes;
+      return 'publicado hace $minutos ${minutos == 1 ? 'minuto' : 'minutos'}';
+    }
+    if (diff.inHours < 24) {
+      final horas = diff.inHours;
+      return 'publicado hace $horas ${horas == 1 ? 'hora' : 'horas'}';
+    }
+    final dias = diff.inDays;
+    if (dias < 30) {
+      return 'publicado hace $dias ${dias == 1 ? 'día' : 'días'}';
+    }
+    final meses = dias ~/ 30;
+    if (meses < 12) {
+      return 'publicado hace $meses ${meses == 1 ? 'mes' : 'meses'}';
+    }
+    final anios = dias ~/ 365;
+    return 'publicado hace $anios ${anios == 1 ? 'año' : 'años'}';
+  }
+
+  DateTime? _momentoPublicacion(Noticia noticia) {
+    final creacion = noticia.fechaCreacion?.trim() ?? '';
+    if (creacion.isNotEmpty) {
+      final marca = DateTime.tryParse(creacion);
+      if (marca != null) return marca.toLocal();
+    }
+    final fecha = noticia.fecha.trim();
+    if (fecha.isEmpty) return null;
+    final dia = DateTime.tryParse(fecha);
+    if (dia == null) return null;
+    return DateTime(dia.year, dia.month, dia.day);
   }
 
   List<Pet> _mascotasPorDefecto() {
@@ -1297,91 +1364,6 @@ class _HomeTabState extends State<HomeTab> {
 }
 
 // ==========================================
-// PAINTER: DEGRADADO ROSADO CON BURBUJAS Y ONDA EXACTO A WELCOME
-// ==========================================
-class _FondoHeroWelcomePainter extends CustomPainter {
-  final Color colorTop;
-  final Color colorMid;
-  final Color colorBottom;
-  final Color colorFondo;
-
-  const _FondoHeroWelcomePainter({
-    required this.colorTop,
-    required this.colorMid,
-    required this.colorBottom,
-    this.colorFondo = const Color(0xFFFFF0F5),
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final w = size.width;
-    final base = size.height;
-
-    // Camino con curva idéntica a Welcome (welcome_screen.dart:1079-1089)
-    final rosa = Path()
-      ..moveTo(0, 0)
-      ..lineTo(w, 0)
-      ..lineTo(w, base - 36)
-      ..cubicTo(w * 0.78, base - 8, w * 0.58, base - 58, w * 0.40, base - 34)
-      ..cubicTo(w * 0.22, base - 10, w * 0.10, base - 48, 0, base - 22)
-      ..close();
-
-    final borde = Path()
-      ..moveTo(w, base - 36)
-      ..cubicTo(w * 0.78, base - 8, w * 0.58, base - 58, w * 0.40, base - 34)
-      ..cubicTo(w * 0.22, base - 10, w * 0.10, base - 48, 0, base - 22);
-
-    canvas.drawRect(rect, Paint()..color = colorFondo);
-    canvas.save();
-    canvas.clipPath(rosa);
-
-    // Degradado suave y luminoso exacto del Welcome
-    final shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [colorTop, colorMid, colorBottom],
-    ).createShader(rect);
-
-    canvas.drawRect(rect, Paint()..shader = shader);
-
-    // Burbujas Bokeh idénticas a la pantalla de bienvenida
-    void burbuja(double x, double y, double radio, double alpha) {
-      canvas.drawCircle(
-        Offset(x, y),
-        radio,
-        Paint()..color = Colors.white.withValues(alpha: alpha),
-      );
-    }
-
-    final escala = math.min(size.width, 420);
-    burbuja(size.width * 0.12, size.height * 0.24, escala * 0.18, 0.22);
-    burbuja(size.width * 0.90, size.height * 0.18, escala * 0.20, 0.18);
-    burbuja(size.width * 0.62, size.height * 0.12, escala * 0.09, 0.15);
-    burbuja(size.width * 0.35, size.height * 0.52, escala * 0.12, 0.12);
-
-    canvas.restore();
-
-    // Borde blanco suave difuminado tipo resplandor
-    canvas.drawPath(
-      borde,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 16
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
-        ..color = Colors.white,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _FondoHeroWelcomePainter oldDelegate) =>
-      oldDelegate.colorTop != colorTop ||
-      oldDelegate.colorMid != colorMid ||
-      oldDelegate.colorBottom != colorBottom ||
-      oldDelegate.colorFondo != colorFondo;
-}
-
-// ==========================================
 // WIDGET: BOTÓN DE ACCIÓN RÁPIDA COMPACTO (ADAPTABLE)
 // ==========================================
 class _BotonAccionCompacto extends StatelessWidget {
@@ -1447,7 +1429,7 @@ class _BotonAccionCompacto extends StatelessWidget {
               Text(
                 subtitulo,
                 textAlign: TextAlign.center,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: esEscritorio ? 11.5 : 9,
@@ -1755,12 +1737,16 @@ class _TarjetaNoticiaDestacada extends StatelessWidget {
                           const SizedBox(width: 6),
                           const Text('•', style: TextStyle(color: Colors.white70)),
                           const SizedBox(width: 6),
-                          Text(
-                            '⏱️ $tiempoLecturaTexto',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: esEscritorio ? 12 : 10.5,
-                              fontWeight: FontWeight.w600,
+                          Flexible(
+                            child: Text(
+                              tiempoLecturaTexto,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: esEscritorio ? 12 : 10.5,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -1822,7 +1808,7 @@ class _TarjetaNoticiaDestacada extends StatelessWidget {
                       Row(
                         children: [
                           Text(
-                            'Leer y dar Me Gusta 💖',
+                            'Ver más detalles',
                             style: TextStyle(
                               fontSize: esEscritorio ? 12.5 : 11,
                               fontWeight: FontWeight.w800,
@@ -1940,7 +1926,7 @@ class _TarjetaNoticiaSecundaria extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '📅 $fechaTexto • ⏱️ $tiempoLecturaTexto',
+                      '📅 $fechaTexto • $tiempoLecturaTexto',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

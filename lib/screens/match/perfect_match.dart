@@ -8,12 +8,13 @@ import 'package:paw_match/screens/apadrinamiento/pasos_apadrinamiento_screen.dar
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/screens/match/aviso_reasignacion_match.dart';
 import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
-import 'package:paw_match/widgets/cuestionario_usuario.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
@@ -33,10 +34,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
   /// Mascotas cuya solicitud de adopción del usuario actual ya está aprobada.
   Set<String> _adoptadasPorMi = {};
 
+  /// Match Ideal que se está mostrando, para detectar si acaba de ser adoptado.
+  String? _idMatchActual;
+  bool _recalculandoMatch = false;
+
   @override
   void initState() {
     super.initState();
     MatchEstado.instancia.addListener(_alActualizarPersonalidad);
+    PetsService.mascotasEnMemoria.addListener(_alCambiarMascotas);
     _future = MatchService.mejores();
     _cargarAdopciones();
   }
@@ -44,7 +50,35 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
   @override
   void dispose() {
     MatchEstado.instancia.removeListener(_alActualizarPersonalidad);
+    PetsService.mascotasEnMemoria.removeListener(_alCambiarMascotas);
     super.dispose();
+  }
+
+  void _alCambiarMascotas() {
+    if (!mounted || _recalculandoMatch) return;
+    final lista = PetsService.mascotasEnMemoria.value;
+    final id = _idMatchActual;
+    if (lista == null || id == null) return;
+    final adoptado = lista.any((p) => p.id == id && p.estaAdoptada);
+    if (!adoptado) return;
+    _recalculandoMatch = true;
+    _cargar().whenComplete(() {
+      _recalculandoMatch = false;
+    });
+  }
+
+  void _programarAviso(RankingMatch ranking) {
+    final id = ranking.idAvisoReasignacion;
+    final nombre = ranking.nombreMatchAnterior;
+    if (id == null || nombre == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      mostrarAvisoReasignacionMatch(
+        context,
+        idAviso: id,
+        nombreAnterior: nombre,
+      );
+    });
   }
 
   void _alActualizarPersonalidad() {
@@ -135,7 +169,10 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
                       );
                     }
                     if (snap.hasError) return _error(snap.error);
-                    return _contenido(snap.data!);
+                    final ranking = snap.data!;
+                    _idMatchActual = ranking.idMascotaMatchInicial;
+                    _programarAviso(ranking);
+                    return _contenido(ranking);
                   },
                 ),
               ),
@@ -187,27 +224,6 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const EncabezadoCuestionarioUsuario(
-                  titulo: '¡Tu Alma Gemela Ideal!',
-                  mostrarLogo: false,
-                  estiloTitulo: TextStyle(
-                    fontFamily: 'serif',
-                    fontSize: 18,
-                    height: 1.25,
-                    fontWeight: FontWeight.w600,
-                    fontStyle: FontStyle.italic,
-                    letterSpacing: 0.3,
-                    color: AppColors.texto,
-                  ),
-                  icono: FeatureIcon.compatibilidad(
-                    color: AppColors.rosa,
-                    tamano: 20,
-                  ),
-                  detalle:
-                      'Comparamos tus respuestas con la personalidad de cada mascota para '
-                      'encontrar a quien mejor conecta con tu corazón.',
-                ),
-                const SizedBox(height: 22),
                 if (!ranking.tienePersonalidad)
                   _vacio(
                     'Aún no conocemos cómo eres ${FeatureIcon.huella}',
@@ -255,13 +271,15 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
         if (siguientes.isNotEmpty) ...[
           const SizedBox(height: 22),
           Text(
-            'Nuevas coincidencias compatibles',
+            '¡Otras conexiones especiales!',
+            textAlign: TextAlign.center,
             style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 4),
           Text(
-            'También podrían ser tu compañero sin reemplazar tu Match inicial.',
-            style: t.bodySmall?.copyWith(color: Colors.black54),
+            'Ellos también hacen Match con tu forma de ser y estarían encantados de conocerte.',
+            textAlign: TextAlign.center,
+            style: t.bodySmall?.copyWith(color: Colors.black54, height: 1.35),
           ),
           const SizedBox(height: 12),
           LayoutBuilder(
@@ -430,7 +448,7 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
                       ),
                       child: Text(
                         widget.match.esMatchInicial
-                            ? '💖 Tu Match Inicial'
+                            ? '💖 Mi Match Ideal'
                             : '💖 Tu Match Principal',
                         style: t.labelSmall?.copyWith(
                           color: AppColors.rosa,
@@ -461,9 +479,7 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    _afinidades(),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
                     Text(
                       _abierta
                           ? 'Toca para ocultar el detalle'
@@ -577,28 +593,6 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
     );
   }
 
-  Widget _afinidades() {
-    final claves = widget.match.rasgosOrdenados.take(3);
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 6,
-      runSpacing: 6,
-      children: [
-        for (final clave in claves)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.rosaClaro,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              '${FeatureIcon.emojiRasgo(clave)} ${_tituloRasgo(clave)}',
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ),
-      ],
-    );
-  }
 }
 
 class _TarjetaSecundaria extends StatefulWidget {
@@ -673,6 +667,7 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
                 onTap: _tocar,
                 borderRadius: BorderRadius.circular(16),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
@@ -694,10 +689,21 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
+                              Flexible(
+                                child: Text(
+                                  pet.nombre,
+                                  style: t.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.15,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
                               Text(
                                 '#${widget.puesto}',
-                                style: t.labelMedium?.copyWith(
+                                style: t.titleSmall?.copyWith(
                                   color: AppColors.rosa,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -725,19 +731,13 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
                               ],
                             ],
                           ),
+                          const SizedBox(height: 4),
                           Text(
-                            pet.nombre,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: t.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
+                            _caracteristicasEnLineas(pet),
+                            style: t.bodySmall?.copyWith(
+                              color: Colors.black54,
+                              height: 1.35,
                             ),
-                          ),
-                          Text(
-                            _subtitulo(pet),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: t.bodySmall?.copyWith(color: Colors.black54),
                           ),
                         ],
                       ),
@@ -938,15 +938,25 @@ class _ChipFamilia extends StatelessWidget {
 }
 
 String _subtitulo(Pet pet) {
+  final partes = _caracteristicas(pet);
+  if (partes.isEmpty) return 'Compañero por conocer';
+  return partes.join(' · ');
+}
+
+List<String> _caracteristicas(Pet pet) {
   final especie = pet.especie.trim();
   final sexo = _sexo(pet);
-  final partes = <String>[
+  return [
     if (especie.isNotEmpty) especie,
     if (sexo != null) sexo,
     if (pet.edad != null) pet.edadTexto,
   ];
+}
+
+String _caracteristicasEnLineas(Pet pet) {
+  final partes = _caracteristicas(pet);
   if (partes.isEmpty) return 'Compañero por conocer';
-  return partes.join(' · ');
+  return partes.join('\n');
 }
 
 /// Macho o Hembra, tal como está guardado en `Mascota.sexo`.
@@ -1178,13 +1188,6 @@ class _EscalaCorazones extends StatelessWidget {
       ),
     );
   }
-}
-
-String _tituloRasgo(String clave) {
-  for (final rasgo in rasgosMascota) {
-    if (rasgo.clave == clave) return rasgo.titulo;
-  }
-  return clave;
 }
 
 int? _entero(dynamic raw) {
