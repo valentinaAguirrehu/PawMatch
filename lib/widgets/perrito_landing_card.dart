@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/pet.dart';
-import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
-/// Tarjeta uniforme de un perrito para la pantalla de bienvenida.
+/// Tarjeta compacta, moderna y uniforme de un perrito para la pantalla de bienvenida.
+/// Muestra únicamente: Fotografía superior, Nombre, Sexo y Edad.
 class PerritoLandingCard extends StatelessWidget {
   final Pet pet;
   final bool paraAdopcion;
@@ -17,178 +17,178 @@ class PerritoLandingCard extends StatelessWidget {
     required this.onTap,
   });
 
-  List<String> _etiquetas() {
-    final rasgos = <(int, String)>[];
-    for (final rasgo in rasgosMascota) {
-      final valor = pet.personalidad[rasgo.clave];
-      if (valor is! num) continue;
-      final puntuacion = valor.toInt();
-      if (puntuacion <= 2) {
-        rasgos.add((3 - puntuacion, rasgo.minimoPara(pet.sexo)));
-      } else if (puntuacion >= 4) {
-        rasgos.add((puntuacion - 3, rasgo.maximoPara(pet.sexo)));
-      }
-    }
-    rasgos.sort((a, b) => b.$1.compareTo(a.$1));
-    final etiquetas = rasgos.take(3).map((rasgo) => rasgo.$2).toList();
-    if (etiquetas.isNotEmpty) return etiquetas;
-
-    return [
-      if ((pet.sexo ?? '').trim().isNotEmpty) pet.sexo!.trim(),
-      if ((pet.tamano ?? '').trim().isNotEmpty) pet.tamano!.trim(),
-      if (pet.edad != null) pet.edadTexto,
-    ];
+  String _sexoTexto() {
+    final s = (pet.sexo ?? '').trim();
+    if (s.isEmpty) return 'Peludito';
+    return s[0].toUpperCase() + s.substring(1).toLowerCase();
   }
 
   @override
   Widget build(BuildContext context) {
-    final tema = Theme.of(context).textTheme;
-    final descripcion = (pet.descripcion ?? '').trim();
     final foto = (pet.foto ?? '').toLowerCase();
     final recorte = foto.endsWith('.png') || foto.endsWith('.webp');
-    final etiquetas = _etiquetas();
+    final sexo = _sexoTexto();
+    final esHembra = sexo.toLowerCase().startsWith('h');
+    final edad = pet.edadTexto.trim().isNotEmpty ? pet.edadTexto.trim() : 'Joven';
 
-    return Material(
-      color: AppColors.rosaSuave,
-      borderRadius: BorderRadius.circular(24),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.bordeRosa.withValues(alpha: 0.55),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.rosa.withValues(alpha: 0.12),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       clipBehavior: Clip.antiAlias,
-      elevation: 2,
-      shadowColor: AppColors.rosa.withValues(alpha: 0.2),
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 5,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(
-                    color: AppColors.rosaClaro,
-                    child: PetImage(
-                      url: pet.foto,
-                      fit: recorte ? BoxFit.contain : BoxFit.cover,
-                    ),
-                  ),
-                  Positioned(
-                    top: 10,
-                    left: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 11,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.rosa,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        paraAdopcion ? 'Para adoptar' : 'Para apadrinar',
-                        style: tema.labelSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Fotografía superior con proporción uniforme
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(
+                      color: AppColors.rosaSuave,
+                      child: PetImage(
+                        url: pet.foto,
+                        fit: recorte ? BoxFit.contain : BoxFit.cover,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 6,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
-                child: LayoutBuilder(
-                  builder: (context, constraints) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        pet.nombre,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tema.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.texto,
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        height: 72,
-                        child: ClipRect(
-                          child: Wrap(
-                            spacing: 5,
-                            runSpacing: 4,
-                            children: [
-                              for (final etiqueta in etiquetas)
-                                ConstrainedBox(
-                                  constraints: BoxConstraints(
-                                    maxWidth: constraints.maxWidth * 0.88,
-                                  ),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.rosaClaro,
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Text(
-                                      etiqueta,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: tema.labelSmall?.copyWith(
-                                        color: AppColors.texto,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
+                        decoration: BoxDecoration(
+                          color: AppColors.rosa.withValues(alpha: 0.92),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      Expanded(
                         child: Text(
-                          descripcion.isEmpty
-                              ? 'Un peludito esperando conocerte.'
-                              : descripcion,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: tema.bodySmall?.copyWith(
-                            height: 1.4,
-                            color: AppColors.texto,
+                          paraAdopcion ? 'Adopción' : 'Apadrinar',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
                           ),
                         ),
                       ),
-                      SizedBox(
-                        height: 32,
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: TextButton(
-                            onPressed: onTap,
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              'Conocer más',
-                              style: tema.labelLarge?.copyWith(
-                                color: AppColors.rosa,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+
+              // Información compacta inferior: únicamente Nombre, Sexo y Edad
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final muyEstrecho = constraints.maxWidth < 150;
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      muyEstrecho ? 8 : 12,
+                      muyEstrecho ? 8 : 10,
+                      muyEstrecho ? 8 : 12,
+                      muyEstrecho ? 9 : 11,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          pet.nombre,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Nunito',
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.texto,
+                            fontSize: muyEstrecho ? 14.5 : 16.5,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: muyEstrecho ? 6 : 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.rosaSuave,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppColors.bordeRosa.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    esHembra ? Icons.female_rounded : Icons.male_rounded,
+                                    size: muyEstrecho ? 12 : 13.5,
+                                    color: AppColors.rosa,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    sexo,
+                                    style: TextStyle(
+                                      color: AppColors.rosa,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: muyEstrecho ? 11 : 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: muyEstrecho ? 6 : 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFDF4F8),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppColors.bordeRosa.withValues(alpha: 0.35),
+                                ),
+                              ),
+                              child: Text(
+                                edad,
+                                style: TextStyle(
+                                  color: AppColors.texto.withValues(alpha: 0.85),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: muyEstrecho ? 11 : 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

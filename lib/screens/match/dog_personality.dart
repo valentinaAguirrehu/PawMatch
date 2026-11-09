@@ -31,11 +31,17 @@ class DogPersonalityController extends ChangeNotifier {
     String? error;
     try {
       final completa = await PetsService.obtener(mascotaId);
-      completa.personalidad.forEach((clave, valor) {
-        if (_valores.containsKey(clave)) {
-          _valores[clave] = valor.clamp(1, 5).toDouble();
-        }
-      });
+      for (final entrada in completa.personalidad.entries) {
+        if (!_valores.containsKey(entrada.key)) continue;
+        final numero = switch (entrada.value) {
+          int n => n,
+          double n => n.round(),
+          String texto => int.tryParse(texto),
+          _ => null,
+        };
+        if (numero == null) continue;
+        _valores[entrada.key] = numero.clamp(1, 5).toDouble();
+      }
     } catch (_) {
       error = 'No se pudo cargar la personalidad actual';
     } finally {
@@ -56,12 +62,76 @@ class DogPersonalityController extends ChangeNotifier {
   }
 }
 
+/// Cuestionario de 1 a 5. Devuelve los valores al guardar, o null si se cancela.
+Future<Map<String, int>?> pedirPersonalidadMascota(
+  BuildContext context, {
+  String? sexo,
+}) {
+  return showDialog<Map<String, int>>(
+    context: context,
+    builder: (_) => _DialogoAsignarPersonalidad(sexo: sexo),
+  );
+}
+
+class _DialogoAsignarPersonalidad extends StatefulWidget {
+  final String? sexo;
+  const _DialogoAsignarPersonalidad({this.sexo});
+
+  @override
+  State<_DialogoAsignarPersonalidad> createState() =>
+      _DialogoAsignarPersonalidadState();
+}
+
+class _DialogoAsignarPersonalidadState
+    extends State<_DialogoAsignarPersonalidad> {
+  final _controller = DogPersonalityController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final alto = MediaQuery.sizeOf(context).height * 0.62;
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Asignar personalidad'),
+      content: SizedBox(
+        width: 520,
+        height: alto,
+        child: SingleChildScrollView(
+          child: DogPersonality(controller: _controller, sexo: widget.sexo),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+          onPressed: () => Navigator.pop(context, _controller.personalidad),
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
+}
+
 class DogPersonality extends StatefulWidget {
   final DogPersonalityController controller;
 
   final String? mascotaId;
+  final String? sexo;
 
-  const DogPersonality({super.key, required this.controller, this.mascotaId});
+  const DogPersonality({
+    super.key,
+    required this.controller,
+    this.mascotaId,
+    this.sexo,
+  });
 
   @override
   State<DogPersonality> createState() => _DogPersonalityState();
@@ -153,7 +223,10 @@ class _DogPersonalityState extends State<DogPersonality> {
                   ],
                 ),
                 const SizedBox(height: 2),
-                Text(r.pregunta, style: const TextStyle(fontSize: 13)),
+                Text(
+                  r.preguntaMascotaPara(widget.sexo),
+                  style: const TextStyle(fontSize: 13),
+                ),
                 Slider(
                   value: controller.valorDe(r.clave),
                   min: 1,
@@ -170,7 +243,7 @@ class _DogPersonalityState extends State<DogPersonality> {
                   children: [
                     Flexible(
                       child: Text(
-                        '1 · ${r.minimo}',
+                        '1 · ${r.minimoPara(widget.sexo)}',
                         style: const TextStyle(
                           fontSize: 11,
                           color: Colors.black54,
@@ -180,7 +253,7 @@ class _DogPersonalityState extends State<DogPersonality> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        '5 · ${r.maximo}',
+                        '5 · ${r.maximoPara(widget.sexo)}',
                         textAlign: TextAlign.right,
                         style: const TextStyle(
                           fontSize: 11,

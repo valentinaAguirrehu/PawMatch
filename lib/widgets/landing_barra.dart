@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
-import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/core/layout.dart';
-import 'package:paw_match/widgets/fundacion_imagen.dart';
+import 'package:paw_match/widgets/logo_paw.dart';
 
-/// Barra superior fija de la landing: logo a la izquierda y los botones
-/// "Iniciar sesión" y "Registrarse" a la derecha (se compacta en celular).
+/// Barra superior de la landing: sello de la fundación a la izquierda,
+/// botones centrados y logo de Paw Match a la derecha.
 class LandingBarra extends StatelessWidget {
   final VoidCallback onIniciarSesion, onRegistrarse;
   final List<EnlaceBarra> enlaces;
@@ -19,79 +18,110 @@ class LandingBarra extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.sizeOf(context).width;
-    final angosto = ancho < 480;
+    final size = MediaQuery.sizeOf(context);
+    if (size.width < 60 || size.height < 60) return const SizedBox.shrink();
+    final ancho = size.width;
+    final muyAngosto = ancho < 360;
+    final angosto = ancho < 520;
+    final tamLogo = muyAngosto ? 40.0 : (angosto ? 46.0 : 52.0);
     return Material(
-      color: Colors.white,
-      elevation: 1,
+      color: const Color(0xFFFFA3C8),
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
       child: SafeArea(
         bottom: false,
         child: Padding(
           padding: EdgeInsets.symmetric(
-            horizontal: angosto ? 12 : 24,
+            horizontal: muyAngosto ? 10 : (angosto ? 14 : 24),
             vertical: 8,
           ),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: Layout.anchoMaximo),
-              child: Row(
-                children: [
-                  const _Logo(),
-                  if (!angosto) ...[
-                    const SizedBox(width: 10),
-                    Text(
-                      'Paw Match',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.rosa,
-                        fontWeight: FontWeight.w800,
+              child: SizedBox(
+                height: muyAngosto ? 44 : (angosto ? 48 : 52),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _botonIniciar(muyAngosto, angosto),
+                        SizedBox(width: muyAngosto ? 6 : (angosto ? 8 : 10)),
+                        _botonRegistro(muyAngosto, angosto),
+                      ],
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _Logo(tamano: tamLogo),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (ancho >= Layout.escritorio)
+                            for (final enlace in enlaces)
+                              TextButton(
+                                onPressed: enlace.onPressed,
+                                child: Text(enlace.texto),
+                              ),
+                          LogoPaw(tamano: tamLogo),
+                        ],
                       ),
                     ),
                   ],
-                  if (ancho >= Layout.escritorio)
-                    for (final enlace in enlaces)
-                      TextButton(
-                        onPressed: enlace.onPressed,
-                        child: Text(enlace.texto),
-                      ),
-                  const Spacer(),
-                  if (angosto) ...[
-                    IconButton(
-                      tooltip: 'Iniciar sesión',
-                      onPressed: onIniciarSesion,
-                      icon: const Icon(Icons.login),
-                    ),
-                    const SizedBox(width: 4),
-                    FilledButton(
-                      onPressed: onRegistrarse,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 40),
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        shape: const StadiumBorder(),
-                      ),
-                      child: const Text('Registrarse'),
-                    ),
-                  ] else ...[
-                    TextButton(
-                      onPressed: onIniciarSesion,
-                      child: const Text('Iniciar sesión'),
-                    ),
-                    const SizedBox(width: 6),
-                    FilledButton(
-                      onPressed: onRegistrarse,
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 42),
-                        padding: const EdgeInsets.symmetric(horizontal: 18),
-                        shape: const StadiumBorder(),
-                      ),
-                      child: const Text('Registrarse'),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _botonIniciar(bool muyAngosto, bool angosto) {
+    return OutlinedButton(
+      onPressed: onIniciarSesion,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white,
+        backgroundColor: Colors.white.withValues(alpha: 0.16),
+        side: const BorderSide(color: Colors.white, width: 1.4),
+        shape: const StadiumBorder(),
+        minimumSize: Size(0, angosto ? 36 : 40),
+        padding: EdgeInsets.symmetric(
+          horizontal: muyAngosto ? 10 : (angosto ? 14 : 18),
+        ),
+        visualDensity: VisualDensity.compact,
+        textStyle: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: muyAngosto ? 12 : (angosto ? 13 : 14.5),
+        ),
+      ),
+      child: const Text('Iniciar sesión'),
+    );
+  }
+
+  Widget _botonRegistro(bool muyAngosto, bool angosto) {
+    return FilledButton(
+      onPressed: onRegistrarse,
+      style: FilledButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.rosa,
+        elevation: 0,
+        shape: const StadiumBorder(),
+        minimumSize: Size(0, angosto ? 36 : 40),
+        padding: EdgeInsets.symmetric(
+          horizontal: muyAngosto ? 10 : (angosto ? 14 : 20),
+        ),
+        visualDensity: VisualDensity.compact,
+        textStyle: TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: muyAngosto ? 12 : (angosto ? 13 : 14.5),
+        ),
+      ),
+      child: const Text('Registrarse'),
     );
   }
 }
@@ -103,26 +133,22 @@ class EnlaceBarra {
   const EnlaceBarra(this.texto, this.onPressed);
 }
 
-/// Logo pequeño configurado en la base de datos (o assets/images/logo.png).
+/// Sello de la Fundación Maritza Arévalo.
 class _Logo extends StatelessWidget {
-  const _Logo();
+  final double tamano;
+  const _Logo({required this.tamano});
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<int>(
-        valueListenable: FundacionInfo.cambios,
-        builder: (context, _, __) => SizedBox(
-          width: 40,
-          height: 40,
-          child: ClipOval(
-            child: FundacionImagen(
-              ruta: FundacionInfo.logo.isEmpty
-                  ? 'assets/images/logo.png'
-                  : FundacionInfo.logo,
-              fit: BoxFit.cover,
-              icono: Icons.pets,
-              tamanoIcono: 22,
-            ),
-          ),
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: tamano,
+      height: tamano,
+      child: ClipOval(
+        child: Image.asset(
+          'assets/images/Logo Fundación.png',
+          fit: BoxFit.cover,
         ),
-      );
+      ),
+    );
+  }
 }

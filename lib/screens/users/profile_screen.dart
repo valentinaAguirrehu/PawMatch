@@ -4,17 +4,38 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/user.dart';
+import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
+import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
+import 'package:paw_match/screens/users/voz_asistente_screen.dart';
+import 'package:paw_match/services/navegacion.dart';
+import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 import 'package:paw_match/widgets/pet_card.dart';
+import 'package:paw_match/widgets/selector_genero.dart';
+import 'package:paw_match/widgets/star_rating_selector.dart';
 
 const _pendiente = 'Sin completar';
 const _colorPendiente = Color(0xFFC62828);
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  /// Abre el formulario de edición en cuanto carga el perfil.
+  final bool iniciarEnEdicion;
+
+  /// Si se indica, la pantalla muestra su propia barra ("Mi Perfil" + salir).
+  final VoidCallback? onCerrarSesion;
+
+  const ProfileScreen({
+    super.key,
+    this.iniciarEnEdicion = false,
+    this.onCerrarSesion,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -34,6 +55,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   User? _usuario;
   DateTime? _nacimiento;
+  String _genero = '';
   Uint8List? _fotoNueva;
   String _fotoNombre = 'perfil.jpg';
   bool _editando = false;
@@ -41,8 +63,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _ocultarClave = true;
   bool _ocultarConfirmar = true;
   bool _guardandoClave = false;
+  bool _guardandoFoto = false;
+  bool _eliminando = false;
   bool _cargando = true;
   String? _error;
+  double? _calificacionPadrino;
+  int _totalSeguimientosPadrino = 0;
 
   static const _meses = [
     'ene', 'feb', 'mar', 'abr', 'may', 'jun',
@@ -52,6 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _editando = widget.iniciarEnEdicion;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _cargar();
     });
@@ -89,6 +116,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final usuario = await ApiService.obtenerUsuario(id);
       if (!mounted) return;
       _aplicar(usuario);
+
+      // Cargar calificación promedio como padrino
+      SeguimientoApadrinamientoService.obtenerResumenPadrino(usuario.id).then((resumen) {
+        if (mounted && resumen != null) {
+          setState(() {
+            _calificacionPadrino = resumen.calificacionPromedio;
+            _totalSeguimientosPadrino = resumen.totalSeguimientos;
+          });
+        }
+      }).catchError((_) {});
+
       setState(() => _cargando = false);
     } catch (e) {
       if (!mounted) return;
@@ -109,6 +147,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Session.apellidos = usuario.apellidos;
     Session.correo = usuario.correo;
     Session.telefono = usuario.telefono;
+    Session.documentoIdentidad = usuario.documentoIdentidad;
+    Session.fijarGenero(usuario.genero);
   }
 
   void _llenar(User usuario) {
@@ -119,6 +159,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _documentoCtrl.text = usuario.documentoIdentidad;
     _direccionCtrl.text = usuario.direccion;
     _nacimiento = usuario.fechaNacimiento;
+    _genero = usuario.genero;
   }
 
   void _aviso(String texto, {bool exito = false}) {
@@ -157,12 +198,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (elegida != null && mounted) setState(() => _nacimiento = elegida);
   }
 
-  Future<void> _elegirFoto() async {
+  void _mostrarOpcionesFoto() {
+    if (_usuario == null || _guardandoFoto || !mounted) return;
+    final esAdmin = Session.isAdmin;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: AppColors.blanco,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 8, 12, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: esAdmin
+                      ? Text(
+                          'Elegir mi foto de perfil',
+                          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                        )
+                      : const Text(
+                          'Por favor, carga una foto donde se vea claramente tu rostro. '
+                          'Esta fotografía es requerida para los fines pertinentes que se '
+                          'llevan a cabo en los procesos de adopción y apadrinación de la '
+                          'fundación. Esta foto solo la verás tú y los administradores de '
+                          'la Fundación Maritza Arévalo.',
+                          style: TextStyle(height: 1.45, fontSize: 14.5),
+                        ),
+                ),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _elegirFoto(ImageSource.camera);
+                    },
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Tomar foto'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.rosa,
+                      foregroundColor: AppColors.blanco,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _elegirFoto(ImageSource.gallery);
+                    },
+                    icon: const Icon(Icons.photo_outlined),
+                    label: const Text('Elegir foto'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.rosa,
+                      side: const BorderSide(color: AppColors.rosa),
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _elegirFoto(ImageSource origen) async {
+    final usuario = _usuario;
+    if (usuario == null || _guardandoFoto) return;
     try {
       final archivo = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+        source: origen,
         maxWidth: 1200,
         imageQuality: 85,
+        preferredCameraDevice: CameraDevice.front,
       );
       if (archivo == null) return;
       final bytes = await archivo.readAsBytes();
@@ -170,13 +305,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) _aviso('La foto supera los 5 MB. Elige una más liviana.');
         return;
       }
+      final nombre = archivo.name.isEmpty ? 'perfil.jpg' : archivo.name;
       setState(() {
         _fotoNueva = bytes;
-        _fotoNombre = archivo.name.isEmpty ? 'perfil.jpg' : archivo.name;
-        _editando = true;
+        _fotoNombre = nombre;
+        _guardandoFoto = true;
       });
+
+      final ruta = await ApiService.subirFotoPerfil(bytes, nombre);
+      final actualizado = await ApiService.actualizarUsuario(
+        User(
+          id: usuario.id,
+          nombres: usuario.nombres,
+          apellidos: usuario.apellidos,
+          correo: usuario.correo,
+          telefono: usuario.telefono,
+          direccion: usuario.direccion,
+          documentoIdentidad: usuario.documentoIdentidad,
+          fechaNacimiento: usuario.fechaNacimiento,
+          fotoPerfil: ruta,
+          genero: usuario.genero,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _usuario = actualizado;
+        _fotoNueva = null;
+        _guardandoFoto = false;
+      });
+      _aviso('Foto de perfil actualizada', exito: true);
     } catch (e) {
-      if (mounted) _aviso('No se pudo abrir la foto: $e');
+      if (!mounted) return;
+      setState(() => _guardandoFoto = false);
+      final crudo = e.toString();
+      final sinCamara = origen == ImageSource.camera &&
+          (e is UnimplementedError ||
+              crudo.contains('camera') ||
+              crudo.contains('Camera') ||
+              crudo.contains('not supported'));
+      _aviso(
+        sinCamara
+            ? 'No se pudo abrir la cámara. Revisa el permiso o elige la foto desde la galería.'
+            : crudo.replaceFirst('Exception: ', ''),
+      );
     }
   }
 
@@ -207,6 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           documentoIdentidad: _documentoCtrl.text.trim(),
           fechaNacimiento: _nacimiento,
           fotoPerfil: foto,
+          genero: _genero,
         ),
       );
       if (!mounted) return;
@@ -259,19 +431,126 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _fecha(DateTime fecha) =>
       '${fecha.day} ${_meses[fecha.month - 1]} ${fecha.year}';
 
+  Future<void> _alertaNoPuedeEliminar(String motivo) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('No se puede eliminar la cuenta'),
+        content: Text(motivo),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.rosa,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _eliminarCuenta() async {
+    final usuario = _usuario;
+    if (usuario == null || _eliminando || Session.isAdmin) return;
+
+    setState(() => _eliminando = true);
+    try {
+      final revision = await ApiService.consultarEliminacionCuenta(usuario.id);
+      if (!mounted) return;
+      if (!revision.puede) {
+        setState(() => _eliminando = false);
+        await _alertaNoPuedeEliminar(
+          revision.motivo.isEmpty
+              ? 'No puedes eliminar tu cuenta porque tienes una adopción o un apadrinamiento asociado.'
+              : revision.motivo,
+        );
+        return;
+      }
+
+      final confirmar = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Eliminar cuenta'),
+          content: const Text(
+            'Se borrará tu perfil y no podrás volver a entrar con este correo. '
+            'Esta acción no se puede deshacer.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sí, eliminar cuenta'),
+            ),
+          ],
+        ),
+      );
+      if (confirmar != true || !mounted) {
+        if (mounted) setState(() => _eliminando = false);
+        return;
+      }
+
+      await ApiService.eliminarCuenta(usuario.id);
+      if (!mounted) return;
+      ApadrinamientoService.detenerMonitoreo();
+      AdoptionService.detenerMonitoreo();
+      Session.cerrar();
+      Navegacion.ir(context, const WelcomeScreen());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _eliminando = false);
+      final mensaje = e.toString().replaceFirst('Exception: ', '');
+      if (mensaje.contains('No puedes eliminar')) {
+        await _alertaNoPuedeEliminar(mensaje);
+      } else {
+        _aviso(mensaje);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cerrarSesion = widget.onCerrarSesion;
+    final barra = cerrarSesion == null
+        ? null
+        : BarraSuperior(
+            iconoTitulo: Icons.person_rounded,
+            titulo: 'Mi Perfil',
+            onCerrarSesion: cerrarSesion,
+          );
+
+    Widget contenido;
     if (_cargando && _usuario == null) {
-      return const Center(child: CircularProgressIndicator());
+      contenido = const Center(child: CircularProgressIndicator());
+    } else {
+      final usuario = _usuario;
+      contenido = usuario == null
+          ? _ErrorPerfil(
+              mensaje: _error ?? 'No se pudo cargar el perfil',
+              onReintentar: _cargar,
+            )
+          : _cuerpo(usuario);
     }
 
-    final usuario = _usuario;
-    if (usuario == null) {
-      return _ErrorPerfil(
-        mensaje: _error ?? 'No se pudo cargar el perfil',
-        onReintentar: _cargar,
-      );
-    }
+    if (barra == null) return contenido;
+
+    return Column(
+      children: [
+        SafeArea(bottom: false, child: barra),
+        Expanded(child: contenido),
+      ],
+    );
+  }
+
+  Widget _cuerpo(User usuario) {
 
     final texto = Theme.of(context).textTheme;
     final fotoPendiente = usuario.fotoPendiente && _fotoNueva == null;
@@ -290,9 +569,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fotoNueva: _fotoNueva,
             fotoPerfil: usuario.fotoPerfil,
             pendiente: fotoPendiente,
-            cargando: _cargando,
-            onFoto: _elegirFoto,
+            cargando: _cargando || _guardandoFoto,
+            calificacionPadrino: _calificacionPadrino,
+            totalSeguimientosPadrino: _totalSeguimientosPadrino,
+            onFoto: _mostrarOpcionesFoto,
           ),
+          if (!Session.isAdmin && !_editando) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Mis Solicitudes',
+              style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: _TarjetaSolicitud(
+                      icono: Icons.pets,
+                      titulo: 'Mis Adopciones',
+                      subtitulo: 'Estado y contrato',
+                      onTap: () {
+                        AdoptionService.marcarLeidasUsuario();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyAdoptionsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _TarjetaSolicitud(
+                      icono: Icons.volunteer_activism,
+                      titulo: 'Mis Apadrinamientos',
+                      subtitulo: 'Estado y contratos',
+                      onTap: () {
+                        ApadrinamientoService.marcarLeidasUsuario();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MisApadrinamientosScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 22),
           Text(
             'Tu información',
@@ -313,6 +642,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icono: const FeatureIcon.persona(color: AppColors.rosa),
               validator: _requerido,
               capitalizacion: TextCapitalization.words,
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SelectorGenero(
+                valor: _genero.isEmpty ? null : _genero,
+                onChanged: _cargando
+                    ? null
+                    : (opcion) => setState(() => _genero = opcion),
+              ),
             ),
             _campo(
               controller: _correoCtrl,
@@ -346,11 +684,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             _campo(
               controller: _direccionCtrl,
-              etiqueta: 'Dirección',
+              etiqueta: 'Dirección Completa y detallada',
               icono: const FeatureIcon.direccion(color: AppColors.rosa),
               capitalizacion: TextCapitalization.sentences,
             ),
           ] else ...[
+            _Dato(
+              icono: const FeatureIcon.persona(color: AppColors.rosa),
+              etiqueta: 'Género',
+              valor: usuario.genero.isEmpty ? 'Sin seleccionar' : usuario.genero,
+            ),
             _Dato(
               icono: const FeatureIcon.documento(color: AppColors.rosa),
               etiqueta: 'Documento de identidad',
@@ -407,20 +750,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
-        Text(
-          'Personalidad',
-          style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()),
+        if (!Session.isAdmin) ...[
+          const SizedBox(height: 28),
+          Text(
+            'Personalidad',
+            style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
-          icon: const FeatureIcon.compatibilidad(color: AppColors.rosa),
-          label: const Text('Mi personalidad'),
-          style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
-        ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PersonalityDetailScreen()),
+            ),
+            icon: const FeatureIcon.compatibilidad(color: AppColors.rosa),
+            label: const Text('Mi personalidad'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(54)),
+          ),
+        ],
+        if (Session.isAdmin) ...[
+          const SizedBox(height: 28),
+          Text(
+            'Voz del asistente',
+            style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          const BotonElegirVoz(),
+        ],
         const SizedBox(height: 28),
       Text(
         'Contraseña',
@@ -478,6 +832,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
+        if (!Session.isAdmin) ...[
+          const SizedBox(height: 28),
+          Text(
+            'Cuenta',
+            style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Puedes eliminar tu cuenta si no tienes adopciones ni apadrinamientos realizados, ni solicitudes en proceso.',
+            style: texto.bodyMedium?.copyWith(color: Colors.black54),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _eliminando ? null : _eliminarCuenta,
+            icon: _eliminando
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.4),
+                  )
+                : const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+            label: const Text('Eliminar cuenta'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(54),
+              foregroundColor: Colors.redAccent,
+              side: const BorderSide(color: Colors.redAccent),
+            ),
+          ),
+        ],
     ],
     );
   }
@@ -536,6 +919,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+class _TarjetaSolicitud extends StatelessWidget {
+  final IconData icono;
+  final String titulo;
+  final String subtitulo;
+  final VoidCallback onTap;
+
+  const _TarjetaSolicitud({
+    required this.icono,
+    required this.titulo,
+    required this.subtitulo,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.rosaSuave,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.bordeRosa),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.rosa.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.rosaClaro,
+              radius: 20,
+              child: Icon(icono, color: AppColors.rosa, size: 20),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              titulo,
+              style: const TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitulo,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 11.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EncabezadoPerfil extends StatelessWidget {
   final String nombre;
   final String correo;
@@ -543,6 +991,8 @@ class _EncabezadoPerfil extends StatelessWidget {
   final String? fotoPerfil;
   final bool pendiente;
   final bool cargando;
+  final double? calificacionPadrino;
+  final int totalSeguimientosPadrino;
   final VoidCallback onFoto;
 
   const _EncabezadoPerfil({
@@ -552,55 +1002,142 @@ class _EncabezadoPerfil extends StatelessWidget {
     required this.fotoPerfil,
     required this.pendiente,
     required this.cargando,
+    this.calificacionPadrino,
+    this.totalSeguimientosPadrino = 0,
     required this.onFoto,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final texto = Theme.of(context).textTheme;
+  Widget _construirFoto() {
     final nueva = fotoNueva;
     final ruta = fotoPerfil;
-    Widget foto;
     if (nueva != null) {
-      foto = Image.memory(nueva, fit: BoxFit.cover);
-    } else if (ruta != null && ruta.trim().isNotEmpty) {
-      foto = Image.network(
+      return Image.memory(nueva, fit: BoxFit.cover);
+    }
+    if (ruta != null && ruta.trim().isNotEmpty) {
+      return Image.network(
         urlFoto(ruta),
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => const _FotoVacia(),
       );
-    } else {
-      foto = const _FotoVacia();
     }
+    return const _FotoVacia();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
 
     return Column(
       children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            CircleAvatar(
-              radius: 54,
-              backgroundColor: AppColors.rosaSuave,
-              child: ClipOval(
-                child: SizedBox(width: 108, height: 108, child: foto),
+        SizedBox(
+          width: 128,
+          height: 128,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  if (pendiente) {
+                    onFoto();
+                  } else {
+                    _abrirFoto(context);
+                  }
+                },
+                child: Container(
+                  width: 128,
+                  height: 128,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.rosaSuave,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.rosa.withValues(alpha: 0.55),
+                        blurRadius: 22,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _construirFoto(),
+                        if (cargando)
+                          const ColoredBox(
+                            color: Color(0x66FFFFFF),
+                            child: Center(
+                              child: SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.6,
+                                  color: AppColors.rosa,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-            Positioned(
-              right: -2,
-              bottom: -2,
-              child: IconButton.filled(
-                tooltip: 'Cambiar foto',
-                onPressed: cargando ? null : onFoto,
-                icon: const FeatureIcon.editar(color: AppColors.blanco, tamano: 18),
-              ),
-            ),
-          ],
+              if (pendiente)
+                Positioned(
+                  right: 8,
+                  bottom: 0,
+                  child: Tooltip(
+                    message: 'Agregar foto de perfil',
+                    child: Material(
+                      color: AppColors.rosa,
+                      elevation: 4,
+                      shadowColor: AppColors.rosa.withValues(alpha: 0.45),
+                      shape: const CircleBorder(
+                        side: BorderSide(color: AppColors.blanco, width: 3),
+                      ),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: cargando ? null : onFoto,
+                        child: const SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: AppColors.blanco,
+                            size: 22,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
-        Text(
-          nombre,
-          textAlign: TextAlign.center,
-          style: texto.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.center,
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            Text(
+              nombre,
+              textAlign: TextAlign.center,
+              style: texto.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            if (calificacionPadrino != null && calificacionPadrino! > 0)
+              StarRatingBadge(
+                rating: calificacionPadrino!,
+                totalSeguimientos: totalSeguimientosPadrino,
+                compacto: true,
+              ),
+          ],
         ),
         if (pendiente) ...[
           const SizedBox(height: 6),
@@ -613,6 +1150,62 @@ class _EncabezadoPerfil extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+
+  void _abrirFoto(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.82),
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.rosa.withValues(alpha: 0.35),
+                      blurRadius: 28,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: ClipOval(
+                  child: SizedBox(
+                    width: 280,
+                    height: 280,
+                    child: _construirFoto(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+              FilledButton.icon(
+                onPressed: cargando
+                    ? null
+                    : () {
+                        Navigator.pop(ctx);
+                        onFoto();
+                      },
+                icon: const FeatureIcon.editar(color: AppColors.blanco, tamano: 18),
+                label: const Text('Editar foto'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.rosa,
+                  foregroundColor: AppColors.blanco,
+                  minimumSize: const Size(180, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

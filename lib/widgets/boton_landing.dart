@@ -7,6 +7,8 @@ class BotonLanding extends StatelessWidget {
   final String texto;
   final VoidCallback onPressed;
   final bool sobreRosa, relleno, expandido;
+  final IconData? icono;
+
   const BotonLanding({
     super.key,
     required this.texto,
@@ -14,13 +16,36 @@ class BotonLanding extends StatelessWidget {
     this.sobreRosa = false,
     this.relleno = true,
     this.expandido = false,
+    this.icono,
   });
 
   @override
   Widget build(BuildContext context) {
-    final tamano = expandido ? const Size.fromHeight(50) : const Size(170, 50);
-    final etiqueta = Text(texto, style: const TextStyle(fontWeight: FontWeight.w700));
-    final forma = const StadiumBorder();
+    final tamano = expandido ? const Size.fromHeight(48) : const Size(0, 46);
+    final contenido = Row(
+      mainAxisSize: expandido ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (icono != null) ...[
+          Icon(icono, size: 18),
+          const SizedBox(width: 8),
+        ],
+        Flexible(
+          child: Text(
+            texto,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+    const forma = StadiumBorder();
+    const pad = EdgeInsets.symmetric(horizontal: 20, vertical: 12);
 
     if (relleno) {
       return FilledButton(
@@ -29,9 +54,10 @@ class BotonLanding extends StatelessWidget {
           backgroundColor: sobreRosa ? Colors.white : AppColors.rosa,
           foregroundColor: sobreRosa ? AppColors.rosa : Colors.white,
           minimumSize: tamano,
+          padding: pad,
           shape: forma,
         ),
-        child: etiqueta,
+        child: contenido,
       );
     }
     final color = sobreRosa ? Colors.white : AppColors.rosa;
@@ -41,9 +67,10 @@ class BotonLanding extends StatelessWidget {
         foregroundColor: color,
         side: BorderSide(color: color, width: 1.5),
         minimumSize: tamano,
+        padding: pad,
         shape: forma,
       ),
-      child: etiqueta,
+      child: contenido,
     );
   }
 }

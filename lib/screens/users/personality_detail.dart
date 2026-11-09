@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/screens/match/revelacion_match.dart';
 import 'package:paw_match/services/match_estado.dart';
+import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/personalidad_usuario_service.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/cuestionario_usuario.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 
@@ -114,17 +117,7 @@ class _PersonalityDetailScreenState extends State<PersonalityDetailScreen> {
       }
       MatchEstado.instancia.publicar(valores);
       if (!mounted) return;
-
-      final nuevos = _mapaDesde(valores);
-      setState(() {
-        _valores = nuevos;
-        _original = Map<String, double>.from(nuevos);
-        _guardando = false;
-        _tieneRegistro = true;
-        _editando = false;
-      });
-      if (!mounted) return;
-      _aviso('Personalidad actualizada', exito: true);
+      Navegacion.ir(context, const RevelacionMatchScreen());
     } catch (e) {
       if (!mounted) return;
       setState(() => _guardando = false);
@@ -366,7 +359,10 @@ class _TarjetaRasgoLecturaState extends State<_TarjetaRasgoLectura> {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(rasgo.preguntaUsuario, style: t.bodyMedium),
+                        Text(
+                          rasgo.preguntaPara(Session.genero),
+                          style: t.bodyMedium,
+                        ),
                       ],
                     ),
                   ),

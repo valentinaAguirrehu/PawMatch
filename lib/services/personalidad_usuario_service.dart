@@ -21,17 +21,26 @@ class PersonalidadUsuarioService {
 
   /// Inserta las respuestas del usuario en sesión. Si ya existían, no falla:
   /// el flujo sigue hacia el inicio.
-  static Future<void> guardar(Map<String, int> valores) async {
+  ///
+  /// [respuestas] solo lo envía la entrevista, después de que la persona
+  /// confirma. El servidor no acepta esas puntuaciones si no las interpretó él.
+  static Future<void> guardar(
+    Map<String, int> valores, {
+    List<Map<String, dynamic>>? respuestas,
+  }) async {
     final id = Session.idUsuario;
     if (id == null || id.isEmpty) {
       throw Exception('No hay una sesión activa');
     }
+    final cuerpo = <String, dynamic>{...valores};
+    if (respuestas != null) cuerpo['respuestas'] = respuestas;
     final resp = await http.post(
       Uri.parse('${ApiService.baseUrl}/usuarios/$id/personalidad'),
       headers: {'Content-Type': 'application/json', 'x-usuario-id': id},
-      body: jsonEncode(valores),
+      body: jsonEncode(cuerpo),
     );
-    if (resp.statusCode == 201 || resp.statusCode == 409) return;
+    if (resp.statusCode == 201) return;
+    if (resp.statusCode == 409 && respuestas == null) return;
     throw Exception(
       _mensaje(_leer(resp), 'No se pudo guardar tu personalidad', resp),
     );

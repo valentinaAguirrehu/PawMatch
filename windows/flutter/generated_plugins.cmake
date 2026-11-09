@@ -3,11 +3,18 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audioplayers_windows
+  camera_windows
   file_selector_windows
+  flutter_tts
+  printing
+  record_windows
+  speech_to_text_windows
   url_launcher_windows
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

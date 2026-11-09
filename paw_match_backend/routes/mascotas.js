@@ -4,7 +4,22 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const { esAdministrador } = require('../utils/roles');
 const { quitarFondo } = require('../utils/quitarFondo');
+const { sqlEdad, sqlUnidadEdad, leerFechaNacimiento } = require('../utils/edad_mascota');
+const {
+  asegurarEsquemaMatch,
+  procesarNuevaMascotaParaUsuarios,
+} = require('../utils/match_persistencia');
+const {
+  asegurarTablaBorradorMascota,
+  obtenerLimitesColumnasMascota,
+  normalizarFicha,
+  guardarBorradorMascotaEnBd,
+  obtenerBorradorMascotaDeBd,
+  eliminarBorradorMascotaDeBd,
+  procesarTurnoEntrevistaMascota,
+} = require('../utils/entrevista_mascota_admin');
 
 const router = express.Router();
 const uploadDirectory = path.join(__dirname, '..', 'uploads', 'mascotas');
@@ -25,15 +40,56 @@ const personalityColumns = [
   'tolerancia_soledad', 'adaptabilidad',
 ];
 
+// La edad puede estar en meses o años. Sin esta columna, el listado falla.
+// personalidad_definida queda en true para las mascotas que ya tenían evaluación.
+// Los rasgos de un cachorro en desarrollo se guardan en NULL.
+const esquemaListo = (async () => {
+  await pool.query(`
+    ALTER TABLE mascota
+      ADD COLUMN IF NOT EXISTS unidad_edad VARCHAR(10) NOT NULL DEFAULT 'anos',
+      ADD COLUMN IF NOT EXISTS estado_salud TEXT NOT NULL DEFAULT '["No presenta necesidades veterinarias pendientes."]',
+      ADD COLUMN IF NOT EXISTS detalle_salud TEXT,
+      ADD COLUMN IF NOT EXISTS fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS personalidad_definida BOOLEAN NOT NULL DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS fecha_nacimiento DATE;
+  `);
+  await pool.query(`
+    ALTER TABLE personalidadmascota
+      ALTER COLUMN nivel_energia DROP NOT NULL,
+      ALTER COLUMN sociabilidad_personas DROP NOT NULL,
+      ALTER COLUMN sociabilidad_mascotas DROP NOT NULL,
+      ALTER COLUMN independencia DROP NOT NULL,
+      ALTER COLUMN nivel_juego DROP NOT NULL,
+      ALTER COLUMN carino DROP NOT NULL,
+      ALTER COLUMN proteccion DROP NOT NULL,
+      ALTER COLUMN tolerancia_soledad DROP NOT NULL,
+      ALTER COLUMN adaptabilidad DROP NOT NULL;
+  `);
+  await asegurarEsquemaMatch();
+  await asegurarTablaBorradorMascota();
+})().catch((err) => {
+  console.error('No se pudo preparar la tabla mascota:', err.message);
+  throw err;
+});
+
+router.use(async (_req, res, next) => {
+  try {
+    await esquemaListo;
+    next();
+  } catch (_) {
+    res.status(500).json({ error: 'La tabla mascota no coincide con el esquema esperado.' });
+  }
+});
+
 async function requireAdmin(req, res, next) {
   const userId = req.header('x-usuario-id');
   if (!userId) return res.status(401).json({ error: 'Debes iniciar sesión' });
   try {
     const result = await pool.query(
-      "SELECT id_usuario FROM usuario WHERE id_usuario = $1 AND rol = 'administrador'",
+      'SELECT rol FROM usuario WHERE id_usuario = $1',
       [userId],
     );
-    if (result.rows.length === 0) {
+    if (result.rows.length === 0 || !esAdministrador(result.rows[0].rol)) {
       return res.status(403).json({ error: 'Solo un administrador puede gestionar mascotas' });
     }
     req.adminId = userId;
@@ -44,19 +100,86 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-function personalityValues(personality = {}) {
-  return personalityColumns.map((column) => {
-    const value = Number(personality[column]);
-    return Number.isInteger(value) && value >= 1 && value <= 5 ? value : 3;
-  });
+function leerPersonalidad(body) {
+  const definida = body.personalidad_definida !== false;
+  if (!definida) {
+    return { definida: false, valores: personalityColumns.map(() => null) };
+  }
+  const personalidad = body.personalidad && typeof body.personalidad === 'object'
+    ? body.personalidad
+    : {};
+  const valores = [];
+  for (const column of personalityColumns) {
+    const value = Number(personalidad[column]);
+    if (!Number.isInteger(value) || value < 1 || value > 5) {
+      return { error: 'Completa la evaluación de personalidad (1 a 5).' };
+    }
+    valores.push(value);
+  }
+  return { definida: true, valores };
 }
 
-// fecha_ingreso va como texto 'YYYY-MM-DD' para evitar desfases de zona horaria
+function procesarEstadoSaludYProcedimientos(estadoSaludInput, vacunasInput, esterilizadoInput) {
+  let estados = [];
+  if (Array.isArray(estadoSaludInput)) {
+    estados = estadoSaludInput.map((e) => String(e).trim()).filter(Boolean);
+  } else if (typeof estadoSaludInput === 'string') {
+    const s = estadoSaludInput.trim();
+    if (s.startsWith('[') && s.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) estados = parsed.map((e) => String(e).trim()).filter(Boolean);
+      } catch (_) {
+        estados = [s];
+      }
+    } else if (s.length > 0) {
+      estados = [s];
+    }
+  }
+
+  if (estados.length === 0) {
+    estados = ['No presenta necesidades veterinarias pendientes.'];
+  }
+
+  const tieneVacunasAlDia = estados.some((e) =>
+    e.toLowerCase().includes('vacunación al día') || e.toLowerCase().includes('vacunacion al dia'),
+  );
+  const tieneEsterilizacionRealizada = estados.some((e) =>
+    e.toLowerCase().includes('esterilización realizada') || e.toLowerCase().includes('esterilizacion realizada'),
+  );
+
+  const vacunasFinal = tieneVacunasAlDia || (vacunasInput === true && !estados.some((e) => e.toLowerCase().includes('requiere vacunación')));
+  const esterilizadoFinal = tieneEsterilizacionRealizada || (esterilizadoInput === true && !estados.some((e) => e.toLowerCase().includes('requiere esterilización')));
+
+  return {
+    estadoSaludDb: JSON.stringify(estados),
+    vacunas: vacunasFinal,
+    esterilizado: esterilizadoFinal,
+  };
+}
+
+// fecha_ingreso va como texto 'YYYY-MM-DD' para evitar desfases de zona horaria.
+// fecha_creacion se conserva intacta desde el registro para calcular exactamente las 48 horas de «NUEVO».
 const petSelect = `
-  SELECT m.id_mascota, m.nombre, m.especie, m.raza, m.edad, m.sexo,
+  SELECT m.id_mascota, m.nombre, m.especie, m.raza,
+         ${sqlEdad('m')} AS edad, ${sqlUnidadEdad('m')} AS unidad_edad, m.sexo,
          m.tamano, m.descripcion, m.esterilizado, m.vacunas, m.fotos,
-         m.estado_adopcion, m.estado_apadrinamiento,
+         m.estado_adopcion, m.estado_apadrinamiento, m.personalidad_definida,
+         COALESCE(m.estado_salud, '["No presenta necesidades veterinarias pendientes."]') AS estado_salud,
+         m.detalle_salud,
          to_char(m.fecha_ingreso, 'YYYY-MM-DD') AS fecha_ingreso,
+         to_char(m.fecha_nacimiento, 'YYYY-MM-DD') AS fecha_nacimiento,
+         to_char(m.fecha_actualizacion, 'YYYY-MM-DD HH24:MI') AS fecha_actualizacion,
+         to_char(m.fecha_creacion AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS fecha_creacion,
+         (m.fecha_creacion IS NOT NULL
+          AND (CURRENT_TIMESTAMP - m.fecha_creacion) <= INTERVAL '48 hours'
+          AND (CURRENT_TIMESTAMP - m.fecha_creacion) >= INTERVAL '-2 hours') AS es_nuevo,
+         (SELECT s.id_usuario
+            FROM solicitudadopcion s
+           WHERE s.id_mascota = m.id_mascota
+             AND s.estado = 'aprobada'
+           ORDER BY s.fecha_actualizacion_estado DESC NULLS LAST
+           LIMIT 1) AS id_usuario_adoptante,
          CASE WHEN pm.id_mascota IS NULL THEN '{}'::json ELSE json_build_object(
            'nivel_energia', pm.nivel_energia,
            'sociabilidad_personas', pm.sociabilidad_personas,
@@ -99,6 +222,65 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+router.post('/entrevista-luna', requireAdmin, async (req, res) => {
+  try {
+    const resultado = await procesarTurnoEntrevistaMascota({
+      idAdmin: req.adminId,
+      ficha: req.body?.ficha || {},
+      historial: Array.isArray(req.body?.historial) ? req.body.historial : [],
+      mensaje: req.body?.mensaje || '',
+      reiniciar: req.body?.reiniciar === true,
+    });
+    res.json(resultado);
+  } catch (error) {
+    console.error('Error en entrevista asistente de Paw Match:', error.message || error);
+    if (error.estado === 503) {
+      return res.status(503).json({
+        error: 'El asistente de Paw Match está ocupado en este momento. Inténtalo de nuevo.',
+      });
+    }
+    res.status(502).json({
+      error: 'No se pudo guardar o procesar la respuesta en este momento. Por favor reintenta.',
+    });
+  }
+});
+
+router.put('/entrevista-luna/borrador', requireAdmin, async (req, res) => {
+  try {
+    const limites = await obtenerLimitesColumnasMascota();
+    const existente = await obtenerBorradorMascotaDeBd(req.adminId);
+    const fichaNormalizada = normalizarFicha(
+      req.body?.ficha || {},
+      existente?.ficha || {},
+      limites,
+    );
+    await guardarBorradorMascotaEnBd(
+      req.adminId,
+      fichaNormalizada,
+      req.body?.paso_actual || existente?.pasoActual || 'revision',
+      Array.isArray(req.body?.historial)
+        ? req.body.historial
+        : existente?.historial || [],
+    );
+    res.json({ ok: true, ficha: fichaNormalizada, guardado_en_bd: true });
+  } catch (error) {
+    console.error('Error guardando borrador de mascota:', error.message || error);
+    res.status(500).json({
+      error: 'No se pudo guardar el avance en la base de datos. Inténtalo de nuevo.',
+    });
+  }
+});
+
+router.delete('/entrevista-luna/borrador', requireAdmin, async (req, res) => {
+  try {
+    await eliminarBorradorMascotaDeBd(req.adminId);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error eliminando borrador de mascota:', error.message || error);
+    res.status(500).json({ error: 'No se pudo limpiar el borrador.' });
+  }
+});
+
 router.post('/foto', requireAdmin, upload.single('foto'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna foto' });
 
@@ -110,35 +292,53 @@ router.post('/foto', requireAdmin, upload.single('foto'), async (req, res) => {
 
 router.post('/', requireAdmin, async (req, res) => {
   const {
-    nombre, especie, raza, edad, sexo, tamano, descripcion, esterilizado,
+    nombre, especie, raza, sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion = 'disponible',
-    estado_apadrinamiento: estadoApadrinamiento = 'disponible', personalidad,
+    estado_apadrinamiento: estadoApadrinamiento = 'disponible',
+    estado_salud: estadoSalud,
+    detalle_salud: detalleSalud = null,
   } = req.body;
   if (!nombre || !especie) return res.status(400).json({ error: 'Nombre y especie son obligatorios' });
+  const fechaLeida = leerFechaNacimiento(req.body.fecha_nacimiento);
+  if (fechaLeida.error) return res.status(400).json({ error: fechaLeida.error });
+  const personalidadLeida = leerPersonalidad(req.body);
+  if (personalidadLeida.error) {
+    return res.status(400).json({ error: personalidadLeida.error });
+  }
+
+  const { estadoSaludDb, vacunas: vacunasFinal, esterilizado: esterilizadoFinal } =
+    procesarEstadoSaludYProcedimientos(estadoSalud, vacunas, esterilizado);
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const pet = await client.query(
       `INSERT INTO mascota
-       (id_mascota, nombre, especie, raza, edad, sexo, tamano, descripcion,
-        esterilizado, vacunas, fotos, fecha_ingreso, estado_adopcion,
-        estado_apadrinamiento, id_administrador)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_DATE,
-               $12, $13, $14) RETURNING id_mascota`,
-      [randomUUID(), nombre, especie, raza || null, edad || null, sexo || null,
-        tamano || null, descripcion || null, esterilizado === true, vacunas === true,
-        fotos || null, estadoAdopcion, estadoApadrinamiento, req.adminId],
+       (id_mascota, nombre, especie, raza, edad, unidad_edad, sexo, tamano, descripcion,
+        esterilizado, vacunas, fotos, fecha_ingreso, fecha_creacion, fecha_actualizacion, estado_adopcion,
+        estado_apadrinamiento, estado_salud, detalle_salud, id_administrador,
+        personalidad_definida, fecha_nacimiento)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_DATE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+               $13, $14, $15, $16, $17, $18, $19) RETURNING id_mascota`,
+      [randomUUID(), nombre, especie, raza || null, fechaLeida.edad, fechaLeida.unidad, sexo || null,
+        tamano || null, descripcion || null, esterilizadoFinal, vacunasFinal,
+        fotos || null, estadoAdopcion, estadoApadrinamiento,
+        estadoSaludDb, detalleSalud || null, req.adminId, personalidadLeida.definida,
+        fechaLeida.fecha],
     );
     const idMascota = pet.rows[0].id_mascota;
     await client.query(
       `INSERT INTO personalidadmascota
        (id_perfil_mascota, id_mascota, ${personalityColumns.join(', ')}, fecha_actualizacion)
        VALUES ($1, $2, ${personalityColumns.map((_, i) => `$${i + 3}`).join(', ')}, CURRENT_TIMESTAMP)`,
-      [randomUUID(), idMascota, ...personalityValues(personalidad)],
+      [randomUUID(), idMascota, ...personalidadLeida.valores],
     );
     const result = await client.query(`${petSelect} WHERE m.id_mascota = $1`, [idMascota]);
     await client.query('COMMIT');
+    eliminarBorradorMascotaDeBd(req.adminId).catch(() => {});
+    procesarNuevaMascotaParaUsuarios(idMascota).catch((err) => {
+      console.error('Error evaluando nueva mascota para Match:', err.message);
+    });
     res.status(201).json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -151,33 +351,64 @@ router.post('/', requireAdmin, async (req, res) => {
 
 router.put('/:id', requireAdmin, async (req, res) => {
   const {
-    nombre, especie, raza, edad, sexo, tamano, descripcion, esterilizado,
+    nombre, especie, raza, sexo, tamano, descripcion, esterilizado,
     vacunas, fotos, estado_adopcion: estadoAdopcion, estado_apadrinamiento: estadoApadrinamiento,
-    personalidad,
+    estado_salud: estadoSalud,
+    detalle_salud: detalleSalud = null,
   } = req.body;
+  const fechaLeida = leerFechaNacimiento(req.body.fecha_nacimiento, { obligatoria: false });
+  if (fechaLeida.error) return res.status(400).json({ error: fechaLeida.error });
+  const personalidadLeida = leerPersonalidad(req.body);
+  if (personalidadLeida.error) {
+    return res.status(400).json({ error: personalidadLeida.error });
+  }
+
+  const { estadoSaludDb, vacunas: vacunasFinal, esterilizado: esterilizadoFinal } =
+    procesarEstadoSaludYProcedimientos(estadoSalud, vacunas, esterilizado);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // IMPORTANTE: No se modifica fecha_creacion en UPDATE para no reiniciar las 48h de «NUEVO».
     const pet = await client.query(
-      `UPDATE mascota SET nombre = $1, especie = $2, raza = $3, edad = $4, sexo = $5,
-       tamano = $6, descripcion = $7, esterilizado = $8, vacunas = $9, fotos = $10,
-       estado_adopcion = $11, estado_apadrinamiento = $12 WHERE id_mascota = $13
+      `UPDATE mascota SET nombre = $1, especie = $2, raza = $3,
+       edad = COALESCE($4, edad), unidad_edad = COALESCE($5, unidad_edad), sexo = $6,
+       tamano = $7, descripcion = $8, esterilizado = $9, vacunas = $10, fotos = $11,
+       estado_adopcion = $12, estado_apadrinamiento = $13,
+       estado_salud = $14, detalle_salud = $15, personalidad_definida = $16,
+       fecha_nacimiento = COALESCE($17::date, fecha_nacimiento),
+       fecha_actualizacion = CURRENT_TIMESTAMP WHERE id_mascota = $18
        RETURNING id_mascota`,
-      [nombre, especie, raza || null, edad || null, sexo || null, tamano || null,
-        descripcion || null, esterilizado === true, vacunas === true, fotos || null,
-        estadoAdopcion, estadoApadrinamiento, req.params.id],
+      [nombre, especie, raza || null, fechaLeida.edad, fechaLeida.unidad, sexo || null, tamano || null,
+        descripcion || null, esterilizadoFinal, vacunasFinal, fotos || null,
+        estadoAdopcion, estadoApadrinamiento,
+        estadoSaludDb, detalleSalud || null, personalidadLeida.definida, fechaLeida.fecha,
+        req.params.id],
     );
     if (pet.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Mascota no encontrada' });
     }
-    await client.query(
+    const personalidadActualizada = await client.query(
       `UPDATE personalidadmascota SET ${personalityColumns.map((column, i) => `${column} = $${i + 1}`).join(', ')},
        fecha_actualizacion = CURRENT_TIMESTAMP WHERE id_mascota = $${personalityColumns.length + 1}`,
-      [...personalityValues(personalidad), req.params.id],
+      [...personalidadLeida.valores, req.params.id],
     );
+    if (personalidadActualizada.rowCount === 0) {
+      await client.query(
+        `INSERT INTO personalidadmascota
+         (id_perfil_mascota, id_mascota, ${personalityColumns.join(', ')}, fecha_actualizacion)
+         VALUES ($1, $2, ${personalityColumns.map((_, i) => `$${i + 3}`).join(', ')}, CURRENT_TIMESTAMP)`,
+        [randomUUID(), req.params.id, ...personalidadLeida.valores],
+      );
+    }
     const result = await client.query(`${petSelect} WHERE m.id_mascota = $1`, [req.params.id]);
     await client.query('COMMIT');
+    if (personalidadLeida.definida) {
+      procesarNuevaMascotaParaUsuarios(req.params.id).catch((err) => {
+        console.error('Error evaluando mascota actualizada para Match:', err.message);
+      });
+    }
     res.json(result.rows[0]);
   } catch (error) {
     await client.query('ROLLBACK');

@@ -8,6 +8,7 @@ class User {
   final String documentoIdentidad;
   final DateTime? fechaNacimiento;
   final String? fotoPerfil;
+  final String genero;
 
   const User({
     required this.id,
@@ -19,6 +20,7 @@ class User {
     this.documentoIdentidad = '',
     this.fechaNacimiento,
     this.fotoPerfil,
+    this.genero = '',
   });
 
   String get nombreCompleto {
@@ -31,6 +33,26 @@ class User {
   bool get direccionPendiente => direccion.trim().isEmpty;
 
   bool get documentoPendiente => documentoIdentidad.trim().isEmpty;
+
+  bool get telefonoPendiente => telefono.trim().isEmpty;
+
+  bool get nacimientoPendiente => fechaNacimiento == null;
+
+  /// Campos del perfil que aún no tienen valor. Vacío si ya se puede adoptar.
+  List<String> get datosPendientes {
+    final faltan = <String>[];
+    if (nombres.trim().isEmpty) faltan.add('Nombres');
+    if (apellidos.trim().isEmpty) faltan.add('Apellidos');
+    if (correo.trim().isEmpty) faltan.add('Correo electrónico');
+    if (telefonoPendiente) faltan.add('Teléfono');
+    if (nacimientoPendiente) faltan.add('Fecha de nacimiento');
+    if (documentoPendiente) faltan.add('Documento de identidad');
+    if (direccionPendiente) faltan.add('Dirección');
+    if (fotoPendiente) faltan.add('Foto de perfil');
+    return faltan;
+  }
+
+  bool get perfilCompleto => datosPendientes.isEmpty;
 
   factory User.fromJson(Map<String, dynamic> json) {
     final nacimiento = json['fecha_nacimiento'];
@@ -46,6 +68,7 @@ class User {
           ? null
           : DateTime.tryParse(nacimiento.toString()),
       fotoPerfil: json['foto_perfil']?.toString(),
+      genero: (json['genero'] ?? '').toString(),
     );
   }
 
@@ -62,5 +85,6 @@ class User {
               '${fechaNacimiento!.month.toString().padLeft(2, '0')}-'
               '${fechaNacimiento!.day.toString().padLeft(2, '0')}',
     'foto_perfil': fotoPerfil,
+    'genero': genero,
   };
 }

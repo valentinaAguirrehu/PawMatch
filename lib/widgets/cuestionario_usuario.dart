@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
 /// Encabezado del cuestionario de personalidad del adoptante.
@@ -8,6 +9,8 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
   final String titulo;
   final String detalle;
   final Widget? icono;
+  final bool mostrarLogo;
+  final TextStyle? estiloTitulo;
 
   const EncabezadoCuestionarioUsuario({
     super.key,
@@ -16,6 +19,8 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
         'Responde de 1 a 5. Con esto buscamos la mascota que mejor '
         'encaja contigo.',
     this.icono,
+    this.mostrarLogo = true,
+    this.estiloTitulo,
   });
 
   @override
@@ -30,8 +35,10 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const LogoPaw(tamano: 72),
-          const SizedBox(height: 12),
+          if (mostrarLogo) ...[
+            const LogoPaw(tamano: 72),
+            const SizedBox(height: 12),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -43,10 +50,11 @@ class EncabezadoCuestionarioUsuario extends StatelessWidget {
                 child: Text(
                   titulo,
                   textAlign: TextAlign.center,
-                  style: t.headlineSmall?.copyWith(
-                    color: AppColors.texto,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: estiloTitulo ??
+                      t.headlineSmall?.copyWith(
+                        color: AppColors.texto,
+                        fontWeight: FontWeight.w800,
+                      ),
                 ),
               ),
             ],
@@ -114,7 +122,7 @@ class TarjetaRasgoUsuario extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 2),
-          Text(rasgo.preguntaUsuario, style: t.bodyMedium),
+          Text(rasgo.preguntaPara(Session.genero), style: t.bodyMedium),
           Slider(
             value: valor,
             min: 1,
@@ -128,14 +136,14 @@ class TarjetaRasgoUsuario extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  '1 · ${rasgo.minimoUsuario}',
+                  '1 · ${rasgo.minimoUsuarioPara(Session.genero)}',
                   style: t.bodySmall?.copyWith(color: Colors.black54),
                 ),
               ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
-                  '5 · ${rasgo.maximoUsuario}',
+                  '5 · ${rasgo.maximoUsuarioPara(Session.genero)}',
                   textAlign: TextAlign.right,
                   style: t.bodySmall?.copyWith(color: Colors.black54),
                 ),
