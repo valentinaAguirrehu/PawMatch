@@ -96,6 +96,9 @@ class _MenuScreenState extends State<MenuScreen> {
     AdoptionService.detenerMonitoreo();
     PetsService.detenerMonitoreo();
     DenunciasService.detenerMonitoreo();
+    if (Navegacion.volverANotificaciones != null) {
+      Navegacion.volverANotificaciones = null;
+    }
     _indice.dispose();
     super.dispose();
   }
@@ -273,7 +276,10 @@ class _MenuScreenState extends State<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
-
+    Navegacion.volverANotificaciones = () {
+      if (!mounted) return;
+      _cambiarA(3);
+    };
 
     return PopScope(
       canPop: !_enDetalle && _index == 0,

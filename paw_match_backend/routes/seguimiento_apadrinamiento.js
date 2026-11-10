@@ -1,4 +1,8 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
+const { randomUUID } = require('crypto');
 const router = express.Router();
 const pool = require('../db');
 const { esAdministrador } = require('../utils/roles');
@@ -43,6 +47,83 @@ async function requireAdmin(req, res, next) {
   }
   req.usuarioActual = usuario;
   next();
+}
+
+const fotosCancelacionDir = path.join(__dirname, '..', 'uploads', 'cancelaciones_apadrinamiento');
+fs.mkdirSync(fotosCancelacionDir, { recursive: true });
+
+const MOTIVOS_CANCELACION_APADRINAMIENTO = [
+  'Incumplimiento del acuerdo de apadrinamiento',
+  'Falta de los aportes acordados',
+  'Pérdida de contacto con el padrino',
+  'Desinterés por parte del padrino',
+  'Cambio imprevisto en la situación del padrino',
+  'Solicitud del padrino',
+  'Otro',
+];
+
+const extensionesImagen = new Set([
+  '.jpg', '.jpeg', '.jfif', '.png', '.gif', '.webp', '.bmp',
+  '.tif', '.tiff', '.heic', '.heif', '.avif',
+]);
+
+function extensionImagen(file) {
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (extensionesImagen.has(ext)) return ext;
+  const mime = (file.mimetype || '').toLowerCase();
+  if (mime === 'image/png') return '.png';
+  if (mime === 'image/gif') return '.gif';
+  if (mime === 'image/webp') return '.webp';
+  if (mime === 'image/heic' || mime === 'image/heif') return '.heic';
+  return '.jpg';
+}
+
+function esArchivoImagen(file) {
+  const mime = (file.mimetype || '').toLowerCase();
+  const ext = path.extname(file.originalname || '').toLowerCase();
+  if (mime.startsWith('image/')) return true;
+  if (extensionesImagen.has(ext)) return true;
+  return !mime || mime === 'application/octet-stream';
+}
+
+const uploadCancelacion = multer({
+  storage: multer.diskStorage({
+    destination: fotosCancelacionDir,
+    filename: (_req, file, callback) => {
+      callback(null, `${randomUUID()}${extensionImagen(file)}`);
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    if (esArchivoImagen(file)) callback(null, true);
+    else callback(new Error('La foto de la cancelación debe ser una imagen'));
+  },
+});
+
+function fechaCancelacionValida(valor) {
+  const texto = String(valor || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return null;
+  const [anio, mes, dia] = texto.split('-').map(Number);
+  const fecha = new Date(Date.UTC(anio, mes - 1, dia));
+  if (
+    fecha.getUTCFullYear() !== anio
+    || fecha.getUTCMonth() !== mes - 1
+    || fecha.getUTCDate() !== dia
+  ) {
+    return null;
+  }
+  const hoy = new Date();
+  const hoyTexto = hoy.toISOString().slice(0, 10);
+  if (texto > hoyTexto) return null;
+  return texto;
+}
+
+async function asegurarColumnasCancelacion() {
+  await pool.query(`
+    ALTER TABLE solicitudapadrinamiento
+      ADD COLUMN IF NOT EXISTS observacion_cancelacion TEXT,
+      ADD COLUMN IF NOT EXISTS foto_cancelacion TEXT
+  `);
 }
 
 /**
@@ -117,6 +198,7 @@ function calcularEstadoCiclos(seguimientos, evaluaciones) {
  */
 router.get('/activos', requireAdmin, async (_req, res) => {
   try {
+    await asegurarColumnasCancelacion();
     const query = `
       SELECT 
         sa.id_solicitud_apadrinamiento,
@@ -147,6 +229,7 @@ router.get('/activos', requireAdmin, async (_req, res) => {
         u.apellidos AS usuario_apellidos,
         u.correo AS usuario_correo,
         u.telefono AS usuario_telefono,
+        COALESCE(NULLIF(btrim(u.documento_identidad), ''), '') AS usuario_cedula,
         u.foto_perfil AS usuario_foto,
         COALESCE(u.bloqueado_apadrinar, false) AS usuario_bloqueado,
         COALESCE(vr.calificacion_promedio, 0.0) AS calificacion_promedio,
@@ -160,7 +243,9 @@ router.get('/activos', requireAdmin, async (_req, res) => {
         sa.nota_decision,
         sa.id_admin_decision,
         sa.fecha_decision,
-        sa.motivo_cancelacion,
+        COALESCE(NULLIF(btrim(sa.motivo_cancelacion), ''), sa.observaciones) AS motivo_cancelacion,
+        sa.observacion_cancelacion,
+        sa.foto_cancelacion,
         sa.fecha_cancelacion,
         admin_dec.nombres AS admin_decision_nombres,
         admin_dec.apellidos AS admin_decision_apellidos,
@@ -230,9 +315,16 @@ router.get('/activos', requireAdmin, async (_req, res) => {
         FROM seguimientoapadrinamiento s
         WHERE s.id_solicitud_apadrinamiento = sa.id_solicitud_apadrinamiento
       ) seg_list ON true
-      WHERE sa.estado = 'aprobada'
-        AND sa.contrato_apadrinamiento_archivo IS NOT NULL
-        AND COALESCE(sa.estado_apadrinamiento, 'activa') = 'activa'
+      WHERE sa.contrato_apadrinamiento_archivo IS NOT NULL
+        AND btrim(sa.contrato_apadrinamiento_archivo) <> ''
+        AND (
+          (
+            sa.estado = 'aprobada'
+            AND COALESCE(sa.estado_apadrinamiento, 'activa') = 'activa'
+          )
+          OR sa.estado = 'cancelada'
+          OR COALESCE(sa.estado_apadrinamiento, '') = 'cancelada'
+        )
       ORDER BY m.nombre ASC
     `;
 
@@ -953,6 +1045,119 @@ router.put('/reporte-visto/:idEvaluacion', async (req, res) => {
   } catch (error) {
     console.error('Error marcando reporte como visto:', error);
     res.status(500).json({ error: 'Error al actualizar estado del reporte' });
+  }
+});
+
+router.post('/:idSolicitud/finalizar', requireAdmin, (req, res, next) => {
+  uploadCancelacion.single('foto')(req, res, (err) => {
+    if (err) {
+      const mensaje = err.code === 'LIMIT_FILE_SIZE'
+        ? 'La foto debe pesar máximo 15 MB'
+        : (err.message || 'No se pudo subir la foto');
+      return res.status(400).json({ error: mensaje });
+    }
+    next();
+  });
+}, async (req, res) => {
+  const admin = req.usuarioActual;
+  const { idSolicitud } = req.params;
+  const motivo = String(req.body.motivo || '').trim();
+  const observacion = String(req.body.observacion || '').trim();
+  const fecha = fechaCancelacionValida(req.body.fecha_cancelacion);
+  const foto = req.file;
+  const fallar = (status, error) => {
+    if (foto) fs.unlink(foto.path, () => {});
+    return res.status(status).json({ error });
+  };
+
+  if (!MOTIVOS_CANCELACION_APADRINAMIENTO.includes(motivo)) {
+    return fallar(400, 'Selecciona un motivo de la lista');
+  }
+  if (observacion.length < 10) {
+    return fallar(400, 'Explica el motivo de la cancelación con más detalle');
+  }
+  if (!fecha) {
+    return fallar(400, 'La fecha de cancelación no es válida');
+  }
+
+  const client = await pool.connect();
+  try {
+    await asegurarColumnasCancelacion();
+    await client.query('BEGIN');
+    const solRes = await client.query(
+      `SELECT sa.id_solicitud_apadrinamiento, sa.estado, sa.id_mascota, m.nombre AS mascota_nombre,
+              COALESCE(sa.estado_apadrinamiento, 'activa') AS estado_apadrinamiento
+       FROM solicitudapadrinamiento sa
+       JOIN mascota m ON m.id_mascota = sa.id_mascota
+       WHERE sa.id_solicitud_apadrinamiento = $1
+       FOR UPDATE OF sa`,
+      [idSolicitud]
+    );
+    if (solRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return fallar(404, 'La solicitud de apadrinamiento no existe');
+    }
+    const sol = solRes.rows[0];
+    if (sol.estado === 'cancelada' || sol.estado_apadrinamiento === 'cancelada') {
+      await client.query('ROLLBACK');
+      return fallar(409, 'Este apadrinamiento ya fue cancelado');
+    }
+    if (sol.estado !== 'aprobada') {
+      await client.query('ROLLBACK');
+      return fallar(400, 'Solo se puede cancelar un apadrinamiento activo');
+    }
+
+    await client.query(
+      `UPDATE solicitudapadrinamiento
+       SET estado = 'cancelada',
+           estado_apadrinamiento = 'cancelada',
+           motivo_cancelacion = $1,
+           observacion_cancelacion = $2,
+           foto_cancelacion = $3,
+           fecha_cancelacion = $4::date,
+           fecha_actualizacion_estado = NOW(),
+           leido_usuario = false,
+           id_admin_decision = $5,
+           decision_admin = 'cancelar',
+           nota_decision = $2,
+           fecha_decision = $4::date
+       WHERE id_solicitud_apadrinamiento = $6`,
+      [
+        motivo,
+        observacion,
+        foto ? `/uploads/cancelaciones_apadrinamiento/${foto.filename}` : null,
+        fecha,
+        admin.id_usuario,
+        sol.id_solicitud_apadrinamiento,
+      ]
+    );
+
+    await client.query(
+      `UPDATE mascota
+       SET estado_apadrinamiento = 'disponible'
+       WHERE id_mascota = $1
+         AND NOT EXISTS (
+           SELECT 1
+           FROM solicitudapadrinamiento otra
+           WHERE otra.id_mascota = $1
+             AND otra.id_solicitud_apadrinamiento <> $2
+             AND otra.estado = 'aprobada'
+             AND COALESCE(otra.estado_apadrinamiento, 'activa') = 'activa'
+         )`,
+      [sol.id_mascota, sol.id_solicitud_apadrinamiento]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      mensaje: `Apadrinamiento cancelado. ${sol.mascota_nombre} vuelve a estar disponible.`,
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    if (foto) fs.unlink(foto.path, () => {});
+    console.error('Error al finalizar el apadrinamiento:', error);
+    res.status(500).json({ error: error.message || 'Error interno al cancelar el apadrinamiento' });
+  } finally {
+    client.release();
   }
 });
 

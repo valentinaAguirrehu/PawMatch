@@ -155,6 +155,14 @@ class SolicitudApadrinamiento {
   bool get tieneContrato =>
       contratoArchivo != null && contratoArchivo!.trim().isNotEmpty;
 
+  /// Estado que ve el padrino. Una solicitud cerrada no se muestra como pendiente.
+  String get etiquetaEstado {
+    if (esRechazada) return 'Rechazada';
+    if (esCancelada || estadoApadrinamiento == 'cancelada') return 'Cancelada';
+    if (esAprobada) return 'Aprobada';
+    return 'Pendiente';
+  }
+
   factory SolicitudApadrinamiento.fromJson(Map<String, dynamic> json) {
     List<CicloEvaluacionItem> evs = [];
     if (json['evaluaciones_ciclos'] is List) {

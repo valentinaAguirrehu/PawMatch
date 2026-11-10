@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
@@ -12,7 +11,6 @@ import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/api_service.dart';
-import 'package:paw_match/services/compartir_acta_whatsapp.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
@@ -68,6 +66,13 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
   bool? _otrasMascotas;
   String? _tiempo;
   bool? _experiencia;
+
+  bool get _esMacho =>
+      (widget.pet.sexo ?? '').trim().toLowerCase().startsWith('m');
+
+  String get _lo => _esMacho ? 'lo' : 'la';
+
+  String get _pronombre => _esMacho ? 'él' : 'ella';
 
   Uint8List? _cedulaBytes;
   String? _cedulaNombre;
@@ -186,14 +191,14 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     final opcion = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: const Icon(Icons.file_present_rounded, color: AppColors.rosa),
-              title: const Text('Subir archivo o documento (PDF, JPG, PNG)'),
-              subtitle: const Text('Permite seleccionar documentos PDF o imágenes de tu dispositivo'),
+              title: const Text('Seleccionar archivo o documento'),
               onTap: () => Navigator.pop(ctx, 'archivo'),
             ),
             ListTile(
@@ -395,7 +400,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     });
 
     try {
-      final idCreado = await AdoptionService.submit(
+      await AdoptionService.submit(
         petId: widget.pet.id,
         housingType: _vivienda!,
         hasYard: _patio!,
@@ -412,82 +417,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
         correoContacto: correoFinal,
       );
 
-      final fechaAhora = DateTime.now();
-      final idRadicado = (idCreado != null && idCreado.isNotEmpty)
-          ? idCreado
-          : 'ADOP-${fechaAhora.millisecondsSinceEpoch}';
-
-      String? direccionUsuario;
-      if (Session.idUsuario != null) {
-        try {
-          final usuario = await ApiService.obtenerUsuario(Session.idUsuario!);
-          if (usuario.documentoIdentidad.trim().isNotEmpty) {
-            Session.documentoIdentidad = usuario.documentoIdentidad.trim();
-          }
-          if (usuario.direccion.trim().isNotEmpty) {
-            direccionUsuario = usuario.direccion.trim();
-          }
-        } catch (_) {}
-      }
-
-      final nombreCompleto = '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
-          ? 'Usuario Registrado'
-          : '${Session.nombre} ${Session.apellidos}'.trim();
-
-      // Traer foto de la mascota para el PDF si existe
-      Uint8List? petFotoBytes;
-      try {
-        if (widget.pet.foto != null && widget.pet.foto!.trim().isNotEmpty) {
-          final url = urlFoto(widget.pet.foto!);
-          final resImg = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
-          if (resImg.statusCode == 200) petFotoBytes = resImg.bodyBytes;
-        }
-      } catch (_) {}
-
-      Uint8List? pdfBytes;
-      String? avisoPdf;
-      try {
-        pdfBytes = await AcuerdoAdopcionPdfService.generarPdfBytes(
-          DatosActaAdopcion(
-            idSolicitud: idRadicado,
-            nombreUsuario: nombreCompleto,
-            documentoUsuario: Session.documentoIdentidad.trim().isNotEmpty
-                ? Session.documentoIdentidad.trim()
-                : null,
-            correoUsuario: correoFinal,
-            telefonoUsuario: Session.telefono.isNotEmpty ? Session.telefono : null,
-            direccionUsuario: direccionUsuario,
-            tipoVivienda: _vivienda!,
-            tienePatio: _patio!,
-            tieneNinos: _ninos!,
-            tieneOtrasMascotas: _otrasMascotas!,
-            otrasMascotas: _otrasCtrl.text.trim(),
-            tiempoDisponible: _tiempo!,
-            experienciaPrevia: _experiencia!,
-            motivacion: _infoCtrl.text.trim(),
-            nombreMascota: widget.pet.nombre,
-            especieMascota: widget.pet.especie,
-            razaMascota: widget.pet.raza,
-            edadMascota: widget.pet.edadTexto,
-            sexoMascota: widget.pet.sexo,
-            fechaAceptacion: fechaAhora,
-            aceptoTerminos: true,
-            fotoCedula: _cedulaBytes,
-            fotoRecibo: _reciboBytes,
-            fotoMascota: petFotoBytes,
-            estadoProceso: 'pendiente',
-            estadoCorreo: 'pendiente',
-          ),
-        );
-        await AcuerdoAdopcionPdfService.descargarYGuardarPdf(
-          bytes: pdfBytes,
-          nombreMascota: widget.pet.nombre,
-        );
-      } catch (e) {
-        avisoPdf =
-            'La solicitud quedó registrada, pero no se pudo generar el acta en PDF. Puedes solicitarla de nuevo a la fundación.';
-      }
-
       if (!mounted) return;
       final navigator = Navigator.of(context);
       FocusManager.instance.primaryFocus?.unfocus();
@@ -499,59 +428,19 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           scrollable: true,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           icon: const Icon(Icons.check_circle_outline, color: Colors.green, size: 52),
-          title: Text(
-            pdfBytes != null
-                ? 'Solicitud enviada y acta descargada'
-                : 'Solicitud enviada',
+          title: const Text(
+            'Solicitud enviada',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'Tu solicitud para adoptar a ${widget.pet.nombre} ha sido enviada a la Fundación Maritza Arévalo.\n\n'
-                'El administrador revisará tus respuestas y datos. Cuando haya una decisión, podrás ver las observaciones en Mis adopciones.',
+                'Tu solicitud para adoptar a ${widget.pet.nombre} ha sido enviada a la Fundación Maritza Arévalo.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
-              if (pdfBytes != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.rosaSuave,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.bordeRosa),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.picture_as_pdf, color: AppColors.rosa, size: 28),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Acta de adopción en PDF',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
-                            ),
-                            Text(
-                              'Se descargó el compromiso con tu aceptación expresa de los términos.',
-                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else if (avisoPdf != null)
-                Text(
-                  avisoPdf,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.redAccent, fontSize: 12.5),
-                ),
-              const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
@@ -572,15 +461,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Radicado: #$idRadicado',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                  color: Colors.black54,
-                ),
-              ),
             ],
           ),
           actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -598,49 +478,6 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                     onPressed: () => Navigator.pop(ctx),
                     child: const Text('Aceptar'),
                   ),
-                  if (pdfBytes != null) ...[
-                    const SizedBox(height: 8),
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF25D366),
-                        minimumSize: const Size.fromHeight(46),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                      onPressed: () async {
-                        final seguro = widget.pet.nombre.replaceAll(
-                          RegExp(r'[^a-zA-Z0-9_\-]'),
-                          '_',
-                        );
-                        final abrio = await compartirActaPorWhatsApp(
-                          bytes: pdfBytes!,
-                          nombreArchivo: 'Acta_Compromiso_Adopcion_$seguro.pdf',
-                          mensaje:
-                              'Hola, te comparto el acta de compromiso de adopción de ${widget.pet.nombre}.',
-                        );
-                        if (!ctx.mounted || abrio) return;
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'No se pudo adjuntar el PDF en WhatsApp. Ábrelo desde el celular para enviarlo con el documento.',
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.chat_rounded, size: 18),
-                          SizedBox(width: 8),
-                          Text(
-                            'Compartir vía WhatsApp',
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -803,7 +640,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                   keyboardType: TextInputType.emailAddress,
                   autofocus: true,
                   decoration: InputDecoration(
-                    labelText: 'Nuevo correo electrónico *',
+                    labelText: 'Nuevo correo electrónico',
                     labelStyle: const TextStyle(color: AppColors.rosa),
                     prefixIcon: const Icon(Icons.email_outlined, color: AppColors.rosa),
                     filled: true,
@@ -829,7 +666,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           actions: [
             TextButton(
               onPressed: _actualizandoCorreo ? null : () => Navigator.pop(ctx),
-              child: const Text('Cancelar', style: TextStyle(color: Colors.black54)),
+              child: const Text('Cancelar', style: TextStyle(color: AppColors.grisTexto)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -900,7 +737,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     ),
     const SizedBox(height: 14),
     _Opciones(
-      titulo: '¿En qué tipo de hogar vivirá el peludito?',
+      titulo: '¿En qué tipo de hogar vivirá ${widget.pet.nombre}?',
       opciones: _viviendas,
       valor: _vivienda,
       onChanged: (v) => setState(() => _vivienda = v),
@@ -945,7 +782,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     ),
     const SizedBox(height: 14),
     _Opciones(
-      titulo: '¿Cuánto tiempo al día compartirá con su nuevo compañero?',
+      titulo: '¿Cuánto tiempo al día compartirá con ${widget.pet.nombre}?',
       opciones: _tiempos,
       valor: _tiempo,
       onChanged: (v) => setState(() => _tiempo = v),
@@ -958,9 +795,9 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       onChanged: (v) => setState(() => _experiencia = v),
     ),
     const SizedBox(height: 16),
-    const Text(
-      '¿Por qué desea adoptar a este compañerito?',
-      style: TextStyle(fontWeight: FontWeight.w700),
+    Text(
+      '¿Por qué desea adoptar a ${widget.pet.nombre}?',
+      style: const TextStyle(fontWeight: FontWeight.w700),
     ),
     const SizedBox(height: 8),
     TextField(
@@ -972,7 +809,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       onChanged: _alEscribirMotivacion,
       decoration: InputDecoration(
         hintText:
-            'Cuéntenos qué lo motivó a elegirlo y por qué considera que su hogar es el lugar ideal para él.',
+            'Cuéntenos qué lo motivó a elegir$_lo y por qué considera que su hogar es el lugar ideal para $_pronombre.',
         alignLabelWithHint: true,
         border: const OutlineInputBorder(),
         errorText: _mostrarError && _motivacionCorta ? _avisoMotivacion : null,
@@ -1064,7 +901,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                       _correoPerfilConfirmado
                           ? 'Correo verificado para tu solicitud'
                           : 'Confirmación requerida para notificación',
-                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF1F2937)),
                     ),
                   ],
                 ),
@@ -1088,25 +925,31 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                 color: _correoPerfilConfirmado ? Colors.green.shade300 : AppColors.bordeRosa,
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.email,
-                  color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    correoPerfil,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14.5,
-                      color: AppColors.texto,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.email,
+                      color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
+                      size: 20,
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        correoPerfil,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          color: AppColors.texto,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -1123,7 +966,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        _correoPerfilConfirmado ? 'Confirmado' : 'Verificación al enviar',
+                        _correoPerfilConfirmado ? 'Confirmado' : 'Confirmar',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -1175,7 +1018,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                   ),
                   icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
                   label: const Text(
-                    'No es / Cambiar correo',
+                    'Modificar',
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
                   onPressed: _dialogoEditarCorreoPerfil,
@@ -1217,7 +1060,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                   ),
                   Text(
                     'Fundación Maritza Arévalo',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF1F2937)),
                   ),
                 ],
               ),
@@ -1303,7 +1146,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Al confirmar, el sistema registrará tu constancia electrónica y generará el acta de adopción en PDF.',
+                          'Al confirmar, se registrará tu constancia electrónica y se generará el documento del acta.',
                           style: TextStyle(fontSize: 11.5, color: Colors.black87),
                         ),
                       ),
@@ -1342,7 +1185,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
       const SizedBox(height: 6),
       Text(
         'Revisa el resumen de tu solicitud y acepta los términos de adopción responsable de la Fundación Maritza Arévalo.',
-        style: t.bodySmall?.copyWith(color: Colors.grey.shade600, height: 1.35),
+        style: t.bodySmall?.copyWith(color: const Color(0xFF1F2937), height: 1.35),
       ),
       const SizedBox(height: 14),
       Container(
@@ -1358,7 +1201,7 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
             const Divider(height: 14),
             _resumenFila('Adoptante:', nombre),
             const Divider(height: 14),
-            _resumenFila('Notificación al correo:', _correoCtrl.text.trim()),
+            _resumenFila('Correo:', _correoCtrl.text.trim()),
             const Divider(height: 14),
             _resumenFila('Mascota:', widget.pet.nombre),
             const Divider(height: 14),
@@ -1420,11 +1263,11 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.file_download_outlined, color: AppColors.rosa, size: 24),
+            const Icon(Icons.description_outlined, color: AppColors.rosa, size: 24),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Al confirmar, el sistema registrará tu aceptación expresa y descargará el acta de compromiso de adopción en PDF, con tus datos, los de la mascota y la fecha.',
+                'Al confirmar, se registrará tu aceptación y se generará el documento del acta. Podrás descargarlo en Mis adopciones.',
                 style: TextStyle(fontSize: 11.5, color: Colors.grey.shade800, height: 1.35),
               ),
             ),
@@ -1440,12 +1283,14 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(etiqueta, style: const TextStyle(color: Colors.black54, fontSize: 12.5)),
+        Text(etiqueta, style: const TextStyle(color: Color(0xFF1F2937), fontSize: 12.5)),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
             valor,
             textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
           ),
         ),
@@ -1546,7 +1391,7 @@ class _Pasos extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: i == paso ? AppColors.rosa : Colors.black54,
+                    color: i == paso ? AppColors.rosa : AppColors.grisTexto,
                   ),
                 ),
               ],
@@ -1595,7 +1440,7 @@ class _MascotaResumen extends StatelessWidget {
                     pet.especie,
                     if ((pet.sexo ?? '').trim().isNotEmpty) pet.sexo!.trim(),
                   ].join(' · '),
-                  style: const TextStyle(color: Colors.black54),
+                  style: const TextStyle(color: Color(0xFF1F2937)),
                 ),
               ],
             ),
@@ -1747,7 +1592,7 @@ class _FotoCampo extends StatelessWidget {
             Text(
               descripcion!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.black54,
+                color: Color(0xFF1F2937),
                 height: 1.35,
               ),
             ),
@@ -1874,7 +1719,7 @@ class _FotoCampo extends StatelessWidget {
                     ),
                     onPressed: onVer,
                     icon: const Icon(Icons.visibility_outlined, size: 18),
-                    label: const Text('Ver documento'),
+                    label: const Text('Ver'),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1907,7 +1752,7 @@ class _FotoCampo extends StatelessWidget {
                   SizedBox(height: 4),
                   Text(
                     'Ningún archivo seleccionado',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF1F2937)),
                   ),
                 ],
               ),

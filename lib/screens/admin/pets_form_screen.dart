@@ -1,17 +1,21 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/screens/match/dog_personality.dart';
 import 'package:paw_match/models/pet.dart';
+import 'package:paw_match/services/entrevista_mascota_luna_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/widgets/pet_card.dart'; // PetImage
 
 /// Formulario para agregar (pet == null) o editar una mascota.
-/// Al guardar con éxito hace Navigator.pop con la mascota guardada.
+/// Guarda automáticamente borradores en la base de datos si es un nuevo registro.
+/// Al guardar con éxito hace Navigator.pop con la mascota guardada y limpia el borrador.
 class PetsFormScreen extends StatefulWidget {
   final Pet? pet;
-  const PetsFormScreen({super.key, this.pet});
+  final BorradorMascotaResumen? borrador;
+  const PetsFormScreen({super.key, this.pet, this.borrador});
 
   @override
   State<PetsFormScreen> createState() => _PetsFormScreenState();
@@ -20,31 +24,37 @@ class PetsFormScreen extends StatefulWidget {
 class _PetsFormScreenState extends State<PetsFormScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  late final _nombre = TextEditingController(text: widget.pet?.nombre);
-  late final _raza = TextEditingController(text: widget.pet?.raza);
+  late final _nombre = TextEditingController(
+    text: widget.pet?.nombre ?? widget.borrador?.nombre ?? '',
+  );
+  late final _raza = TextEditingController(
+    text: widget.pet?.raza ?? widget.borrador?.raza ?? '',
+  );
   late final _descripcion = TextEditingController(
-    text: widget.pet?.descripcion,
+    text: widget.pet?.descripcion ?? widget.borrador?.descripcion ?? widget.borrador?.ficha.descripcion ?? '',
   );
 
-  late String _especie = widget.pet?.especie ?? 'Perro';
-  late DateTime? _fechaNacimiento = widget.pet?.fechaNacimientoParaEditar;
+  late String _especie = widget.pet?.especie ?? widget.borrador?.especie ?? 'Perro';
+  late DateTime? _fechaNacimiento = widget.pet?.fechaNacimientoParaEditar ??
+      widget.borrador?.fechaNacimiento ??
+      (widget.borrador != null ? widget.borrador!.ficha.calcularFechaNacimiento() : null);
   late bool _fechaEstimada = widget.pet?.fechaNacimientoEsEstimada ?? false;
   String? _errorFecha;
-  late String? _sexo = widget.pet?.sexo;
-  late String? _tamano = widget.pet?.tamano;
+  late String? _sexo = widget.pet?.sexo ?? widget.borrador?.sexo ?? 'Macho';
+  late String? _tamano = widget.pet?.tamano ?? widget.borrador?.tamano ?? 'Mediano';
   late final String _estadoAdopcion =
       widget.pet?.estadoAdopcion ?? 'disponible';
   late final String _estadoApadrinamiento =
       widget.pet?.estadoApadrinamiento ?? 'disponible';
   late final List<String> _estadosSalud = List<String>.from(
-    widget.pet?.estadosSalud ?? const <String>[],
+    widget.pet?.estadosSalud ?? widget.borrador?.ficha.estadosSalud ?? const <String>[],
   );
   late final _detalleSalud = TextEditingController(
-    text: widget.pet?.detalleSalud,
+    text: widget.pet?.detalleSalud ?? widget.borrador?.detalleSalud ?? widget.borrador?.ficha.detalleSalud ?? '',
   );
 
   // Foto: la que ya tenía (ruta en el servidor) o una nueva elegida del equipo
-  late String? _fotoActual = widget.pet?.foto;
+  late String? _fotoActual = widget.pet?.foto ?? widget.borrador?.foto;
   Uint8List? _fotoBytes;
   String _fotoNombre = 'foto.jpg';
   String? _fotoRutaSubida;
@@ -53,9 +63,13 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
   final _personalidad = DogPersonalityController();
   late bool _personalidadEnDesarrollo =
-      widget.pet?.personalidadDefinida == false;
+      widget.pet?.personalidadDefinida == false ||
+      widget.borrador?.ficha.personalidadDefinida == false;
 
   bool _guardando = false;
+  bool _guardandoBorrador = false;
+  bool _borradorDescartado = false;
+  Timer? _debounceAutoSave;
   bool get _esEdicion => widget.pet != null;
 
   /// El detalle escrito solo aplica si hay una necesidad veterinaria pendiente.
@@ -71,6 +85,116 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
     super.initState();
     _personalidad.addListener(_refrescarPersonalidad);
     _nombre.addListener(_refrescarPersonalidad);
+
+    // Si viene de un borrador previo, pre-cargamos la personalidad
+    if (widget.borrador != null && widget.borrador!.ficha.personalidad.isNotEmpty) {
+      for (final entrada in widget.borrador!.ficha.personalidad.entries) {
+        _personalidad.actualizar(
+          entrada.key,
+          entrada.value.clamp(1, 5).toDouble(),
+        );
+      }
+    }
+
+    if (!_esEdicion) {
+      _nombre.addListener(_onCambioCampo);
+      _raza.addListener(_onCambioCampo);
+      _descripcion.addListener(_onCambioCampo);
+      _detalleSalud.addListener(_onCambioCampo);
+      _personalidad.addListener(_onCambioCampo);
+    }
+  }
+
+  void _onCambioCampo() {
+    if (_esEdicion || _guardando || _borradorDescartado) return;
+    _debounceAutoSave?.cancel();
+    _debounceAutoSave = Timer(const Duration(milliseconds: 700), () {
+      _ejecutarAutoGuardadoBorrador();
+    });
+  }
+
+  Future<void> _ejecutarAutoGuardadoBorrador() async {
+    if (!mounted || _esEdicion || _guardando || _borradorDescartado) return;
+    final nombre = _nombre.text.trim();
+    final raza = _raza.text.trim();
+    final desc = _descripcion.text.trim();
+    final tieneDatos = nombre.isNotEmpty ||
+        raza.isNotEmpty ||
+        desc.isNotEmpty ||
+        _fechaNacimiento != null ||
+        _fotoActual != null ||
+        _fotoBytes != null ||
+        _estadosSalud.isNotEmpty;
+    if (!tieneDatos) return;
+
+    if (mounted) setState(() => _guardandoBorrador = true);
+    try {
+      await EntrevistaMascotaLunaService.guardarBorradorManual(
+        nombre: nombre.isEmpty ? null : nombre,
+        especie: _especie,
+        raza: raza.isEmpty ? null : raza,
+        sexo: _sexo,
+        tamano: _tamano,
+        fechaNacimiento: _fechaNacimiento,
+        descripcion: desc.isEmpty ? null : desc,
+        estadosSalud: _estadosSalud,
+        detalleSalud: _muestraDetalleSalud && _detalleSalud.text.trim().isNotEmpty
+            ? _detalleSalud.text.trim()
+            : null,
+        personalidadDefinida: !_ocultaEvaluacion,
+        personalidad: _ocultaEvaluacion ? const {} : _personalidad.personalidad,
+        foto: _fotoRutaSubida ?? _fotoActual,
+      );
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _guardandoBorrador = false);
+    }
+  }
+
+  Future<void> _confirmarDescartarBorrador() async {
+    final conf = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          '¿Eliminar borrador?',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Se descartará todo el avance ingresado y se eliminará el borrador de la base de datos definitivamente.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar borrador'),
+          ),
+        ],
+      ),
+    );
+    if (conf != true || !mounted) return;
+    _borradorDescartado = true;
+    _debounceAutoSave?.cancel();
+    final idBorrador = widget.borrador?.idBorrador ?? '';
+    final nombre = _nombre.text.trim().isNotEmpty
+        ? _nombre.text.trim()
+        : widget.borrador?.nombre;
+    await EntrevistaMascotaLunaService.eliminarBorrador(idBorrador, nombre: nombre);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.rosa,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        content: const Text('Borrador eliminado correctamente'),
+      ),
+    );
+    Navigator.pop(context);
   }
 
   /// Menos de 8 meses cumplidos: todavía puede marcarse la personalidad en desarrollo.
@@ -89,6 +213,14 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
   @override
   void dispose() {
+    _debounceAutoSave?.cancel();
+    if (!_esEdicion) {
+      _nombre.removeListener(_onCambioCampo);
+      _raza.removeListener(_onCambioCampo);
+      _descripcion.removeListener(_onCambioCampo);
+      _detalleSalud.removeListener(_onCambioCampo);
+      _personalidad.removeListener(_onCambioCampo);
+    }
     _personalidad.removeListener(_refrescarPersonalidad);
     _nombre.removeListener(_refrescarPersonalidad);
     _personalidad.dispose();
@@ -196,6 +328,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
           _subiendoFoto = false;
           _errorSubidaFoto = null;
         });
+        _onCambioCampo();
       }
       return ruta;
     } catch (e) {
@@ -210,13 +343,16 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
     }
   }
 
-  void _quitarFoto() => setState(() {
-    _fotoBytes = null;
-    _fotoActual = null;
-    _fotoRutaSubida = null;
-    _subiendoFoto = false;
-    _errorSubidaFoto = null;
-  });
+  void _quitarFoto() {
+    setState(() {
+      _fotoBytes = null;
+      _fotoActual = null;
+      _fotoRutaSubida = null;
+      _subiendoFoto = false;
+      _errorSubidaFoto = null;
+    });
+    _onCambioCampo();
+  }
 
   // ---------------- Guardar ----------------
 
@@ -239,6 +375,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
       _errorFecha = null;
       if (!_esMenorDeOchoMeses) _personalidadEnDesarrollo = false;
     });
+    _onCambioCampo();
   }
 
   DateTime _inicialCalendario(DateTime hoy) {
@@ -318,6 +455,8 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
           ? await PetsService.actualizar(widget.pet!.id, pet)
           : await PetsService.crear(pet);
       if (!mounted) return;
+      _borradorDescartado = true;
+      _debounceAutoSave?.cancel();
       _aviso(_mensajeGuardado(guardada));
       Navigator.pop(context, guardada);
     } catch (e) {
@@ -428,7 +567,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
             Text(
               'Fecha calculada con la edad que ya estaba registrada ($edadAnterior). '
               'Puedes corregir el día si lo conoces.',
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
+              style: const TextStyle(fontSize: 12, color: AppColors.grisTexto),
             ),
           ],
         ],
@@ -510,6 +649,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
         _estadosSalud.add(opcion);
       }
     });
+    _onCambioCampo();
   }
 
   Future<void> _abrirSelectorEstadoSalud() async {
@@ -575,7 +715,7 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Text(
                       'Selecciona todas las opciones aplicables. Las condiciones incompatibles se actualizan automáticamente.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.3),
+                      style: TextStyle(fontSize: 12, color: AppColors.grisTexto, height: 1.3),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -972,49 +1112,80 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.rosa,
-      body: Column(
-        children: [
-          // Encabezado rosado
-          SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 18),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _esEdicion ? 'Editar mascota' : 'Nueva mascota',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          _esEdicion
-                              ? 'Actualiza los datos de ${widget.pet!.nombre}'
-                              : 'Completa los datos para publicar',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!_esEdicion && !_borradorDescartado && result == null) {
+          _debounceAutoSave?.cancel();
+          await _ejecutarAutoGuardadoBorrador();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.rosa,
+        body: Column(
+          children: [
+            // Encabezado rosado
+            SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 16, 18),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _esEdicion ? 'Editar mascota' : 'Nueva mascota',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              if (!_esEdicion) ...[
+                                Icon(
+                                  _guardandoBorrador
+                                      ? Icons.cloud_sync_rounded
+                                      : Icons.cloud_done_rounded,
+                                  size: 14,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              Text(
+                                _esEdicion
+                                    ? 'Actualiza los datos de ${widget.pet!.nombre}'
+                                    : (_guardandoBorrador
+                                        ? 'Guardando borrador...'
+                                        : 'Guardado como borrador'),
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!_esEdicion)
+                      IconButton(
+                        tooltip: 'Eliminar borrador',
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
+                        onPressed: _confirmarDescartarBorrador,
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
           // Contenido blanco con esquinas redondeadas arriba
           Expanded(
             child: Container(
@@ -1053,8 +1224,10 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                               initialValue: _especie,
                               decoration: _deco(''),
                               items: _items(_especies, _especie),
-                              onChanged: (v) =>
-                                  setState(() => _especie = v ?? _especie),
+                              onChanged: (v) {
+                                setState(() => _especie = v ?? _especie);
+                                _onCambioCampo();
+                              },
                             ),
                           ),
                         ),
@@ -1081,7 +1254,10 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                               initialValue: _sexo,
                               decoration: _deco('Elegir'),
                               items: _items(_sexos, _sexo),
-                              onChanged: (v) => setState(() => _sexo = v),
+                              onChanged: (v) {
+                                setState(() => _sexo = v);
+                                _onCambioCampo();
+                              },
                             ),
                           ),
                         ),
@@ -1093,7 +1269,10 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                               initialValue: _tamano,
                               decoration: _deco('Elegir'),
                               items: _items(_tamanos, _tamano),
-                              onChanged: (v) => setState(() => _tamano = v),
+                              onChanged: (v) {
+                                setState(() => _tamano = v);
+                                _onCambioCampo();
+                              },
                             ),
                           ),
                         ),
@@ -1147,9 +1326,10 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
                           ),
                           value: _personalidadEnDesarrollo,
                           activeThumbColor: AppColors.rosa,
-                          onChanged: (valor) => setState(
-                            () => _personalidadEnDesarrollo = valor,
-                          ),
+                          onChanged: (valor) {
+                            setState(() => _personalidadEnDesarrollo = valor);
+                            _onCambioCampo();
+                          },
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1200,8 +1380,9 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 /// Borde punteado para la caja de la foto.

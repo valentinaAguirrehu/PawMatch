@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/seguimiento_apadrinamiento.dart';
+import 'package:paw_match/widgets/pet_card.dart' show urlFoto;
 
 class ReportePadrinoPdfService {
   ReportePadrinoPdfService._();
@@ -27,7 +29,7 @@ class ReportePadrinoPdfService {
     return '$dia/$mes/${f.year}';
   }
 
-  /// Carga el logo institucional de PawMatch de forma segura.
+  /// Carga el logo institucional de Paw Match de forma segura.
   static Future<pw.MemoryImage?> _cargarLogoPawMatch() async {
     try {
       final ByteData data = await rootBundle.load('assets/images/logo.png');
@@ -57,7 +59,10 @@ class ReportePadrinoPdfService {
     required String padrinoNombre,
     required String padrinoCorreo,
     String? padrinoTelefono,
+    String? padrinoCedula,
+    DateTime? fechaInicio,
     required String mascotaNombre,
+    String? mascotaFoto,
     String? mascotaEspecie,
     String? mascotaRaza,
     String? mascotaEdad,
@@ -77,7 +82,10 @@ class ReportePadrinoPdfService {
       padrinoNombre: padrinoNombre,
       padrinoCorreo: padrinoCorreo,
       padrinoTelefono: padrinoTelefono,
+      padrinoCedula: padrinoCedula,
+      fechaInicio: fechaInicio,
       mascotaNombre: mascotaNombre,
+      mascotaFoto: mascotaFoto,
       mascotaEspecie: mascotaEspecie,
       mascotaRaza: mascotaRaza,
       mascotaEdad: mascotaEdad,
@@ -108,7 +116,10 @@ class ReportePadrinoPdfService {
     required String padrinoNombre,
     required String padrinoCorreo,
     String? padrinoTelefono,
+    String? padrinoCedula,
+    DateTime? fechaInicio,
     required String mascotaNombre,
+    String? mascotaFoto,
     String? mascotaEspecie,
     String? mascotaRaza,
     String? mascotaEdad,
@@ -128,7 +139,10 @@ class ReportePadrinoPdfService {
       padrinoNombre: padrinoNombre,
       padrinoCorreo: padrinoCorreo,
       padrinoTelefono: padrinoTelefono,
+      padrinoCedula: padrinoCedula,
+      fechaInicio: fechaInicio,
       mascotaNombre: mascotaNombre,
+      mascotaFoto: mascotaFoto,
       mascotaEspecie: mascotaEspecie,
       mascotaRaza: mascotaRaza,
       mascotaEdad: mascotaEdad,
@@ -159,7 +173,10 @@ class ReportePadrinoPdfService {
     required String padrinoNombre,
     required String padrinoCorreo,
     String? padrinoTelefono,
+    String? padrinoCedula,
+    DateTime? fechaInicio,
     required String mascotaNombre,
+    String? mascotaFoto,
     String? mascotaEspecie,
     String? mascotaRaza,
     String? mascotaEdad,
@@ -175,21 +192,11 @@ class ReportePadrinoPdfService {
     DateTime? fechaDecision,
     String? adminDecisionNombre,
   }) async {
-    pw.ThemeData tema;
-    try {
-      final ttfRegular = await PdfGoogleFonts.robotoRegular();
-      final ttfBold = await PdfGoogleFonts.robotoBold();
-      tema = pw.ThemeData.withFont(base: ttfRegular, bold: ttfBold);
-    } catch (_) {
-      tema = pw.ThemeData.withFont(
-        base: pw.Font.helvetica(),
-        bold: pw.Font.helveticaBold(),
-      );
-    }
-
-    final logoImage = await _cargarLogoPawMatch();
     final logoFundacion = await _cargarLogoFundacion();
-    final pdf = pw.Document(theme: tema);
+    final logoPawMatch = await _cargarLogoPawMatch();
+    final fotoMascota = await _imagen(mascotaFoto);
+    final cedula = padrinoCedula?.trim() ?? '';
+    final pdf = pw.Document();
 
     // Fuente completa de seguimientos para poder adjuntar ciclos anteriores
     final List<SeguimientoApadrinamientoItem> fuenteCompleta =
@@ -251,69 +258,97 @@ class ReportePadrinoPdfService {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 36),
-        header: (context) => pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 10),
-          margin: const pw.EdgeInsets.only(bottom: 14),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColors.grey300, width: 1.5),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 56, vertical: 40),
+        header: (context) => pw.Column(
+          children: [
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.SizedBox(
+                  width: 58,
+                  height: 58,
+                  child: logoFundacion == null
+                      ? pw.SizedBox()
+                      : pw.Image(logoFundacion, fit: pw.BoxFit.contain),
+                ),
+                pw.SizedBox(width: 10),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        FundacionInfo.nombre.toUpperCase(),
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          color: PdfColor.fromHex('#880E4F'),
+                          fontSize: 15.5,
+                          fontWeight: pw.FontWeight.bold,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      pw.SizedBox(height: 3),
+                      pw.Text(
+                        FundacionInfo.ciudad,
+                        textAlign: pw.TextAlign.center,
+                        style: const pw.TextStyle(color: PdfColors.grey700, fontSize: 10.5),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Protección, Bienestar y Rescate Animal',
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          color: PdfColors.grey700,
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 10),
+                pw.SizedBox(
+                  width: 58,
+                  height: 58,
+                  child: logoPawMatch == null
+                      ? pw.SizedBox()
+                      : pw.Image(logoPawMatch, fit: pw.BoxFit.contain),
+                ),
+              ],
             ),
-          ),
-          child: pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              if (logoFundacion != null)
-                pw.Container(
-                  width: 55,
-                  height: 55,
-                  margin: const pw.EdgeInsets.only(right: 10),
-                  child: pw.Image(logoFundacion, fit: pw.BoxFit.contain),
-                ),
-              pw.Expanded(
-                child: pw.Column(
-                  crossAxisAlignment: logoFundacion != null
-                      ? pw.CrossAxisAlignment.center
-                      : pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      FundacionInfo.nombre.toUpperCase(),
-                      textAlign: logoFundacion != null
-                          ? pw.TextAlign.center
-                          : pw.TextAlign.left,
-                      style: pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColor.fromHex('#880E4F'),
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      'Reporte Oficial de Seguimiento de Apadrinamiento · Ciclo $cicloReporte',
-                      textAlign: logoFundacion != null
-                          ? pw.TextAlign.center
-                          : pw.TextAlign.left,
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        color: PdfColors.grey700,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (logoImage != null)
-                pw.Container(
-                  width: 55,
-                  height: 55,
-                  margin: const pw.EdgeInsets.only(left: 10),
-                  child: pw.Image(logoImage, fit: pw.BoxFit.contain),
-                ),
-            ],
-          ),
+            pw.SizedBox(height: 8),
+            pw.Container(height: 1.5, color: PdfColors.grey300),
+            pw.SizedBox(height: 8),
+          ],
         ),
         build: (context) => [
+          pw.Center(
+            child: pw.Column(
+              children: [
+                pw.Text(
+                  'REPORTE DE SEGUIMIENTO Y APOYO DE APADRINAMIENTO',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                    color: PdfColor.fromHex('#1F2937'),
+                    fontSize: 13,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 1),
+                pw.Text(
+                  'REGISTRO DE CONTROL Y BIENESTAR',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                    color: PdfColor.fromHex('#4B5563'),
+                    fontSize: 9.5,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Container(height: 0.8, color: PdfColor.fromHex('#D1D5DB')),
+          pw.SizedBox(height: 10),
           // 1. FECHA DE EMISIÓN Y TÍTULO
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -361,9 +396,14 @@ class ReportePadrinoPdfService {
                       ),
                       pw.SizedBox(height: 5),
                       _filaDato('Nombre:', padrinoNombre),
+                      _filaDato('Cédula:', cedula.isEmpty ? '-' : cedula),
                       _filaDato('Correo:', padrinoCorreo),
                       if (padrinoTelefono != null && padrinoTelefono.isNotEmpty)
                         _filaDato('Teléfono:', padrinoTelefono),
+                      _filaDato(
+                        'Fecha de inicio:',
+                        fechaInicio == null ? '-' : _formatearFecha(fechaInicio),
+                      ),
                     ],
                   ),
                 ),
@@ -390,13 +430,43 @@ class ReportePadrinoPdfService {
                         ),
                       ),
                       pw.SizedBox(height: 5),
-                      _filaDato('Nombre:', mascotaNombre),
-                      if (mascotaEspecie != null && mascotaEspecie.isNotEmpty)
-                        _filaDato('Especie:', mascotaEspecie),
-                      if (mascotaRaza != null && mascotaRaza.isNotEmpty)
-                        _filaDato('Raza:', mascotaRaza),
-                      if (mascotaEdad != null && mascotaEdad.isNotEmpty)
-                        _filaDato('Edad:', mascotaEdad),
+                      if (fotoMascota == null)
+                        pw.Column(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: _filasMascota(
+                            mascotaNombre: mascotaNombre,
+                            mascotaEspecie: mascotaEspecie,
+                            mascotaRaza: mascotaRaza,
+                            mascotaEdad: mascotaEdad,
+                          ),
+                        )
+                      else
+                        pw.Row(
+                          crossAxisAlignment: pw.CrossAxisAlignment.start,
+                          children: [
+                            pw.Expanded(
+                              child: pw.Column(
+                                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                                children: _filasMascota(
+                                  mascotaNombre: mascotaNombre,
+                                  mascotaEspecie: mascotaEspecie,
+                                  mascotaRaza: mascotaRaza,
+                                  mascotaEdad: mascotaEdad,
+                                ),
+                              ),
+                            ),
+                            pw.Container(
+                              width: 64,
+                              height: 64,
+                              margin: const pw.EdgeInsets.only(left: 8),
+                              child: pw.ClipRRect(
+                                horizontalRadius: 6,
+                                verticalRadius: 6,
+                                child: pw.Image(fotoMascota, fit: pw.BoxFit.cover),
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -945,6 +1015,33 @@ class ReportePadrinoPdfService {
     return pdf.save();
   }
 
+  static List<pw.Widget> _filasMascota({
+    required String mascotaNombre,
+    String? mascotaEspecie,
+    String? mascotaRaza,
+    String? mascotaEdad,
+  }) {
+    return [
+      _filaDato('Nombre:', mascotaNombre),
+      if (mascotaEspecie != null && mascotaEspecie.isNotEmpty)
+        _filaDato('Especie:', mascotaEspecie),
+      if (mascotaRaza != null && mascotaRaza.isNotEmpty) _filaDato('Raza:', mascotaRaza),
+      if (mascotaEdad != null && mascotaEdad.isNotEmpty) _filaDato('Edad:', mascotaEdad),
+    ];
+  }
+
+  static Future<pw.MemoryImage?> _imagen(String? ruta) async {
+    final limpia = ruta?.trim() ?? '';
+    if (limpia.isEmpty || limpia == 'null') return null;
+    try {
+      final res = await http.get(Uri.parse(urlFoto(limpia))).timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200 || res.bodyBytes.isEmpty) return null;
+      return pw.MemoryImage(res.bodyBytes);
+    } catch (_) {
+      return null;
+    }
+  }
+
   static pw.Widget _filaDato(String etiqueta, String valor) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 1.5),
@@ -952,7 +1049,7 @@ class ReportePadrinoPdfService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 50,
+            width: 78,
             child: pw.Text(
               etiqueta,
               style: pw.TextStyle(

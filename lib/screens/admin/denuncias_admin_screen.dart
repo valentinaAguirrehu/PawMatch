@@ -340,7 +340,7 @@ class _DenunciasAdminScreenState extends State<DenunciasAdminScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '${d.tipoAnimal} • ${d.ciudadCaso}',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.grisTexto),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -354,26 +354,26 @@ class _DenunciasAdminScreenState extends State<DenunciasAdminScreen> {
                 // Pie de tarjeta: evidencias, reportante, fecha
                 Row(
                   children: [
-                    Icon(Icons.attach_file_rounded, size: 16, color: Colors.grey.shade600),
+                    Icon(Icons.attach_file_rounded, size: 16, color: AppColors.grisTexto),
                     const SizedBox(width: 4),
                     Text(
                       '${d.totalArchivos} evidencia${d.totalArchivos != 1 ? 's' : ''}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                      style: TextStyle(fontSize: 12, color: AppColors.grisTexto, fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(width: 14),
-                    Icon(Icons.person_outline_rounded, size: 16, color: Colors.grey.shade600),
+                    Icon(Icons.person_outline_rounded, size: 16, color: AppColors.grisTexto),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
                         d.esAnonimo ? 'Anónimo' : (d.nombreReportante ?? 'Reportante'),
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                        style: TextStyle(fontSize: 12, color: AppColors.grisTexto, fontWeight: FontWeight.w500),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Text(
                       d.fechaCreacion.isNotEmpty ? d.fechaCreacion.substring(0, 10) : '',
-                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade500),
+                      style: TextStyle(fontSize: 11.5, color: AppColors.grisTexto),
                     ),
                   ],
                 ),

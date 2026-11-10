@@ -805,6 +805,9 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
   }
 
   const observaciones = (req.body.observaciones || '').toString().trim().slice(0, 500);
+  if (estado === 'rechazada' && !observaciones) {
+    return res.status(400).json({ error: 'Indica el motivo del rechazo' });
+  }
   let fechaInicio = null;
   if (estado === 'aprobada') {
     fechaInicio = fechaIso(req.body.fecha_inicio_adopcion || '')
@@ -858,14 +861,14 @@ router.put('/:id/status', requireAdmin, async (req, res) => {
 
     const updateRes = await client.query(
       `UPDATE solicitudadopcion
-       SET estado = $1,
+       SET estado = $1::estado_solicitud,
            fecha_actualizacion_estado = NOW(),
            id_administrador_revisor = $2,
            observaciones = $3,
            fecha_inicio_adopcion = $4,
            leido_usuario = false,
            contrato_adopcion_estado = CASE
-             WHEN $1 = 'aprobada' THEN 'pendiente'
+             WHEN $1::text = 'aprobada' THEN 'pendiente'
              ELSE contrato_adopcion_estado
            END
        WHERE id_solicitud_adopcion = $5

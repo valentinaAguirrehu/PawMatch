@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/user.dart';
-import 'package:paw_match/screens/adoption/my_adoptions_screen.dart';
-import 'package:paw_match/screens/apadrinamiento/mis_apadrinamientos_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
 import 'package:paw_match/screens/users/voz_asistente_screen.dart';
@@ -574,54 +572,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             totalSeguimientosPadrino: _totalSeguimientosPadrino,
             onFoto: _mostrarOpcionesFoto,
           ),
-          if (!Session.isAdmin && !_editando) ...[
-            const SizedBox(height: 18),
-            Text(
-              'Mis Solicitudes',
-              style: texto.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 10),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: _TarjetaSolicitud(
-                      icono: Icons.pets,
-                      titulo: 'Mis Adopciones',
-                      subtitulo: 'Estado y contrato',
-                      onTap: () {
-                        AdoptionService.marcarLeidasUsuario();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyAdoptionsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _TarjetaSolicitud(
-                      icono: Icons.volunteer_activism,
-                      titulo: 'Mis Apadrinamientos',
-                      subtitulo: 'Estado y contratos',
-                      onTap: () {
-                        ApadrinamientoService.marcarLeidasUsuario();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MisApadrinamientosScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: 22),
           Text(
             'Tu información',
@@ -841,7 +791,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           Text(
             'Puedes eliminar tu cuenta si no tienes adopciones ni apadrinamientos realizados, ni solicitudes en proceso.',
-            style: texto.bodyMedium?.copyWith(color: Colors.black54),
+            style: texto.bodyMedium?.copyWith(color: AppColors.grisTexto),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -914,71 +864,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         keyboardType: teclado,
         textCapitalization: capitalizacion,
         decoration: InputDecoration(labelText: etiqueta, prefixIcon: icono),
-      ),
-    );
-  }
-}
-
-class _TarjetaSolicitud extends StatelessWidget {
-  final IconData icono;
-  final String titulo;
-  final String subtitulo;
-  final VoidCallback onTap;
-
-  const _TarjetaSolicitud({
-    required this.icono,
-    required this.titulo,
-    required this.subtitulo,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.rosaSuave,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.bordeRosa),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.rosa.withValues(alpha: 0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              backgroundColor: AppColors.rosaClaro,
-              radius: 20,
-              child: Icon(icono, color: AppColors.rosa, size: 20),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              titulo,
-              style: const TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
-                height: 1.2,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitulo,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 11.5,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

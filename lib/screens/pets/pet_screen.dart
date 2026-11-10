@@ -15,6 +15,7 @@ import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/personalidad_usuario_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
+import 'package:paw_match/services/entrevista_mascota_luna_service.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart';
@@ -62,6 +63,9 @@ class _PetScreenState extends State<PetScreen> {
   /// Al entrar, Disponibles queda marcado e incluye también a las apadrinadas.
   String _estado = 'Disponibles';
 
+  List<BorradorMascotaResumen> _borradores = const [];
+  bool _cargandoBorradores = false;
+
   @override
   void initState() {
     super.initState();
@@ -69,6 +73,9 @@ class _PetScreenState extends State<PetScreen> {
     MatchEstado.instancia.addListener(_onMatchEstadoActualizado);
     PetsService.mascotasEnMemoria.addListener(_onMascotasMemoriaActualizadas);
     _cargarFavoritos();
+    if (Session.esAdmin) {
+      _cargarBorradores();
+    }
   }
 
   @override
@@ -279,8 +286,146 @@ class _PetScreenState extends State<PetScreen> {
   }
 
   Future<void> _recargar() async {
+    if (Session.esAdmin) {
+      _cargarBorradores();
+    }
     setState(() => _future = _cargarDatosIniciales());
     await _future.catchError((_) => <Pet>[]);
+  }
+
+  Future<void> _cargarBorradores() async {
+    if (!Session.esAdmin) return;
+    setState(() => _cargandoBorradores = true);
+    try {
+      final lista = await EntrevistaMascotaLunaService.obtenerBorradores();
+      if (!mounted) return;
+      setState(() {
+        _borradores = lista;
+        _cargandoBorradores = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cargandoBorradores = false);
+    }
+  }
+
+  Future<bool> _eliminarBorrador(
+    BorradorMascotaResumen b, {
+    bool pedirConfirmacion = true,
+  }) async {
+    if (pedirConfirmacion) {
+      final conf = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            '¿Eliminar borrador?',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Se descartará el avance de registro de "${b.nombreVisible}". Esta acción no se puede deshacer.',
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+              ),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        ),
+      );
+      if (conf != true || !mounted) return false;
+    }
+
+    // Eliminación inmediata en la UI para que desaparezca al instante
+    setState(() {
+      _borradores = [];
+    });
+
+    final ok = await EntrevistaMascotaLunaService.eliminarBorrador(
+      b.idBorrador,
+      nombre: b.nombre,
+    );
+    if (!mounted) return ok;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.rosa,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          content: const Text('Borrador eliminado correctamente'),
+        ),
+      );
+    }
+    await _cargarBorradores();
+    return ok;
+  }
+
+  Future<void> _abrirAsistenteLuna() async {
+    final Pet? creada = await Navigator.push<Pet>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const GptLunaMascotaScreen(),
+      ),
+    );
+    if (!mounted) return;
+    if (Session.esAdmin) {
+      _cargarBorradores();
+    }
+    if (creada != null) {
+      setState(() {
+        _recienAgregada = creada;
+        if (_listaVisible != null) {
+          _listaVisible = [
+            creada,
+            ..._listaVisible!.where((p) => p.id != creada.id),
+          ];
+        }
+        _estado = 'Disponibles';
+        _irAlInicio = true;
+        _searchCtrl.clear();
+        _busqueda = '';
+      });
+      _recargar();
+    }
+  }
+
+  Future<void> _continuarBorrador(BorradorMascotaResumen b) async {
+    final Pet? creada = await Navigator.push<Pet>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => b.esManual
+            ? PetsFormScreen(borrador: b)
+            : const GptLunaMascotaScreen(),
+      ),
+    );
+    if (!mounted) return;
+    if (Session.esAdmin) {
+      _cargarBorradores();
+    }
+    if (creada != null) {
+      setState(() {
+        _recienAgregada = creada;
+        if (_listaVisible != null) {
+          _listaVisible = [
+            creada,
+            ..._listaVisible!.where((p) => p.id != creada.id),
+          ];
+        }
+        _estado = 'Disponibles';
+        _irAlInicio = true;
+        _searchCtrl.clear();
+        _busqueda = '';
+      });
+      _recargar();
+    }
   }
 
   /// Deja la mascota nueva al inicio y limpia filtros que podrían ocultarla.
@@ -304,7 +449,121 @@ class _PetScreenState extends State<PetScreen> {
   /// Muestra las dos opciones al administrador:
   /// 1) Agregar mascota con asistente virtual
   /// 2) Agregar mascota mediante formulario tradicional
+  /// Si existe un borrador pendiente, bloquea iniciar un nuevo registro
+  /// y orienta al administrador a continuar o eliminar el existente.
   Future<void> _abrirFormularioNuevaMascota() async {
+    if (_borradores.isNotEmpty) {
+      final b = _borradores.first;
+      final modoNombre =
+          b.esManual ? 'formulario tradicional' : 'asistente virtual';
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: AppColors.rosaSuave,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.edit_document,
+                  color: AppColors.rosa,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Borrador pendiente',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Ya tienes un registro en progreso de "${b.nombreVisible}" iniciado mediante $modoNombre.',
+                style: const TextStyle(fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.rosaSuave.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.bordeRosa),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      size: 20,
+                      color: AppColors.rosa,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Debes finalizar este registro o eliminar el borrador antes de iniciar el registro de otra mascota.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF374151),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cerrar'),
+            ),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFEF4444),
+                side: const BorderSide(color: Color(0xFFFCA5A5)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final eliminado = await _eliminarBorrador(b, pedirConfirmacion: false);
+                if (eliminado && mounted) {
+                  _abrirFormularioNuevaMascota();
+                }
+              },
+              child: const Text('Eliminar borrador'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.rosa,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _continuarBorrador(b);
+              },
+              child: const Text('Continuar registro'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final modo = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -345,7 +604,7 @@ class _PetScreenState extends State<PetScreen> {
                 const Text(
                   'Elige el método que prefieras para agregar un nuevo peludito.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                  style: TextStyle(fontSize: 13, color: AppColors.grisTexto),
                 ),
                 const SizedBox(height: 16),
                 // Opción 1: Agregar mascota con asistente virtual
@@ -487,7 +746,11 @@ class _PetScreenState extends State<PetScreen> {
             : const PetsFormScreen(),
       ),
     );
-    if (creada == null || !mounted) return;
+    if (!mounted) return;
+    if (Session.esAdmin) {
+      _cargarBorradores();
+    }
+    if (creada == null) return;
     setState(() {
       _recienAgregada = creada;
       if (_listaVisible != null) {
@@ -503,7 +766,7 @@ class _PetScreenState extends State<PetScreen> {
       _sexo = 'Todos';
       _tamano = 'Todos';
       _edad = 'Todos';
-      _estado = 'Todas';
+      _estado = 'Todos';
     });
     _programarIrAlInicio();
   }
@@ -1056,15 +1319,53 @@ class _PetScreenState extends State<PetScreen> {
     );
   }
 
-  /// Categorías horizontales: Todas, Disponibles, Favoritos, Apadrinadas y Adopción.
+  /// Categorías horizontales. «Todos» queda fijo al inicio para no verse cortado.
   Widget _barraEstado() {
-    const opciones = [
-      'Todas',
-      'Disponibles',
-      'Favoritos',
-      'Apadrinadas',
-      'Adopción',
-    ];
+    const fijo = 'Todos';
+    const resto = ['Disponibles', 'Favoritos', 'Apadrinadas', 'Adoptadas'];
+
+    Widget chip(String valor, {required bool compacto}) {
+      final sel = _estado == valor;
+      return GestureDetector(
+        onTap: () => setState(() => _estado = valor),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: EdgeInsets.symmetric(
+            horizontal: compacto ? 12 : 15,
+            vertical: 7,
+          ),
+          decoration: BoxDecoration(
+            gradient: sel
+                ? const LinearGradient(
+                    colors: [Color(0xFFFF6FB3), AppColors.rosa],
+                  )
+                : null,
+            color: sel ? null : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: sel ? AppColors.rosa : const Color(0xFFF8C4DC),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.rosa.withValues(alpha: sel ? 0.25 : 0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            valor,
+            style: TextStyle(
+              fontSize: compacto ? 12.0 : 12.5,
+              fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+              color: sel ? Colors.white : const Color(0xFF374151),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 6, 14, 4),
       child: SizedBox(
@@ -1072,67 +1373,24 @@ class _PetScreenState extends State<PetScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compacto = constraints.maxWidth < 390;
-            return SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(opciones.length, (i) {
-                    final valor = opciones[i];
-                    final sel = _estado == valor;
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        right: i < opciones.length - 1 ? 6 : 0,
-                      ),
-                      child: GestureDetector(
-                        onTap: () => setState(() => _estado = valor),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: compacto ? 12 : 15,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            gradient: sel
-                                ? const LinearGradient(
-                                    colors: [
-                                      Color(0xFFFF6FB3),
-                                      AppColors.rosa,
-                                    ],
-                                  )
-                                : null,
-                            color: sel ? null : Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: sel
-                                  ? AppColors.rosa
-                                  : const Color(0xFFF8C4DC),
-                              width: 1.2,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.rosa.withValues(
-                                  alpha: sel ? 0.25 : 0.06,
-                                ),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            valor,
-                            style: TextStyle(
-                              fontSize: compacto ? 12.0 : 12.5,
-                              fontWeight:
-                                  sel ? FontWeight.w800 : FontWeight.w600,
-                              color: sel
-                                  ? Colors.white
-                                  : const Color(0xFF374151),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
-              ),
+            return Row(
+              children: [
+                chip(fijo, compacto: compacto),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (var i = 0; i < resto.length; i++) ...[
+                          chip(resto[i], compacto: compacto),
+                          if (i < resto.length - 1) const SizedBox(width: 6),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -1167,6 +1425,7 @@ class _PetScreenState extends State<PetScreen> {
               esMejorMatch: !esAdmin && item.esMatchIdeal,
               esNuevoMatchEncontrado: !esAdmin && item.esNuevoMatchEncontrado,
               ocultarMatch: esAdmin,
+              insigniaNuevo: _recienAgregada?.id == pet.id,
               esFavorito: _favoritosIds.contains(pet.id),
               onToggleFavorito: () => _alternarFavorito(pet),
               onTap: () async {
@@ -1188,6 +1447,170 @@ class _PetScreenState extends State<PetScreen> {
             );
           },
           childCount: items.length,
+        ),
+      ),
+    );
+  }
+
+  Widget _botonBorradorMascotaIA() {
+    if (_borradores.isEmpty) return const SizedBox.shrink();
+
+    final b = _borradores.first;
+    final total = _borradores.length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFFFFF0F7),
+              Color(0xFFFFFAFD),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFF9B8D4), width: 1.4),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.rosa.withValues(alpha: 0.12),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => _continuarBorrador(b),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+              child: Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF7DBA), AppColors.rosa],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.rosa.withValues(alpha: 0.28),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      b.esManual ? Icons.edit_note_rounded : Icons.auto_awesome,
+                      color: Colors.white,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                total > 1
+                                    ? 'Tienes $total borradores pendientes'
+                                    : 'Borrador pendiente: ${b.nombreVisible}',
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1F2937),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 1.5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.rosaSuave,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: AppColors.bordeRosa,
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Text(
+                                b.esManual ? 'MANUAL' : 'IA',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.rosa,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          b.descripcionPaso,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF6B7280),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.rosa,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      minimumSize: const Size(0, 36),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => _continuarBorrador(b),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                    label: const Text(
+                      'Continuar',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  IconButton(
+                    tooltip: 'Descartar borrador',
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                    onPressed: () => _eliminarBorrador(b),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1359,11 +1782,11 @@ class _PetScreenState extends State<PetScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        'Todas',
+                        'Todos',
                         'Disponibles',
                         'Favoritos',
                         'Apadrinadas',
-                        'Adopción',
+                        'Adoptadas',
                       ].map((estado) {
                         return chipFiltro(estado, _estado, (v) => _estado = v);
                       }).toList(),
@@ -1571,7 +1994,7 @@ class _PetScreenState extends State<PetScreen> {
               style: TextStyle(
                 fontSize: 13,
                 height: 1.4,
-                color: Colors.grey.shade600,
+                color: AppColors.grisTexto,
               ),
             ),
             if (!sinFavoritos &&
@@ -1611,8 +2034,16 @@ class _PetScreenState extends State<PetScreen> {
       floatingActionButton: esAdmin
           ? FloatingActionButton.extended(
               onPressed: _abrirFormularioNuevaMascota,
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar mascota'),
+              elevation: 6,
+              icon: const Icon(Icons.add, size: 22),
+              label: const Text(
+                'Agregar mascota',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: const BorderSide(color: Colors.white, width: 3),
+              ),
             )
           : null,
       body: Container(
@@ -1746,6 +2177,10 @@ class _PetScreenState extends State<PetScreen> {
                                         _notificacionesPendientes.first,
                                         origen ?? const <Pet>[],
                                       ),
+                                    ),
+                                  if (esAdmin && _borradores.isNotEmpty)
+                                    SliverToBoxAdapter(
+                                      child: _botonBorradorMascotaIA(),
                                     ),
                                   const SliverToBoxAdapter(
                                     child: SizedBox(height: 4),

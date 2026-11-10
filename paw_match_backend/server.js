@@ -58,6 +58,9 @@ asegurarVozAsistente(pool).catch((error) => {
 asegurarEsquemaMatch().catch((error) => {
   console.error('No se pudo preparar el esquema de Match:', error.message);
 });
+pool.query('DROP TABLE IF EXISTS borrador_registro_mascota_luna CASCADE;').catch(() => {});
+pool.query('DROP TABLE IF EXISTS borrador_mascota_ia CASCADE;').catch(() => {});
+pool.query('DROP TABLE IF EXISTS borrador_mascota CASCADE;').catch(() => {});
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

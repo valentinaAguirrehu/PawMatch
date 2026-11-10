@@ -314,7 +314,7 @@ class _HomeTabState extends State<HomeTab> {
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade700,
+                                  color: AppColors.grisTexto,
                                 ),
                               ),
                               const SizedBox(width: 6),
@@ -399,7 +399,7 @@ class _HomeTabState extends State<HomeTab> {
                                         children: [
                                           Icon(
                                             dioLike ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                            color: dioLike ? _rosaPrincipal : Colors.grey.shade600,
+                                            color: dioLike ? _rosaPrincipal : AppColors.grisTexto,
                                             size: 18,
                                           ),
                                           const SizedBox(width: 6),
@@ -409,7 +409,7 @@ class _HomeTabState extends State<HomeTab> {
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
-                                                color: dioLike ? _rosaPrincipal : Colors.grey.shade700,
+                                                color: dioLike ? _rosaPrincipal : AppColors.grisTexto,
                                                 fontWeight: FontWeight.w800,
                                                 fontSize: 13,
                                               ),
@@ -1202,7 +1202,7 @@ class _HomeTabState extends State<HomeTab> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: esEscritorio ? 12 : 11,
-              color: Colors.grey.shade600,
+              color: AppColors.grisTexto,
             ),
           ),
         ],
@@ -1581,7 +1581,7 @@ class _TarjetaMascotaEstiloFoto extends StatelessWidget {
                   style: TextStyle(
                     fontSize: esEscritorio ? 11.5 : 10,
                     fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade600,
+                    color: AppColors.grisTexto,
                   ),
                 ),
                 SizedBox(height: esEscritorio ? 8 : 6),
@@ -1782,7 +1782,7 @@ class _TarjetaNoticiaDestacada extends StatelessWidget {
                     style: TextStyle(
                       fontSize: esEscritorio ? 13 : 11.5,
                       height: 1.4,
-                      color: Colors.grey.shade700,
+                      color: AppColors.grisTexto,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -1932,7 +1932,7 @@ class _TarjetaNoticiaSecundaria extends StatelessWidget {
                       style: TextStyle(
                         fontSize: esEscritorio ? 11 : 9.5,
                         fontWeight: FontWeight.w500,
-                        color: Colors.grey.shade600,
+                        color: AppColors.grisTexto,
                       ),
                     ),
                   ],

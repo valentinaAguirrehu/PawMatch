@@ -76,7 +76,7 @@ class TarjetaSeguimiento extends StatelessWidget {
                   Icon(
                     Icons.calendar_today_outlined,
                     size: 13,
-                    color: Colors.grey.shade600,
+                    color: AppColors.grisTexto,
                   ),
                   const SizedBox(width: 4),
                   Text(
