@@ -2,13 +2,11 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
-import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
@@ -148,6 +146,7 @@ class _SolicitudApadrinamientoDialogState
   bool _enviando = false;
   bool _actualizandoCorreo = false;
   bool _correoPerfilConfirmado = false;
+  final _scrollCtrl = ScrollController();
 
   @override
   void initState() {
@@ -177,6 +176,7 @@ class _SolicitudApadrinamientoDialogState
     _correoCtrl.dispose();
     _detalleEspecieCtrl.dispose();
     _otroAporteCtrl.dispose();
+    _scrollCtrl.dispose();
     super.dispose();
   }
 
@@ -192,14 +192,14 @@ class _SolicitudApadrinamientoDialogState
     final opcion = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
               leading: const Icon(Icons.file_present_rounded, color: AppColors.rosa),
-              title: const Text('Subir archivo o documento (PDF, JPG, PNG)'),
-              subtitle: const Text('Permite seleccionar documentos PDF o imágenes de tu dispositivo'),
+              title: const Text('Seleccionar archivo o documento'),
               onTap: () => Navigator.pop(ctx, 'archivo'),
             ),
             ListTile(
@@ -350,7 +350,7 @@ class _SolicitudApadrinamientoDialogState
                   ),
                   Text(
                     'Fundación Maritza Arévalo',
-                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF1F2937)),
                   ),
                 ],
               ),
@@ -423,7 +423,7 @@ class _SolicitudApadrinamientoDialogState
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Al confirmar, el sistema registrará tu constancia electrónica y generará el PDF descargable.',
+                          'Al confirmar, se registrará tu constancia electrónica y se generará el documento del acta.',
                           style: TextStyle(fontSize: 11.5, color: Colors.black87),
                         ),
                       ),
@@ -448,6 +448,14 @@ class _SolicitudApadrinamientoDialogState
     );
   }
 
+  /// El paso siguiente se muestra desde el inicio, no desde donde quedó el anterior.
+  void _mostrarDesdeArriba() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollCtrl.hasClients) return;
+      _scrollCtrl.jumpTo(0);
+    });
+  }
+
   void _continuar() {
     if (_paso == 0) {
       final motivacion = _motivacionCtrl.text.trim();
@@ -464,6 +472,7 @@ class _SolicitudApadrinamientoDialogState
       }
       if (!_formKey.currentState!.validate()) return;
       setState(() => _paso = 1);
+      _mostrarDesdeArriba();
     } else if (_paso == 1) {
       if (_docBytes == null || _docNombre == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -477,6 +486,7 @@ class _SolicitudApadrinamientoDialogState
         return;
       }
       setState(() => _paso = 2);
+      _mostrarDesdeArriba();
     }
   }
 
@@ -594,7 +604,7 @@ class _SolicitudApadrinamientoDialogState
                   keyboardType: TextInputType.emailAddress,
                   autofocus: true,
                   decoration: InputDecoration(
-                    labelText: 'Nuevo correo electrónico *',
+                    labelText: 'Nuevo correo electrónico',
                     labelStyle: const TextStyle(color: AppColors.rosa),
                     prefixIcon: const Icon(Icons.email_outlined, color: AppColors.rosa),
                     filled: true,
@@ -618,7 +628,7 @@ class _SolicitudApadrinamientoDialogState
           actions: [
             TextButton(
               onPressed: _actualizandoCorreo ? null : () => Navigator.pop(ctx),
-              child: const Text('Cancelar', style: TextStyle(color: Colors.black54)),
+              child: const Text('Cancelar', style: TextStyle(color: AppColors.grisTexto)),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
@@ -708,8 +718,7 @@ class _SolicitudApadrinamientoDialogState
       }
 
       // 1. Enviar a base de datos en el backend (incluyendo el correo confirmado)
-      final SolicitudApadrinamiento? solicitudCreada =
-          await ApadrinamientoService.enviarSolicitud(
+      await ApadrinamientoService.enviarSolicitud(
         idMascota: widget.pet.id,
         motivacion: motivacion,
         tipoAporte: _tipoAporte,
@@ -721,86 +730,24 @@ class _SolicitudApadrinamientoDialogState
         correoContacto: correoConfirmado,
       );
 
-      final fechaAhora = DateTime.now();
-      final idRadicado = solicitudCreada != null && solicitudCreada.id.isNotEmpty
-          ? solicitudCreada.id
-          : 'APAD-${fechaAhora.millisecondsSinceEpoch}';
-
-      final nombreCompletoUsuario =
-          '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
-              ? 'Usuario Registrado'
-              : '${Session.nombre} ${Session.apellidos}'.trim();
-
-      // Asegurar que el documento de identidad esté cargado
-      if (Session.documentoIdentidad.trim().isEmpty && Session.idUsuario != null) {
-        try {
-          final u = await ApiService.obtenerUsuario(Session.idUsuario!);
-          if (u.documentoIdentidad.trim().isNotEmpty) {
-            Session.documentoIdentidad = u.documentoIdentidad.trim();
-          }
-        } catch (_) {}
-      }
-
-      // Obtener imagen de la mascota si está disponible
-      Uint8List? petFotoBytes;
-      try {
-        if (widget.pet.foto != null && widget.pet.foto!.trim().isNotEmpty) {
-          final url = urlFoto(widget.pet.foto!);
-          final resImg = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 8));
-          if (resImg.statusCode == 200) petFotoBytes = resImg.bodyBytes;
-        }
-      } catch (_) {}
-
-      // 2. Generar el PDF oficial del Acuerdo breve con datos reales y fotos integradas
-      final datosAcuerdo = DatosAcuerdoApadrinamiento(
-        idSolicitud: idRadicado,
-        nombreUsuario: nombreCompletoUsuario,
-        documentoUsuario: Session.documentoIdentidad.trim().isNotEmpty
-            ? Session.documentoIdentidad.trim()
-            : null,
-        correoUsuario: correoConfirmado.isNotEmpty ? correoConfirmado : (Session.correo.isNotEmpty ? Session.correo : 'No especificado'),
-        telefonoUsuario: Session.telefono.isNotEmpty ? Session.telefono : null,
-        nombreMascota: widget.pet.nombre,
-        especieMascota: widget.pet.especie,
-        razaMascota: widget.pet.raza,
-        edadMascota: widget.pet.edadTexto,
-        tipoAporte: _tipoAporte,
-        detalleAporte: detalleFinal,
-        montoAporte: monto,
-        frecuenciaAporte: frecuenciaFinal,
-        motivacion: motivacion,
-        fechaAceptacion: fechaAhora,
-        fotoCedula: _docBytes,
-        fotoMascota: petFotoBytes,
-        estadoProceso: 'pendiente',
-        estadoCorreo: 'pendiente',
-      );
-
-      final pdfBytes = await AcuerdoApadrinamientoPdfService.generarPdfBytes(datosAcuerdo);
-
-      // 3. Descarga y guardado automático del PDF
-      await AcuerdoApadrinamientoPdfService.descargarYGuardarPdf(
-        bytes: pdfBytes,
-        nombreMascota: widget.pet.nombre,
-      );
-
       if (!mounted) return;
       Navigator.pop(context); // Cierra bottom sheet
 
       widget.onEnviadaExitosamente?.call();
 
-      // 4. Diálogo de confirmación con indicación del correo de verificación
+      // 4. Diálogo de confirmación con aviso de notificación por correo
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
+          scrollable: true,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           icon: const Icon(
             Icons.check_circle_outline,
             color: Colors.green,
-            size: 56,
+            size: 52,
           ),
           title: const Text(
-            '¡Solicitud y Correo de Verificación Enviados!',
+            'Solicitud enviada',
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
@@ -810,95 +757,31 @@ class _SolicitudApadrinamientoDialogState
               Text(
                 'Tu solicitud para apadrinar a ${widget.pet.nombre} ha sido registrada exitosamente en la Fundación Maritza Arévalo.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(height: 1.4, fontSize: 14),
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.rosaSuave,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.bordeRosa),
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.blue.shade200),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.picture_as_pdf, color: AppColors.rosa, size: 28),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Acuerdo en PDF descargado',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
-                          ),
-                          Text(
-                            'Incluye tus datos, los de ${widget.pet.nombre}, tu aporte y la fotografía de tu documento.',
-                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.shade300),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.mark_email_unread_outlined, color: Colors.amber.shade900, size: 22),
+                    Icon(Icons.mail_outline, color: Colors.blue.shade700, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Verifica tu correo electrónico',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.amber.shade900,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Enviamos un enlace de verificación a $correoConfirmado. Haz clic en el enlace para actualizar tu estado a «Correo confirmado».',
-                            style: TextStyle(fontSize: 11.5, height: 1.35, color: Colors.grey.shade900),
-                          ),
-                        ],
+                      child: Text(
+                        'Notificación: Te llegará un correo a $correoConfirmado cuando la fundación apruebe o rechace tu solicitud.',
+                        style: TextStyle(fontSize: 11.5, color: Colors.blue.shade900),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Radicado: #$idRadicado',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.black54),
               ),
             ],
           ),
           actions: [
-            OutlinedButton.icon(
-              icon: const Icon(Icons.download, size: 18),
-              label: const Text('Descargar copia'),
-              onPressed: () {
-                AcuerdoApadrinamientoPdfService.descargarYGuardarPdf(
-                  bytes: pdfBytes,
-                  nombreMascota: widget.pet.nombre,
-                );
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Descargando copia del acuerdo...')),
-                );
-              },
-            ),
             FilledButton(
               style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
               onPressed: () => Navigator.pop(ctx),
@@ -948,24 +831,17 @@ class _SolicitudApadrinamientoDialogState
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 2, 12, 0),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.volunteer_activism,
-                      color: AppColors.rosa,
-                      size: 22,
+                const Icon(Icons.pets, color: AppColors.rosa, size: 22),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Apadrinar a ${widget.pet.nombre}',
+                    style: t.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.texto,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Detalles del apadrinamiento',
-                      style: t.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.texto,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
@@ -988,9 +864,10 @@ class _SolicitudApadrinamientoDialogState
             child: Form(
               key: _formKey,
               child: ListView(
+                controller: _scrollCtrl,
                 padding: const EdgeInsets.fromLTRB(20, 6, 20, 16),
                 children: [
-                  _resumenMascota(t),
+                  _resumenMascota(),
                   const SizedBox(height: 14),
 
                   if (_paso == 0) ..._pasoMotivacion(t),
@@ -1008,104 +885,47 @@ class _SolicitudApadrinamientoDialogState
     );
   }
 
-  /// Tarjeta de presentación de la mascota
-  Widget _resumenMascota(TextTheme t) {
-    if (_paso > 0) {
-      // Formato compacto para los pasos 2 y 3 para aprovechar mejor el espacio
-      return Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: AppColors.rosaSuave,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.bordeRosa),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.rosa, width: 2),
-              ),
-              child: ClipOval(child: PetImage(url: widget.pet.foto)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.pet.nombre,
-                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                  ),
-                  Text(
-                    '${widget.pet.especie} • ${(widget.pet.raza == null || widget.pet.raza!.isEmpty) ? 'Mestizo' : widget.pet.raza} • ${widget.pet.edadTexto}',
-                    style: const TextStyle(fontSize: 11.5, color: Colors.black54),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Paso 0: Presentación destacada y centrada del perro
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
+  /// Tarjeta de la mascota, igual que en el formulario de adopción.
+  Widget _resumenMascota() {
+    final pet = widget.pet;
+    final raza = (pet.raza ?? '').trim();
+    final sexo = (pet.sexo ?? '').trim();
+    final detalle = sexo.isNotEmpty ? sexo : raza;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.rosaSuave,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
         children: [
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.rosa, width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.rosa.withValues(alpha: 0.22),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 64,
+              height: 64,
+              child: PetImage(url: pet.foto),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  pet.nombre,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                ),
+                Text(
+                  [
+                    pet.edadTexto,
+                    pet.especie,
+                    if (detalle.isNotEmpty) detalle,
+                  ].join(' · '),
+                  style: const TextStyle(color: Color(0xFF1F2937)),
                 ),
               ],
             ),
-            child: ClipOval(child: PetImage(url: widget.pet.foto)),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            widget.pet.nombre,
-            textAlign: TextAlign.center,
-            style: t.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: AppColors.texto,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.rosaSuave,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.bordeRosa),
-            ),
-            child: Text(
-              widget.pet.edadTexto,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.rosa,
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${widget.pet.especie} • ${(widget.pet.raza == null || widget.pet.raza!.isEmpty) ? 'Mestizo' : widget.pet.raza}',
-            textAlign: TextAlign.center,
-            style: t.bodySmall?.copyWith(color: Colors.black54),
           ),
         ],
       ),
@@ -1114,45 +934,6 @@ class _SolicitudApadrinamientoDialogState
 
   /// Paso 1: Motivación y Aporte
   List<Widget> _pasoMotivacion(TextTheme t) => [
-        // Datos del solicitante
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.rosaClaro.withValues(alpha: 0.4),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.rosa.withValues(alpha: 0.2)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.person_outline, size: 20, color: AppColors.rosa),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Datos del solicitante',
-                    style: t.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.rosa,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '${Session.nombre} ${Session.apellidos}'.trim().isEmpty
-                    ? 'Usuario registrado'
-                    : '${Session.nombre} ${Session.apellidos}',
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              if (Session.telefono.isNotEmpty)
-                Text('Teléfono: ${Session.telefono}', style: t.bodySmall),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 14),
-
         // Pregunta obligatoria de motivación claramente destacada
         Container(
           padding: const EdgeInsets.all(16),
@@ -1184,7 +965,7 @@ class _SolicitudApadrinamientoDialogState
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '¿Por qué quieres apadrinar a ${widget.pet.nombre}? *',
+                      '¿Por qué quieres apadrinar a ${widget.pet.nombre}?',
                       style: t.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: AppColors.texto,
@@ -1195,9 +976,13 @@ class _SolicitudApadrinamientoDialogState
               ),
               const SizedBox(height: 8),
               Text(
-                'Cuéntanos por qué quieres apadrinar a ${widget.pet.nombre}. ¿Qué te motivó a elegirlo(a)? ¿Por qué deseas apoyarlo(a)?',
+                () {
+                  final sexo = (widget.pet.sexo ?? '').trim().toLowerCase();
+                  final lo = sexo.startsWith('m') ? 'lo' : 'la';
+                  return 'Cuéntanos por qué quieres apadrinar a ${widget.pet.nombre}. ¿Qué te motivó a elegir$lo? ¿Por qué deseas apoyar$lo?';
+                }(),
                 style: t.bodySmall?.copyWith(
-                  color: Colors.grey.shade700,
+                  color: const Color(0xFF1F2937),
                   height: 1.35,
                 ),
               ),
@@ -1288,7 +1073,7 @@ class _SolicitudApadrinamientoDialogState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '¿Cómo deseas contribuir? *',
+                      '¿Cómo deseas contribuir?',
                       style: t.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: AppColors.texto,
@@ -1298,7 +1083,7 @@ class _SolicitudApadrinamientoDialogState
                     Text(
                       'Elige la forma en que apoyarás a ${widget.pet.nombre}',
                       style: t.bodySmall?.copyWith(
-                        color: Colors.grey.shade600,
+                        color: const Color(0xFF1F2937),
                         fontSize: 11.5,
                       ),
                     ),
@@ -1314,7 +1099,7 @@ class _SolicitudApadrinamientoDialogState
             initialValue: _tipoAporte,
             isExpanded: true,
             decoration: InputDecoration(
-              labelText: 'Tipo de aporte *',
+              labelText: 'Tipo de aporte',
               labelStyle: const TextStyle(
                 color: AppColors.rosa,
                 fontWeight: FontWeight.w600,
@@ -1402,7 +1187,7 @@ class _SolicitudApadrinamientoDialogState
                             ),
                             Text(
                               'Apoyo económico periódico o único',
-                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF1F2937)),
                             ),
                           ],
                         ),
@@ -1434,7 +1219,7 @@ class _SolicitudApadrinamientoDialogState
                             ),
                             Text(
                               'Alimento, cobijas, camas, juguetes, medicamentos, aseo u otros',
-                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF1F2937)),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -1467,7 +1252,7 @@ class _SolicitudApadrinamientoDialogState
                             ),
                             Text(
                               'Voluntariado, paseos, transporte o difusión',
-                              style: TextStyle(fontSize: 11, color: Colors.black54),
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF1F2937)),
                             ),
                           ],
                         ),
@@ -1536,7 +1321,7 @@ class _SolicitudApadrinamientoDialogState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Valor del aporte (COP) *',
+                  'Valor del aporte (COP)',
                   style: t.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.texto,
@@ -1598,7 +1383,7 @@ class _SolicitudApadrinamientoDialogState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Frecuencia del aporte *',
+                  'Frecuencia del aporte',
                   style: t.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.texto,
@@ -1657,48 +1442,6 @@ class _SolicitudApadrinamientoDialogState
             }
           },
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              'Sugeridos:',
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
-            ),
-            ...[20000, 30000, 50000, 100000].map((montoSugerido) {
-              return InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () {
-                  setState(() {
-                    _montoCtrl.text = montoSugerido.toString();
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _montoCtrl.text == montoSugerido.toString()
-                        ? AppColors.rosa
-                        : AppColors.rosaSuave,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.bordeRosa),
-                  ),
-                  child: Text(
-                    '\$${(montoSugerido / 1000).toInt()}k COP',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: _montoCtrl.text == montoSugerido.toString()
-                          ? Colors.white
-                          : AppColors.rosa,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
       ],
     );
   }
@@ -1730,7 +1473,7 @@ class _SolicitudApadrinamientoDialogState
         ),
         const SizedBox(height: 12),
         Text(
-          '¿Qué deseas aportar? *',
+          '¿Qué deseas aportar?',
           style: t.bodyMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: AppColors.texto,
@@ -1744,8 +1487,8 @@ class _SolicitudApadrinamientoDialogState
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
             hintText:
-                'Ejemplo: 1 bulto de alimento para perros de 15kg, 2 cobijas térmicas, cama mediana y productos de aseo...',
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12.5),
+                'Ejemplo: Apoyaré con kilos de alimentación, con medicamentos, juguetes, cobijas...',
+            hintStyle: TextStyle(color: AppColors.grisTexto, fontSize: 13),
             filled: true,
             fillColor: Colors.grey.shade50,
             contentPadding: const EdgeInsets.all(14),
@@ -1773,7 +1516,7 @@ class _SolicitudApadrinamientoDialogState
         ),
         const SizedBox(height: 8),
         Text(
-          'Frecuencia de entrega *',
+          'Frecuencia de entrega',
           style: t.bodyMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: AppColors.texto,
@@ -1819,19 +1562,6 @@ class _SolicitudApadrinamientoDialogState
     final procedimientos = pet.procedimientosRealizados;
     final sinPendientes = pet.noTieneNecesidadesPendientes || necesidades.isEmpty;
     final tieneNecesidad = !sinPendientes;
-
-    // Ejemplos orientativos solicitados: vacunas, esterilización, desparasitación, exámenes médicos, medicamentos, consultas veterinarias o tratamientos.
-    final List<String> ejemplosOrientativos = [
-      'Vacunación',
-      'Esterilización',
-      'Desparasitación',
-      'Exámenes médicos',
-      'Medicamentos',
-      'Consultas veterinarias',
-      'Tratamientos veterinarios',
-      'Paseos y recreación',
-      'Difusión en redes',
-    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2088,89 +1818,6 @@ class _SolicitudApadrinamientoDialogState
                 ),
                 const SizedBox(height: 10),
               ],
-
-              // 4. Ejemplos orientativos de ayudas veterinarias (claramente diferenciados)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.lightbulb_outline, size: 16, color: AppColors.rosa),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Text(
-                            'Ejemplos orientativos de ayudas veterinarias:',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.texto,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Ideas de apoyo general. No representan necesidades confirmadas de ${pet.nombre} a menos que aparezcan listadas arriba.',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        color: Colors.grey.shade600,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: ejemplosOrientativos.map((ejemplo) {
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () {
-                            final actual = _otroAporteCtrl.text.trim();
-                            final prefijo = 'Apoyo en $ejemplo';
-                            if (actual.isEmpty) {
-                              _otroAporteCtrl.text = '$prefijo para ${pet.nombre}. ';
-                            } else if (!actual.contains(ejemplo)) {
-                              _otroAporteCtrl.text = '$actual, $ejemplo';
-                            }
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.rosaSuave,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.bordeRosa),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.add, size: 12, color: AppColors.rosa),
-                                const SizedBox(width: 4),
-                                Text(
-                                  ejemplo,
-                                  style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.rosa,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),
@@ -2178,7 +1825,7 @@ class _SolicitudApadrinamientoDialogState
         const SizedBox(height: 14),
 
         Text(
-          '¿Cómo deseas contribuir? *',
+          '¿Cómo deseas contribuir?',
           style: t.bodyMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: AppColors.texto,
@@ -2191,10 +1838,9 @@ class _SolicitudApadrinamientoDialogState
           maxLength: 400,
           textCapitalization: TextCapitalization.sentences,
           decoration: InputDecoration(
-            hintText: tieneNecesidad
-                ? 'Describe cómo deseas apoyar sus necesidades médicas o veterinarias (ej: cubrir vacunas, medicamentos, exámenes o acompañar la consulta)...'
-                : 'Describe tu propuesta de ayuda (ej: voluntariado en eventos, paseos los fines de semana, transporte o fotografías)...',
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 12.5),
+            hintText:
+                'Ejemplo: Me gustaría cubrirle su esterilización, baño y corte de cabello, transporte al veterinario...',
+            hintStyle: TextStyle(color: AppColors.grisTexto, fontSize: 13),
             filled: true,
             fillColor: Colors.grey.shade50,
             contentPadding: const EdgeInsets.all(14),
@@ -2233,7 +1879,7 @@ class _SolicitudApadrinamientoDialogState
         const SizedBox(height: 6),
         Text(
           'Adjunta una fotografía clara de tu documento de identidad (cédula de ciudadanía o extranjería). La Fundación mantendrá tus datos de forma confidencial.',
-          style: t.bodySmall?.copyWith(color: Colors.grey.shade600, height: 1.35),
+          style: t.bodySmall?.copyWith(color: const Color(0xFF1F2937), height: 1.35),
         ),
         const SizedBox(height: 16),
         Container(
@@ -2369,7 +2015,7 @@ class _SolicitudApadrinamientoDialogState
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         icon: const Icon(Icons.visibility_outlined, size: 18),
-                        label: const Text('Ver documento'),
+                        label: const Text('Ver'),
                         onPressed: _verDocumento,
                       ),
                     ),
@@ -2403,7 +2049,7 @@ class _SolicitudApadrinamientoDialogState
                       const SizedBox(height: 6),
                       Text(
                         'Ningún documento adjunto aún',
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                        style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                       ),
                     ],
                   ),
@@ -2447,11 +2093,9 @@ class _SolicitudApadrinamientoDialogState
         'entrega_unica' => 'Entrega única',
         _ => _frecuenciaEspecie,
       };
-      final detalle = _detalleEspecieCtrl.text.trim();
-      aporteResumen = 'En especie ($frec)${detalle.isNotEmpty ? ': $detalle' : ''}';
+      aporteResumen = 'En especie ($frec)';
     } else {
-      final detalle = _otroAporteCtrl.text.trim();
-      aporteResumen = 'Otro tipo de ayuda${detalle.isNotEmpty ? ': $detalle' : ''}';
+      aporteResumen = 'Otro tipo de ayuda';
     }
 
     return [
@@ -2462,7 +2106,7 @@ class _SolicitudApadrinamientoDialogState
       const SizedBox(height: 6),
       Text(
         'Revisa el resumen de tu apadrinamiento y acepta el acuerdo para formalizar tu solicitud.',
-        style: t.bodySmall?.copyWith(color: Colors.grey.shade600, height: 1.35),
+        style: t.bodySmall?.copyWith(color: const Color(0xFF1F2937), height: 1.35),
       ),
       const SizedBox(height: 14),
 
@@ -2485,9 +2129,16 @@ class _SolicitudApadrinamientoDialogState
                   : '${Session.nombre} ${Session.apellidos}',
             ),
             const Divider(height: 14),
-            _resumenFila('Notificación al correo:', _correoCtrl.text.trim()),
+            _resumenFila('Correo:', _correoCtrl.text.trim()),
             const Divider(height: 14),
-            _resumenFila('Tipo de aporte:', _tipoAporte),
+            _resumenFila(
+              'Tipo de aporte:',
+              _tipoAporte == tipoEspecie
+                  ? 'Aporte en especie'
+                  : _tipoAporte == tipoOtro
+                      ? 'Otro tipo de ayuda'
+                      : 'Aporte monetario',
+            ),
             const Divider(height: 14),
             _resumenFila('Modalidad y Detalle:', aporteResumen),
             const Divider(height: 14),
@@ -2556,11 +2207,11 @@ class _SolicitudApadrinamientoDialogState
         ),
         child: Row(
           children: [
-            const Icon(Icons.file_download_outlined, color: AppColors.rosa, size: 24),
+            const Icon(Icons.description_outlined, color: AppColors.rosa, size: 24),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Al confirmar, el sistema registrará tu constancia electrónica de aceptación y descargará automáticamente tu Acuerdo en PDF con la identidad de la Fundación.',
+                'Al confirmar, se registrará tu constancia de aceptación y se generará el documento del acta. Podrás descargarlo en Mis apadrinamientos.',
                 style: TextStyle(fontSize: 11.5, color: Colors.grey.shade800, height: 1.35),
               ),
             ),
@@ -2628,7 +2279,7 @@ class _SolicitudApadrinamientoDialogState
                       _correoPerfilConfirmado
                           ? 'Correo verificado para tu solicitud'
                           : 'Confirmación requerida para notificación',
-                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF1F2937)),
                     ),
                   ],
                 ),
@@ -2652,21 +2303,31 @@ class _SolicitudApadrinamientoDialogState
                 color: _correoPerfilConfirmado ? Colors.green.shade300 : AppColors.bordeRosa,
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.email,
-                  color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
-                  size: 20,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.email,
+                      color: _correoPerfilConfirmado ? Colors.green.shade700 : AppColors.rosa,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        correoPerfil,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14.5,
+                          color: AppColors.texto,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    correoPerfil,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: AppColors.texto),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -2683,7 +2344,7 @@ class _SolicitudApadrinamientoDialogState
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        _correoPerfilConfirmado ? 'Confirmado' : 'Verificación al enviar',
+                        _correoPerfilConfirmado ? 'Confirmado' : 'Confirmar',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -2734,7 +2395,7 @@ class _SolicitudApadrinamientoDialogState
                     padding: const EdgeInsets.symmetric(vertical: 11),
                   ),
                   icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.rosa),
-                  label: const Text('No es / Cambiar correo', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  label: const Text('Modificar', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
                   onPressed: _dialogoEditarCorreoPerfil,
                 ),
               ),
@@ -2747,10 +2408,18 @@ class _SolicitudApadrinamientoDialogState
 
   Widget _resumenFila(String etiqueta, String valor) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(etiqueta, style: const TextStyle(color: Colors.black54, fontSize: 12.5)),
-        Text(valor, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        Text(etiqueta, style: const TextStyle(color: Color(0xFF1F2937), fontSize: 12.5)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            valor,
+            textAlign: TextAlign.end,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ),
       ],
     );
   }
@@ -2770,7 +2439,12 @@ class _SolicitudApadrinamientoDialogState
                     minimumSize: const Size.fromHeight(48),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  onPressed: _enviando ? null : () => setState(() => _paso -= 1),
+                  onPressed: _enviando
+                      ? null
+                      : () {
+                          setState(() => _paso -= 1);
+                          _mostrarDesdeArriba();
+                        },
                   child: const Text('Atrás'),
                 ),
               ),
@@ -2806,7 +2480,7 @@ class _SolicitudApadrinamientoDialogState
                           Text(
                             _paso < 2
                                 ? 'Continuar'
-                                : 'Enviar Solicitud de Apadrinamiento',
+                                : 'Enviar solicitud',
                             style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
                           ),
                         ],
@@ -2860,7 +2534,7 @@ class _Pasos extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: i == paso ? AppColors.rosa : Colors.black54,
+                    color: i == paso ? AppColors.rosa : AppColors.grisTexto,
                   ),
                 ),
               ],

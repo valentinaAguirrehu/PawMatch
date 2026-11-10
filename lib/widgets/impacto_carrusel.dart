@@ -80,7 +80,7 @@ class _ImpactoCarruselState extends State<ImpactoCarrusel> {
                     fontSize: 13.5,
                     height: 1.35,
                     fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade700,
+                    color: AppColors.grisTexto,
                   ),
                 ),
               ),

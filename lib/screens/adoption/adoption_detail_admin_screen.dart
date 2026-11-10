@@ -16,11 +16,15 @@ class AdoptionDetailAdminScreen extends StatefulWidget {
   /// Si es verdadero, se muestra como página (sin la barra de la hoja).
   final bool enPagina;
 
+  /// Muestra solo el recuadro para subir o ver el contrato.
+  final bool soloContrato;
+
   const AdoptionDetailAdminScreen({
     super.key,
     required this.request,
     required this.onCambioEstado,
     this.enPagina = false,
+    this.soloContrato = false,
   });
 
   @override
@@ -35,7 +39,6 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
   bool _cargandoRecibo = true;
   String? _errorCedula;
   String? _errorRecibo;
-  bool _procesando = false;
 
   Uint8List? _contratoBytes;
   bool _cargandoContrato = false;
@@ -57,7 +60,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     super.initState();
     _tieneContrato = widget.request.hasContract;
     _nombreContrato = widget.request.contractFile;
-    _cargarDocumentos();
+    if (!widget.soloContrato) _cargarDocumentos();
     if (_tieneContrato) _cargarContrato();
   }
 
@@ -113,37 +116,131 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     }
   }
 
-  void _verCompleta(Uint8List bytes, String titulo) {
-    if (_esPdf(bytes)) {
-      Printing.layoutPdf(
-        onLayout: (_) => bytes,
-        name: '$titulo.pdf',
+  Future<void> _descargarAdjunto(Uint8List bytes, String titulo) async {
+    final esPdf = _esPdf(bytes);
+    final esPng = bytes.length >= 4 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47;
+    final extension = esPdf ? 'pdf' : (esPng ? 'png' : 'jpg');
+    final base = titulo
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+    try {
+      final ruta = await FilePicker.saveFile(
+        dialogTitle: 'Descargar $titulo',
+        fileName: '${base.isEmpty ? 'documento' : base}.$extension',
+        bytes: bytes,
+        mimeType: esPdf ? 'application/pdf' : (esPng ? 'image/png' : 'image/jpeg'),
       );
-      return;
+      if (!mounted || ruta == null) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$titulo descargado.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo descargar: $e')),
+      );
     }
-    showDialog<void>(
+  }
+
+  void _verCompleta(Uint8List bytes, String titulo) {
+    final esPdf = _esPdf(bytes);
+    showGeneralDialog<void>(
       context: context,
-      builder: (ctx) => Dialog.fullscreen(
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.black,
-            foregroundColor: Colors.white,
-            title: Text(titulo),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(ctx),
+      barrierDismissible: true,
+      barrierLabel: 'Cerrar',
+      barrierColor: Colors.black.withValues(alpha: 0.72),
+      pageBuilder: (ctx, _, _) {
+        return SafeArea(
+          child: Material(
+            color: Colors.transparent,
+            child: Stack(
+              children: [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 72, 22, 108),
+                    child: InteractiveViewer(
+                      minScale: 0.8,
+                      maxScale: 4,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.rosa.withValues(alpha: 0.45),
+                              blurRadius: 36,
+                              spreadRadius: 2,
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.4),
+                              blurRadius: 24,
+                              offset: const Offset(0, 12),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(18),
+                          child: esPdf
+                              ? ColoredBox(
+                                  color: Colors.white,
+                                  child: SizedBox(
+                                    height: 220,
+                                    width: double.infinity,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.picture_as_pdf_rounded, color: Colors.red.shade700, size: 64),
+                                        const SizedBox(height: 10),
+                                        Text(
+                                          titulo,
+                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              : Image.memory(bytes, fit: BoxFit.contain),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF1F2937),
+                    ),
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+                Positioned(
+                  left: 22,
+                  right: 22,
+                  bottom: 18,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.rosa,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () => _descargarAdjunto(bytes, titulo),
+                    icon: const Icon(Icons.download_rounded),
+                    label: const Text('Descargar', style: TextStyle(fontWeight: FontWeight.w800)),
+                  ),
+                ),
+              ],
             ),
           ),
-          body: Center(
-            child: InteractiveViewer(
-              minScale: 0.5,
-              maxScale: 4,
-              child: Image.memory(bytes, fit: BoxFit.contain),
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -251,7 +348,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                           ),
                           Text(
                             '${(bytes.length / 1024).toStringAsFixed(1)} KB • ${ext.toUpperCase()}',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                            style: TextStyle(color: AppColors.grisTexto, fontSize: 11),
                           ),
                         ],
                       ),
@@ -311,275 +408,26 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     }
   }
 
-  Future<void> _eliminarContrato() async {
-    final confirmacion = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.delete_outline, color: Colors.redAccent),
-            SizedBox(width: 8),
-            Expanded(child: Text('Eliminar contrato')),
-          ],
-        ),
-        content: const Text(
-          '¿Eliminar este contrato de adopción? El adoptante dejará de verlo y el estado volverá a «Pendiente subir contrato de adopción» hasta que subas uno nuevo.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmacion != true) return;
-
-    setState(() => _subiendoContrato = true);
-    try {
-      await AdoptionService.eliminarContrato(widget.request.id);
-      if (!mounted) return;
-      setState(() {
-        _subiendoContrato = false;
-        _contratoBytes = null;
-        _tieneContrato = false;
-        _nombreContrato = null;
-        _errorContrato = null;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Colors.orange,
-          content: Text('Contrato de adopción eliminado.'),
-        ),
-      );
-      widget.onCambioEstado('aprobada');
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _subiendoContrato = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.redAccent,
-          content: Text('Error al eliminar contrato: $e'),
-        ),
-      );
-    }
-  }
-
-  String _avisoCorreo(String correo, String decision) {
-    final destino = correo.trim();
-    if (destino.isEmpty) {
-      return 'Se enviará un correo de $decision y una notificación en la app al solicitante.';
-    }
-    return 'Se enviará un correo de $decision a $destino y una notificación en la app.';
-  }
-
-  Future<void> _aprobar() async {
-    DateTime fechaSeleccionada = DateTime.now();
-    final observacionCtrl = TextEditingController();
-    final s = widget.request;
-
-    final confirmacion = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: Colors.green),
-              SizedBox(width: 8),
-              Expanded(child: Text('Aprobar adopción')),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '¿Confirmas que ${s.applicantFullName} adoptará a ${s.petName}? La mascota quedará marcada como adoptada.',
-                  style: const TextStyle(height: 1.35),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Fecha oficial de inicio de la adopción:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today, color: AppColors.rosa),
-                  label: Text(
-                    '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () async {
-                    final elegida = await showDatePicker(
-                      context: context,
-                      initialDate: fechaSeleccionada,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2035),
-                    );
-                    if (elegida != null) {
-                      setDialogState(() => fechaSeleccionada = elegida);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Observaciones para el adoptante (opcional):',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: observacionCtrl,
-                  maxLines: 3,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    hintText: 'Indicaciones, requisitos o recomendaciones...',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _avisoCorreo(s.applicantEmail, 'aprobación'),
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Al aprobar, deberás subir el contrato de adopción. El adoptante verá «Pendiente subir contrato de adopción» hasta que lo cargues.',
-                  style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.green),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Confirmar aprobación'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (confirmacion != true) return;
-
-    final fecha =
-        '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}';
-    await _guardar(
-      estado: 'aprobada',
-      fechaInicio: fecha,
-      observaciones: observacionCtrl.text.trim(),
-      mensaje: '¡Solicitud aprobada! Ahora puedes adjuntar el contrato. Se notificó al adoptante.',
-      color: Colors.green,
-    );
-  }
-
-  Future<void> _rechazar() async {
-    final motivoCtrl = TextEditingController();
-    final s = widget.request;
-    final confirmacion = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rechazar solicitud'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Indica el motivo por el cual se rechaza la solicitud de ${s.applicantFullName}:',
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: motivoCtrl,
-              maxLines: 3,
-              maxLength: 500,
-              decoration: const InputDecoration(
-                hintText: 'Motivo del rechazo u observaciones...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _avisoCorreo(s.applicantEmail, 'rechazo'),
-              style: const TextStyle(fontSize: 12, color: Colors.black54),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Rechazar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmacion != true) return;
-    await _guardar(
-      estado: 'rechazada',
-      observaciones: motivoCtrl.text.trim(),
-      mensaje: 'Solicitud rechazada. Se envió el correo al adoptante.',
-      color: Colors.orange,
-    );
-  }
-
-  Future<void> _guardar({
-    required String estado,
-    required String mensaje,
-    required Color color,
-    String? fechaInicio,
-    String? observaciones,
-  }) async {
-    setState(() => _procesando = true);
-    try {
-      await AdoptionService.updateStatus(
-        id: widget.request.id,
-        status: estado,
-        startDate: fechaInicio,
-        observations: observaciones,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: color, content: Text(mensaje)),
-      );
-      widget.onCambioEstado(estado);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _procesando = false);
-      final texto = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: Colors.redAccent, content: Text(texto)),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (widget.soloContrato) {
+      return _seccionContrato();
+    }
+
     final s = widget.request;
     final t = Theme.of(context).textTheme;
 
-    return Container(
-      constraints: widget.enPagina
-          ? null
-          : BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.92,
-            ),
+    return LayoutBuilder(
+      builder: (context, limites) {
+        final menu = 82 + MediaQuery.paddingOf(context).bottom;
+        final tope = MediaQuery.sizeOf(context).height - menu;
+        final altoDisponible = limites.maxHeight.isFinite && limites.maxHeight < tope
+            ? limites.maxHeight
+            : tope;
+        return Container(
+          constraints: widget.enPagina
+              ? null
+              : BoxConstraints(maxHeight: altoDisponible),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: widget.enPagina
@@ -619,7 +467,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
           ],
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 24 + MediaQuery.paddingOf(context).bottom),
               children: [
                 _Seccion(
                   titulo: 'Mascota',
@@ -667,7 +515,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                         const SizedBox(height: 4),
                         Text(
                           s.petSummary,
-                          style: TextStyle(color: Colors.grey.shade600),
+                          style: TextStyle(color: AppColors.grisTexto),
                         ),
                       ],
                     ),
@@ -677,15 +525,27 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                 _Seccion(
                   titulo: 'Datos del solicitante',
                   icono: Icons.person,
-                  child: Column(
-                    children: [
-                      _Dato('Nombre completo', s.applicantFullName),
-                      _Dato('Correo electrónico', _vacio(s.applicantEmail)),
-                      _Dato('Teléfono de contacto', _vacio(s.applicantPhone)),
-                      _Dato('Dirección', _vacio(s.applicantAddress)),
-                      if (s.applicantIdNumber.trim().isNotEmpty)
-                        _Dato('Número de cédula', s.applicantIdNumber),
-                    ],
+                  child: Builder(
+                    builder: (context) {
+                      final filas = <(String, String)>[
+                        ('Nombre completo', s.applicantFullName),
+                        ('Correo electrónico', _vacio(s.applicantEmail)),
+                        ('Celular', _vacio(s.applicantPhone)),
+                        ('Dirección', _vacio(s.applicantAddress)),
+                        if (s.applicantIdNumber.trim().isNotEmpty)
+                          ('Número de cédula', s.applicantIdNumber),
+                      ];
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < filas.length; i++) ...[
+                            _Dato(filas[i].$1, filas[i].$2, anchoEtiqueta: 114),
+                            if (i != filas.length - 1)
+                              Divider(height: 1, color: Colors.grey.shade200),
+                          ],
+                        ],
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -717,7 +577,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                 ),
                 const SizedBox(height: 14),
                 _Seccion(
-                  titulo: 'Foto de la cédula (privado)',
+                  titulo: 'Foto de la cédula',
                   icono: Icons.badge_outlined,
                   child: _vistaFoto(
                     cargando: _cargandoCedula,
@@ -728,7 +588,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                 ),
                 const SizedBox(height: 14),
                 _Seccion(
-                  titulo: 'Recibo de servicio público (privado)',
+                  titulo: 'Recibo de servicio público',
                   icono: Icons.receipt_long_outlined,
                   child: _vistaFoto(
                     cargando: _cargandoRecibo,
@@ -746,6 +606,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                   titulo: 'Detalles de la adopción',
                   icono: Icons.info_outline,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Dato('Fecha de envío de solicitud', s.requestedAtLabel),
                       _Dato('Estado de la solicitud', s.status.toUpperCase()),
@@ -758,70 +619,37 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                if (s.isPending) ...[
-                  if (_procesando)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.redAccent,
-                              side: const BorderSide(color: Colors.redAccent),
-                              minimumSize: const Size.fromHeight(50),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            onPressed: _rechazar,
-                            icon: const Icon(Icons.close),
-                            label: const Text('Rechazar'),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              minimumSize: const Size.fromHeight(50),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            onPressed: _aprobar,
-                            icon: const Icon(Icons.check),
-                            label: const Text('Aprobar'),
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
               ],
             ),
           ),
         ],
       ),
+        );
+      },
     );
   }
 
   Widget _seccionContrato() {
     final hayArchivo = _tieneContrato || _contratoBytes != null;
+    final Color fondoBase =
+        hayArchivo ? Colors.green.shade50 : Colors.amber.shade50;
     return _Seccion(
       titulo: 'Contrato de adopción',
       icono: Icons.assignment_outlined,
-      colorFondo: hayArchivo
-          ? Colors.green.shade50.withValues(alpha: 0.7)
-          : Colors.amber.shade50.withValues(alpha: 0.7),
+      colorFondo: widget.soloContrato
+          ? fondoBase
+          : fondoBase.withValues(alpha: 0.7),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_subiendoContrato)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: SizedBox(
+                width: double.infinity,
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     CircularProgressIndicator(),
                     SizedBox(height: 8),
@@ -853,10 +681,14 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
             ),
             const SizedBox(height: 12),
             if (_cargandoContrato)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(12),
-                  child: CircularProgressIndicator(),
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [CircularProgressIndicator()],
+                  ),
                 ),
               )
             else if (_errorContrato != null)
@@ -890,7 +722,7 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                             ),
                             Text(
                               'Documento PDF (${(_contratoBytes!.length / 1024).toStringAsFixed(1)} KB)',
-                              style: TextStyle(color: Colors.grey.shade600, fontSize: 11.5),
+                              style: TextStyle(color: AppColors.grisTexto, fontSize: 11.5),
                             ),
                           ],
                         ),
@@ -909,34 +741,29 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
                   ),
                 ),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.rosa,
-                      side: const BorderSide(color: AppColors.rosa),
+              SizedBox(
+                width: double.infinity,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.rosa,
+                        side: const BorderSide(color: AppColors.rosa),
+                      ),
+                      onPressed: _verContrato,
+                      icon: const Icon(Icons.visibility, size: 18),
+                      label: const Text('Ver'),
                     ),
-                    onPressed: _verContrato,
-                    icon: const Icon(Icons.visibility, size: 18),
-                    label: const Text('Ver'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _subirContrato,
-                    icon: const Icon(Icons.upload_file, size: 18),
-                    label: const Text('Reemplazar'),
-                  ),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.redAccent,
-                      side: const BorderSide(color: Colors.redAccent),
+                    OutlinedButton.icon(
+                      onPressed: _subirContrato,
+                      icon: const Icon(Icons.upload_file, size: 18),
+                      label: const Text('Reemplazar'),
                     ),
-                    onPressed: _eliminarContrato,
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('Eliminar'),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ] else
               FilledButton.icon(
@@ -1013,70 +840,65 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
     if (bytes == null) return const Text('No hay archivo adjunto.');
     final bool esDocumentoPdf = _esPdf(bytes);
 
-    return Column(
-      children: [
-        if (esDocumentoPdf)
-          Container(
-            height: 150,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.red.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200, width: 1.2),
+    return GestureDetector(
+      onTap: () => _verCompleta(bytes, titulo),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.picture_as_pdf_rounded, color: Colors.red.shade700, size: 52),
-                const SizedBox(height: 8),
-                Text(
-                  '$titulo (Documento PDF)',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13.5,
-                    color: Colors.red.shade900,
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: esDocumentoPdf
+              ? ColoredBox(
+                  color: Colors.red.shade50,
+                  child: SizedBox(
+                    height: 150,
+                    width: double.infinity,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.picture_as_pdf_rounded, color: Colors.red.shade700, size: 52),
+                        const SizedBox(height: 8),
+                        Text(
+                          titulo,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                            color: Colors.red.shade900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Image.memory(
+                  bytes,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (ctx, error, stackTrace) => Container(
+                    height: 140,
+                    alignment: Alignment.center,
+                    color: AppColors.rosaSuave,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.description_outlined, color: AppColors.rosa, size: 40),
+                        const SizedBox(height: 6),
+                        Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          )
-        else
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.memory(
-              bytes,
-              height: 180,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (ctx, _, __) => Container(
-                height: 140,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: AppColors.rosaSuave,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.description_outlined, color: AppColors.rosa, size: 40),
-                    const SizedBox(height: 6),
-                    Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.rosa,
-            side: const BorderSide(color: AppColors.rosa),
-          ),
-          onPressed: () => _verCompleta(bytes, titulo),
-          icon: Icon(esDocumentoPdf ? Icons.picture_as_pdf : Icons.fullscreen),
-          label: Text(esDocumentoPdf ? 'Abrir / Ver PDF' : 'Ver documento en pantalla completa'),
         ),
-      ],
+      ),
     );
   }
 
@@ -1107,6 +929,7 @@ class _Seccion extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -1132,27 +955,40 @@ class _Seccion extends StatelessWidget {
 class _Dato extends StatelessWidget {
   final String etiqueta;
   final String valor;
+  final double anchoEtiqueta;
 
-  const _Dato(this.etiqueta, this.valor);
+  const _Dato(this.etiqueta, this.valor, {this.anchoEtiqueta = 132});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 7),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 160,
+            width: anchoEtiqueta,
             child: Text(
-              '$etiqueta:',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              etiqueta,
+              style: TextStyle(
+                color: AppColors.grisTexto,
+                fontSize: 12.5,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               valor,
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              textAlign: TextAlign.left,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+                height: 1.35,
+                color: Color(0xFF1F2937),
+              ),
             ),
           ),
         ],

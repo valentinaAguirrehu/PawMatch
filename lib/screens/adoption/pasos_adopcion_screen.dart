@@ -4,12 +4,19 @@ import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 
 /// Primera pantalla de la adopción: pasos y requisitos, antes del formulario.
 class PasosAdopcionScreen extends StatefulWidget {
-  const PasosAdopcionScreen({super.key});
+  final String nombreMascota;
 
-  static Future<bool> mostrar(BuildContext context) async {
+  const PasosAdopcionScreen({super.key, required this.nombreMascota});
+
+  static Future<bool> mostrar(
+    BuildContext context, {
+    required String nombreMascota,
+  }) async {
     final seguir = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => const PasosAdopcionScreen()),
+      MaterialPageRoute(
+        builder: (_) => PasosAdopcionScreen(nombreMascota: nombreMascota),
+      ),
     );
     return seguir == true;
   }
@@ -21,33 +28,36 @@ class PasosAdopcionScreen extends StatefulWidget {
 class _PasosAdopcionScreenState extends State<PasosAdopcionScreen> {
   bool _acepto = false;
 
-  static const _pasos = [
-    (
-      titulo: 'Confirma la adopción de tu peludito',
-      texto:
-          'Estás a un paso de cambiarle la vida al amigo que elegiste. Revisa sus detalles y da inicio formal a su solicitud de adopción.',
-    ),
-    (
-      titulo: 'Diligencia el formulario de adopción',
-      texto:
-          'Queremos saber un poco sobre ti, tu hogar y tu experiencia previa conviviendo con peluditos.',
-    ),
-    (
-      titulo: 'Entrevista y visita domiciliaria',
-      texto:
-          'Realizaremos una breve entrevista y, de ser necesario, agendaremos una visita a tu vivienda para confirmar de que sea un entorno seguro.',
-    ),
-    (
-      titulo: '¡Un nuevo integrante en la familia!',
-      texto:
-          'Al completar el proceso con éxito y firmar el contrato formal de adopción, le darás la bienvenida oficial a tu hogar.',
-    ),
-  ];
-
   static const _requisitos = AcuerdoAdopcionPdfService.requisitosImportantes;
 
   @override
   Widget build(BuildContext context) {
+    final nombre = widget.nombreMascota.trim().isEmpty
+        ? 'la mascota'
+        : widget.nombreMascota.trim();
+    final pasos = [
+      (
+        titulo: 'Confirma la adopción de $nombre',
+        texto:
+            'Estás a un paso de cambiarle la vida a $nombre. Revisa sus detalles y da inicio formal a su solicitud de adopción.',
+      ),
+      (
+        titulo: 'Diligencia el formulario de adopción',
+        texto:
+            'Queremos saber un poco sobre ti, tu hogar y tu experiencia previa conviviendo con animales.',
+      ),
+      (
+        titulo: 'Entrevista y visita domiciliaria',
+        texto:
+            'Realizaremos una breve entrevista y, de ser necesario, agendaremos una visita a tu vivienda para confirmar de que sea un entorno seguro.',
+      ),
+      (
+        titulo: '¡Un nuevo integrante en la familia!',
+        texto:
+            'Al completar el proceso con éxito y firmar el contrato formal de adopción, le darás la bienvenida oficial a tu hogar.',
+      ),
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFFDF0F3),
       body: SafeArea(
@@ -80,15 +90,16 @@ class _PasosAdopcionScreenState extends State<PasosAdopcionScreen> {
                       ),
                     ),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Pasos para adoptar',
+                      'Adoptar a ${widget.nombreMascota}',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         color: Color(0xFF1E272E),
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 42),
@@ -99,13 +110,13 @@ class _PasosAdopcionScreenState extends State<PasosAdopcionScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 children: [
-                  for (var i = 0; i < _pasos.length; i++) ...[
+                  for (var i = 0; i < pasos.length; i++) ...[
                     _Paso(
                       numero: i + 1,
-                      titulo: _pasos[i].titulo,
-                      texto: _pasos[i].texto,
+                      titulo: pasos[i].titulo,
+                      texto: pasos[i].texto,
                     ),
-                    if (i < _pasos.length - 1) const SizedBox(height: 12),
+                    if (i < pasos.length - 1) const SizedBox(height: 12),
                   ],
                   const SizedBox(height: 26),
                   const Text(
@@ -121,26 +132,6 @@ class _PasosAdopcionScreenState extends State<PasosAdopcionScreen> {
                     _Requisito(texto: requisito),
                     const SizedBox(height: 8),
                   ],
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.rosaSuave,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppColors.bordeRosa),
-                    ),
-                    child: const Text(
-                      '“Adoptar va mucho más allá de dar un techo; es abrirle la puerta a un amor puro e incondicional que cambiará tu vida para siempre.”',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14.5,
-                        height: 1.45,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.texto,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -266,7 +257,7 @@ class _Paso extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13.5,
                     height: 1.4,
-                    color: Colors.grey.shade700,
+                    color: AppColors.grisTexto,
                   ),
                 ),
               ],

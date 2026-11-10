@@ -82,21 +82,8 @@ class ReporteAdopcionPdfService {
     required List<SeguimientoAdopcionItem> seguimientos,
     CancelacionAdopcion? cancelacion,
   }) async {
-    pw.ThemeData tema;
-    try {
-      tema = pw.ThemeData.withFont(
-        base: await PdfGoogleFonts.robotoRegular(),
-        bold: await PdfGoogleFonts.robotoBold(),
-      );
-    } catch (_) {
-      tema = pw.ThemeData.withFont(
-        base: pw.Font.helvetica(),
-        bold: pw.Font.helveticaBold(),
-      );
-    }
-
-    final logo = await _logo();
     final logoFundacion = await _logoFundacion();
+    final logoPawMatch = await _asset('assets/images/logo.png');
     final fotoMascota = await _imagen(adopcion.fotoPrincipal);
     final fotoCancelacion1 = await _imagen(cancelacion?.foto1);
     final fotoCancelacion2 = await _imagen(cancelacion?.foto2);
@@ -110,65 +97,101 @@ class ReporteAdopcionPdfService {
       );
     }
 
-    final pdf = pw.Document(theme: tema);
+    final pdf = pw.Document();
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.symmetric(horizontal: 36, vertical: 36),
-        header: (context) => pw.Container(
-          padding: const pw.EdgeInsets.only(bottom: 10),
-          margin: const pw.EdgeInsets.only(bottom: 14),
-          decoration: const pw.BoxDecoration(
-            border: pw.Border(
-              bottom: pw.BorderSide(color: PdfColors.grey300, width: 1.5),
-            ),
-          ),
-          child: pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              pw.SizedBox(
-                width: 58,
-                height: 58,
-                child: logoFundacion == null
-                    ? pw.SizedBox()
-                    : pw.Image(logoFundacion, fit: pw.BoxFit.contain),
-              ),
-              pw.Expanded(
-                child: pw.Column(
-                  children: [
-                    pw.Text(
-                      FundacionInfo.nombre.toUpperCase(),
-                      textAlign: pw.TextAlign.center,
-                      style: pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColor.fromHex(_rosaOscuro),
-                      ),
-                    ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      'Reporte Oficial de Seguimiento de Adopción',
-                      textAlign: pw.TextAlign.center,
-                      style: pw.TextStyle(
-                        fontSize: 10,
-                        color: PdfColors.grey700,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ],
+        margin: const pw.EdgeInsets.symmetric(horizontal: 56, vertical: 40),
+        header: (context) => pw.Column(
+          children: [
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                pw.SizedBox(
+                  width: 58,
+                  height: 58,
+                  child: logoFundacion == null
+                      ? pw.SizedBox()
+                      : pw.Image(logoFundacion, fit: pw.BoxFit.contain),
                 ),
-              ),
-              pw.SizedBox(
-                width: 58,
-                height: 58,
-                child: logo == null
-                    ? pw.SizedBox()
-                    : pw.Image(logo, fit: pw.BoxFit.contain),
-              ),
-            ],
-          ),
+                pw.SizedBox(width: 10),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        FundacionInfo.nombre.toUpperCase(),
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          color: PdfColor.fromHex(_rosaOscuro),
+                          fontSize: 15.5,
+                          fontWeight: pw.FontWeight.bold,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      pw.SizedBox(height: 3),
+                      pw.Text(
+                        FundacionInfo.ciudad,
+                        textAlign: pw.TextAlign.center,
+                        style: const pw.TextStyle(color: PdfColors.grey700, fontSize: 10.5),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Protección, Bienestar y Rescate Animal',
+                        textAlign: pw.TextAlign.center,
+                        style: pw.TextStyle(
+                          color: PdfColors.grey700,
+                          fontSize: 10,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                pw.SizedBox(width: 10),
+                pw.SizedBox(
+                  width: 58,
+                  height: 58,
+                  child: logoPawMatch == null
+                      ? pw.SizedBox()
+                      : pw.Image(logoPawMatch, fit: pw.BoxFit.contain),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(height: 1.5, color: PdfColors.grey300),
+            pw.SizedBox(height: 8),
+          ],
         ),
         build: (context) => [
+          pw.Center(
+            child: pw.Column(
+              children: [
+                pw.Text(
+                  'REPORTE DE SEGUIMIENTO Y EVALUACIÓN DE ADOPCIÓN',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                    color: PdfColor.fromHex('#1F2937'),
+                    fontSize: 13,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 1),
+                pw.Text(
+                  'REGISTRO DE EVOLUCIÓN Y BIENESTAR',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                    color: PdfColor.fromHex('#4B5563'),
+                    fontSize: 9.5,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Container(height: 0.8, color: PdfColor.fromHex('#D1D5DB')),
+          pw.SizedBox(height: 10),
           ..._encabezado(adopcion, fotoMascota),
           if (adopcion.adopcionCancelada) ...[
             pw.SizedBox(height: 12),
@@ -765,10 +788,6 @@ class ReporteAdopcionPdfService {
     } catch (_) {
       return null;
     }
-  }
-
-  static Future<pw.MemoryImage?> _logo() async {
-    return _asset('assets/images/logo.png');
   }
 
   static Future<pw.MemoryImage?> _logoFundacion() async {

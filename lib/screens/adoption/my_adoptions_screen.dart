@@ -341,7 +341,14 @@ class _MyAdoptionsScreenState extends State<MyAdoptionsScreen> {
               iconoTitulo: Icons.favorite_rounded,
               titulo: 'Mis Adopciones',
               onCerrarSesion: _confirmarCerrarSesion,
-              forzarHuella: true,
+              onVolver: () {
+                final ir = Navegacion.volverANotificaciones;
+                if (ir != null) {
+                  ir();
+                  return;
+                }
+                if (Navigator.canPop(context)) Navigator.pop(context);
+              },
             ),
             Expanded(
               child: FutureBuilder<List<AdoptionRequest>>(
@@ -678,14 +685,24 @@ class _TarjetaAdopcion extends StatefulWidget {
 
 class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
   bool _seguimientos = false;
+  bool _expandirHistorial = false;
+  bool _descargandoReporte = false;
   Future<List<SeguimientoAdopcionItem>>? _historial;
+
+  static const _mesesLargos = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+  ];
 
   void _alternarSeguimientos() {
     setState(() {
       _seguimientos = !_seguimientos;
+      if (_seguimientos) _expandirHistorial = false;
       _historial ??= SeguimientoAdopcionService.obtenerHistorial(widget.solicitud.id);
     });
   }
+
+  String _fechaLarga(DateTime f) => '${f.day} de ${_mesesLargos[f.month - 1]} de ${f.year}';
 
   Future<void> _reporte(List<SeguimientoAdopcionItem> lista, {required bool descargar}) async {
     final s = widget.solicitud;
@@ -873,6 +890,7 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
                   texto: _seguimientos ? 'Ocultar seguimientos' : 'Ver seguimientos',
                   flecha: true,
                   abierto: _seguimientos,
+                  rosado: true,
                   onPressed: _alternarSeguimientos,
                 ),
                 if (_seguimientos) ...[
@@ -908,6 +926,20 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
     );
   }
 
+  Future<void> _descargarReporte(List<SeguimientoAdopcionItem> lista) async {
+    if (lista.isEmpty || _descargandoReporte) {
+      if (lista.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Aún no hay seguimientos para generar el reporte.')),
+        );
+      }
+      return;
+    }
+    setState(() => _descargandoReporte = true);
+    await _reporte(lista, descargar: true);
+    if (mounted) setState(() => _descargandoReporte = false);
+  }
+
   Widget _panelSeguimientos() {
     return FutureBuilder<List<SeguimientoAdopcionItem>>(
       future: _historial,
@@ -926,60 +958,172 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
             'No se pudieron cargar los seguimientos.',
           );
         }
-        final lista = snap.data ?? [];
-        if (lista.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.fromLTRB(4, 2, 4, 4),
-                                      child: Text(
-              'Aún no hay visitas de seguimiento.',
-                                        style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF92400E),
-              ),
+        final lista = List<SeguimientoAdopcionItem>.from(snap.data ?? [])
+          ..sort((a, b) => b.numeroSeguimiento.compareTo(a.numeroSeguimiento));
+        final ultimo = lista.isEmpty ? null : lista.first;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _historialDesplegable(lista, ultimo),
+            const SizedBox(height: 8),
+            _botonLinea(
+              icono: Icons.picture_as_pdf_outlined,
+              texto: 'Descargar reporte',
+              cargando: _descargandoReporte,
+              rosado: true,
+              onPressed: _descargandoReporte ? null : () => _descargarReporte(lista),
             ),
-          );
-        }
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFFBEB),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFDE68A)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-                                Text(
-                '${lista.length} ${lista.length == 1 ? 'seguimiento registrado' : 'seguimientos registrados'}',
-                style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
-              ),
-              if (lista.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                for (final item in lista)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      '#${item.numeroSeguimiento} · ${_MyAdoptionsScreenState.fechaCorta(item.fechaSeguimiento.toIso8601String())} · ${item.cumplimiento ? 'Cumplió' : 'Pendiente'}',
-                      style: const TextStyle(fontSize: 12.5, color: Color(0xFF475569)),
-                    ),
-                  ),
-                _botonLinea(
-                  icono: Icons.picture_as_pdf_outlined,
-                  texto: 'Ver reporte',
-                  onPressed: () => _reporte(lista, descargar: false),
-                ),
-                                  const SizedBox(height: 8),
-                _botonLinea(
-                  icono: Icons.download_rounded,
-                  texto: 'Descargar reporte',
-                  onPressed: () => _reporte(lista, descargar: true),
-                ),
-              ],
-            ],
-          ),
+          ],
         );
       },
+    );
+  }
+
+  Widget _historialDesplegable(
+    List<SeguimientoAdopcionItem> lista,
+    SeguimientoAdopcionItem? ultimo,
+  ) {
+    final subtitulo = ultimo == null
+        ? 'Sin seguimientos registrados aún'
+        : 'Último: #${ultimo.numeroSeguimiento} • ${ultimo.cumplimiento ? 'Cumplió' : 'No cumplió'} • ${_MyAdoptionsScreenState.fechaCorta(ultimo.fechaSeguimiento.toIso8601String())}';
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFCE4EC), width: 1.1),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => setState(() => _expandirHistorial = !_expandirHistorial),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDE8F1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.history_rounded, color: AppColors.rosa, size: 19),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Historial de Seguimientos',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13.5,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitulo,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    _expandirHistorial
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    color: const Color(0xFF94A3B8),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_expandirHistorial)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: lista.isEmpty
+                  ? const Text(
+                      'Pronto el administrador registrará el primer seguimiento de tu adopción.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    )
+                  : Column(
+                      children: [
+                        for (final it in lista) _tarjetaSeguimiento(it),
+                      ],
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tarjetaSeguimiento(SeguimientoAdopcionItem it) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF9FC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFCE4EC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Seguimiento #${it.numeroSeguimiento}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: it.cumplimiento ? const Color(0xFFDCFCE7) : const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  it.cumplimiento ? 'Cumplió' : 'No cumplió',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: it.cumplimiento ? const Color(0xFF15803D) : const Color(0xFFB91C1C),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Fecha: ${_fechaLarga(it.fechaSeguimiento)}',
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+          ),
+          Text(
+            'Calificación: ${it.calificacion}/5  •  Revisado por: ${it.adminNombre}',
+            style: const TextStyle(fontSize: 11.5, color: Color(0xFF475569)),
+          ),
+          if (it.observaciones.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Comentario: ${it.observaciones}',
+              style: const TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: Color(0xFF334155),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1178,13 +1322,21 @@ class _TarjetaAdopcionState extends State<_TarjetaAdopcion> {
     bool cargando = false,
     bool flecha = false,
     bool abierto = false,
+    bool rosado = false,
   }) {
+    final colorTexto = rosado ? AppColors.rosa : const Color(0xFF880E4F);
+    final colorFondo = rosado
+        ? (abierto ? const Color(0xFFFDE8F1) : const Color(0xFFFFF9FB))
+        : Colors.white;
+    final colorBorde = rosado
+        ? (abierto ? AppColors.rosa : const Color(0xFFF9A8D4))
+        : const Color(0xFFF48FB1);
     return OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF880E4F),
-        side: const BorderSide(color: Color(0xFFF48FB1), width: 1.2),
+        foregroundColor: colorTexto,
+        side: BorderSide(color: colorBorde, width: rosado ? 1.3 : 1.2),
                             minimumSize: const Size.fromHeight(42),
-        backgroundColor: Colors.white,
+        backgroundColor: colorFondo,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             ),
       onPressed: onPressed,

@@ -528,7 +528,7 @@ class _ApadrinamientoFormFollowUpState
                 selected: _recibioMonetario == true,
                 selectedColor: Colors.green.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioMonetario == true ? Colors.green.shade900 : Colors.grey.shade700,
+                  color: _recibioMonetario == true ? Colors.green.shade900 : AppColors.grisTexto,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioMonetario = true),
@@ -539,7 +539,7 @@ class _ApadrinamientoFormFollowUpState
                 selected: _recibioMonetario == false,
                 selectedColor: Colors.red.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioMonetario == false ? Colors.red.shade900 : Colors.grey.shade700,
+                  color: _recibioMonetario == false ? Colors.red.shade900 : AppColors.grisTexto,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioMonetario = false),
@@ -642,7 +642,7 @@ class _ApadrinamientoFormFollowUpState
                 selected: _recibioEspecie == true,
                 selectedColor: Colors.green.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioEspecie == true ? Colors.green.shade900 : Colors.grey.shade700,
+                  color: _recibioEspecie == true ? Colors.green.shade900 : AppColors.grisTexto,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioEspecie = true),
@@ -653,7 +653,7 @@ class _ApadrinamientoFormFollowUpState
                 selected: _recibioEspecie == false,
                 selectedColor: Colors.red.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioEspecie == false ? Colors.red.shade900 : Colors.grey.shade700,
+                  color: _recibioEspecie == false ? Colors.red.shade900 : AppColors.grisTexto,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioEspecie = false),
@@ -729,7 +729,7 @@ class _ApadrinamientoFormFollowUpState
                 selected: _recibioOtro == true,
                 selectedColor: Colors.green.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioOtro == true ? Colors.green.shade900 : Colors.grey.shade700,
+                  color: _recibioOtro == true ? Colors.green.shade900 : AppColors.grisTexto,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioOtro = true),
@@ -740,7 +740,7 @@ class _ApadrinamientoFormFollowUpState
                 selected: _recibioOtro == false,
                 selectedColor: Colors.red.shade100,
                 labelStyle: TextStyle(
-                  color: _recibioOtro == false ? Colors.red.shade900 : Colors.grey.shade700,
+                  color: _recibioOtro == false ? Colors.red.shade900 : AppColors.grisTexto,
                   fontWeight: FontWeight.bold,
                 ),
                 onSelected: (val) => setState(() => _recibioOtro = false),
@@ -937,7 +937,7 @@ class _ApadrinamientoFormFollowUpState
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade700,
+                                    color: AppColors.grisTexto,
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -945,7 +945,7 @@ class _ApadrinamientoFormFollowUpState
                                   solicitud.solicitanteCorreo,
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade600,
+                                    color: AppColors.grisTexto,
                                   ),
                                 ),
                               ],
@@ -1042,7 +1042,7 @@ class _ApadrinamientoFormFollowUpState
                               const SizedBox(height: 4),
                               Text(
                                 'Revisa los aportes acordados por el padrino para este periodo:',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
                               ),
                               const SizedBox(height: 12),
                               if (_aportaMonetarioPrometido)
@@ -1079,7 +1079,7 @@ class _ApadrinamientoFormFollowUpState
                             const SizedBox(height: 4),
                             Text(
                               'Toca las estrellas para evaluar el cumplimiento (1 a 5)',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                              style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
                             ),
                             const SizedBox(height: 8),
                             Center(

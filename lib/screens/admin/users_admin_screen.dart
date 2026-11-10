@@ -323,12 +323,12 @@ class _UsersAdminScreenState extends State<UsersAdminScreen> {
                       Icon(
                         Icons.swap_vert,
                         size: 18,
-                        color: Colors.grey.shade700,
+                        color: AppColors.grisTexto,
                       ),
                       Text(
                         'Registro',
                         style: TextStyle(
-                          color: Colors.grey.shade700,
+                          color: AppColors.grisTexto,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -563,21 +563,21 @@ class _TarjetaUsuario extends StatelessWidget {
                       Text(
                         'Cédula: $cedula',
                         style: TextStyle(
-                          color: Colors.grey.shade700,
+                          color: AppColors.grisTexto,
                           fontSize: 13,
                         ),
                       ),
                       Text(
                         'Celular: $celular',
                         style: TextStyle(
-                          color: Colors.grey.shade700,
+                          color: AppColors.grisTexto,
                           fontSize: 13,
                         ),
                       ),
                       Text(
                         'Registro: ${usuario.fechaRegistroLabel ?? 'Sin fecha'}',
                         style: TextStyle(
-                          color: Colors.grey.shade700,
+                          color: AppColors.grisTexto,
                           fontSize: 13,
                         ),
                       ),

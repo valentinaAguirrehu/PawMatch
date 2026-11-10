@@ -50,7 +50,7 @@ function apiKey() {
 async function sintetizar({ texto, voz, velocidad = 1 }) {
   const key = apiKey();
   if (!key) {
-    const error = new Error('Falta OPENAI_API_KEY');
+    const error = new Error('Falta OPENAI_API_KEY en el archivo .env del backend');
     error.estado = 503;
     throw error;
   }
@@ -76,7 +76,7 @@ async function sintetizar({ texto, voz, velocidad = 1 }) {
       'Habla en español latinoamericano, con un tono claro y cálido. No traduzcas los nombres.';
   }
 
-  const resp = await fetch('https://api.openai.com/v1/audio/speech', {
+  let resp = await fetch('https://api.openai.com/v1/audio/speech', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${key}`,
@@ -86,10 +86,41 @@ async function sintetizar({ texto, voz, velocidad = 1 }) {
     signal: AbortSignal.timeout(45000),
   });
 
+  // Si gpt-4o-mini-tts falla por compatibilidad de modelo (404/400), intentar con tts-1 estándar
+  if (!resp.ok && (resp.status === 404 || resp.status === 400) && modelo !== 'tts-1') {
+    const fallbackCuerpo = {
+      model: 'tts-1',
+      voice: normalizarVoz(voz),
+      input: entrada,
+      speed: rapidez,
+      response_format: 'mp3',
+    };
+    try {
+      const fallbackResp = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(fallbackCuerpo),
+        signal: AbortSignal.timeout(45000),
+      });
+      if (fallbackResp.ok) {
+        return Buffer.from(await fallbackResp.arrayBuffer());
+      }
+    } catch (_) {}
+  }
+
   if (!resp.ok) {
     const error = new Error('OpenAI TTS');
     error.estado = resp.status;
     error.detalle = await resp.text();
+    try {
+      const parsed = JSON.parse(error.detalle);
+      if (parsed?.error?.message) {
+        error.mensajeAmigable = parsed.error.message;
+      }
+    } catch (_) {}
     throw error;
   }
 

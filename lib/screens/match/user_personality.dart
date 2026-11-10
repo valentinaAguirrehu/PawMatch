@@ -1545,7 +1545,7 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
           const SizedBox(height: 6),
           Text(
             _ultimaParte(respuesta.respuestaOriginal),
-            style: const TextStyle(color: Colors.black54, height: 1.35),
+            style: const TextStyle(color: AppColors.grisTexto, height: 1.35),
           ),
           const SizedBox(height: 8),
           Text(

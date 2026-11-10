@@ -407,7 +407,7 @@ class _AdoptionFormFollowUpState extends State<AdoptionFormFollowUp> {
                 ),
                 Text(
                   'Inicio: ${solicitud.adoptionStartDateLabel ?? 'Sin fecha'}',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                  style: TextStyle(fontSize: 12.5, color: AppColors.grisTexto),
                 ),
                 if (widget.numeroSiguiente != null) ...[
                   const SizedBox(height: 4),
@@ -551,7 +551,7 @@ class _FotoCampo extends StatelessWidget {
         children: [
           Text(titulo, style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
-          Text(ayuda, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700)),
+          Text(ayuda, style: TextStyle(fontSize: 12.5, color: AppColors.grisTexto)),
           const SizedBox(height: 8),
           if (bytes != null)
             ClipRRect(
@@ -617,7 +617,7 @@ class _FechaCampo extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(etiqueta, style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                    Text(etiqueta, style: TextStyle(fontSize: 12, color: AppColors.grisTexto)),
                     Text(valor, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.texto)),
                   ],
                 ),

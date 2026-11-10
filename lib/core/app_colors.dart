@@ -16,6 +16,9 @@ class AppColors {
   // Texto: gris casi negro, neutro, para que se lea bien sobre blanco y rosado
   static const texto = Color(0xFF2E2A2C);
 
+  /// Gris de apoyo (descripciones, subtítulos e iconos secundarios).
+  static const grisTexto = Color(0xFF1F2937);
+
   /// Fondos de tarjetas y chips (se alternan en orden).
   static const pastel = [rosaSuave, rosaClaro];
 }

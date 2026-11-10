@@ -146,17 +146,26 @@ class AcuerdoAdopcionPdfService {
 
     final pdf = pw.Document();
 
-    pw.MemoryImage? logoImage;
+    pw.MemoryImage? logoFundacion;
+    try {
+      final logoData =
+          await rootBundle.load('assets/images/Logo Fundación.png');
+      logoFundacion = pw.MemoryImage(logoData.buffer.asUint8List());
+    } catch (e) {
+      debugPrint('No se pudo cargar logo de la Fundación: $e');
+    }
+
+    pw.MemoryImage? logoPawMatch;
     try {
       final logoData = await rootBundle.load('assets/images/logo.png');
-      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+      logoPawMatch = pw.MemoryImage(logoData.buffer.asUint8List());
     } catch (e) {
       debugPrint('No se pudo cargar logo de Paw Match: $e');
     }
 
-    final verdePrincipal = PdfColor.fromHex('#23533E');
-    final verdeSecundario = PdfColor.fromHex('#2E7D32');
-    final verdeClaroBorde = PdfColor.fromHex('#80A892');
+    final verdePrincipal = PdfColor.fromHex('#880E4F');
+    final verdeSecundario = PdfColor.fromHex('#AD1457');
+    final verdeClaroBorde = PdfColors.grey300;
     final grisBorde = PdfColor.fromHex('#D1D5DB');
     final grisOscuro = PdfColor.fromHex('#1F2937');
     final grisMedio = PdfColor.fromHex('#4B5563');
@@ -249,39 +258,21 @@ class AcuerdoAdopcionPdfService {
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              pw.Container(
-                width: 54,
-                height: 54,
-                padding: const pw.EdgeInsets.all(3),
-                decoration: pw.BoxDecoration(
-                  color: PdfColors.white,
-                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
-                  border: pw.Border.all(color: verdeClaroBorde, width: 1.2),
-                ),
-                child: logoImage != null
-                    ? pw.ClipRRect(
-                        horizontalRadius: 8,
-                        verticalRadius: 8,
-                        child: pw.Image(logoImage, fit: pw.BoxFit.contain),
-                      )
-                    : pw.Center(
-                        child: pw.Text(
-                          'PAW',
-                          style: pw.TextStyle(
-                            color: verdePrincipal,
-                            fontWeight: pw.FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
+              pw.SizedBox(
+                width: 58,
+                height: 58,
+                child: logoFundacion == null
+                    ? pw.SizedBox()
+                    : pw.Image(logoFundacion, fit: pw.BoxFit.contain),
               ),
-              pw.SizedBox(width: 14),
+              pw.SizedBox(width: 10),
               pw.Expanded(
                 child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
                     pw.Text(
                       FundacionInfo.nombre.toUpperCase(),
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         color: verdePrincipal,
                         fontSize: 15.5,
@@ -289,20 +280,18 @@ class AcuerdoAdopcionPdfService {
                         letterSpacing: 0.3,
                       ),
                     ),
-                    pw.SizedBox(height: 2),
+                    pw.SizedBox(height: 3),
                     pw.Text(
                       FundacionInfo.ciudad,
-                      style: pw.TextStyle(color: grisOscuro, fontSize: 10.5),
+                      textAlign: pw.TextAlign.center,
+                      style: const pw.TextStyle(color: PdfColors.grey700, fontSize: 10.5),
                     ),
-                    pw.Text(
-                      'WhatsApp: +57 ${FundacionInfo.whatsappNumero.replaceFirst(RegExp(r'^57'), '')}',
-                      style: pw.TextStyle(color: grisOscuro, fontSize: 10.5),
-                    ),
-                    pw.SizedBox(height: 1),
+                    pw.SizedBox(height: 2),
                     pw.Text(
                       'Protección, Bienestar y Rescate Animal',
+                      textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
-                        color: verdeSecundario,
+                        color: PdfColors.grey700,
                         fontSize: 10,
                         fontWeight: pw.FontWeight.bold,
                       ),
@@ -310,24 +299,22 @@ class AcuerdoAdopcionPdfService {
                   ],
                 ),
               ),
+              pw.SizedBox(width: 10),
+              pw.SizedBox(
+                width: 58,
+                height: 58,
+                child: logoPawMatch == null
+                    ? pw.SizedBox()
+                    : pw.Image(logoPawMatch, fit: pw.BoxFit.contain),
+              ),
             ],
           ),
-          pw.SizedBox(height: 10),
-          pw.Container(height: 1.2, color: verdeClaroBorde),
+          pw.SizedBox(height: 8),
+          pw.Container(height: 1.5, color: PdfColors.grey300),
           pw.SizedBox(height: 8),
           pw.Center(
             child: pw.Column(
               children: [
-                pw.Text(
-                  'PAW MATCH',
-                  style: pw.TextStyle(
-                    color: verdePrincipal,
-                    fontSize: 16.5,
-                    fontWeight: pw.FontWeight.bold,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                pw.SizedBox(height: 2),
                 pw.Text(
                   'ACTA DE COMPROMISO Y TÉRMINOS DE ADOPCIÓN RESPONSABLE',
                   textAlign: pw.TextAlign.center,

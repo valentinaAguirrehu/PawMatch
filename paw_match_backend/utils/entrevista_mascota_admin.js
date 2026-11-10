@@ -149,9 +149,8 @@ async function obtenerLimitesColumnasMascota() {
  * respuesta válida paso a paso durante la conversación.
  */
 async function asegurarTablaBorradorMascota() {
-  if (tablaBorradorLista) return;
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS borrador_registro_mascota_luna (
+    CREATE TABLE IF NOT EXISTS borrador_mascota_formulario_ia (
       id_borrador UUID DEFAULT gen_random_uuid() PRIMARY KEY,
       id_administrador UUID NOT NULL UNIQUE REFERENCES usuario(id_usuario) ON DELETE CASCADE,
       nombre VARCHAR(100),
@@ -174,10 +173,28 @@ async function asegurarTablaBorradorMascota() {
       historia_consultada BOOLEAN NOT NULL DEFAULT FALSE,
       paso_actual VARCHAR(40) NOT NULL DEFAULT 'nombre',
       historial_chat JSONB NOT NULL DEFAULT '[]'::jsonb,
+      origen_registro VARCHAR(20) NOT NULL DEFAULT 'ia',
+      foto TEXT,
+      estado_adopcion VARCHAR(20) DEFAULT 'disponible',
+      estado_apadrinamiento VARCHAR(20) DEFAULT 'disponible',
       fecha_actualizacion TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  tablaBorradorLista = true;
+
+  try {
+    await pool.query(`
+      ALTER TABLE borrador_mascota_formulario_ia
+        ADD COLUMN IF NOT EXISTS foto TEXT,
+        ADD COLUMN IF NOT EXISTS origen_registro VARCHAR(20) NOT NULL DEFAULT 'ia',
+        ADD COLUMN IF NOT EXISTS estado_adopcion VARCHAR(20) DEFAULT 'disponible',
+        ADD COLUMN IF NOT EXISTS estado_apadrinamiento VARCHAR(20) DEFAULT 'disponible';
+    `);
+  } catch (_) {}
+
+  // Eliminar definitivamente y sin excepción cualquier tabla antigua o con nombres anteriores
+  await pool.query('DROP TABLE IF EXISTS borrador_registro_mascota_luna CASCADE;').catch(() => {});
+  await pool.query('DROP TABLE IF EXISTS borrador_mascota_ia CASCADE;').catch(() => {});
+  await pool.query('DROP TABLE IF EXISTS borrador_mascota CASCADE;').catch(() => {});
 }
 
 function obtenerApiKey() {
@@ -398,6 +415,49 @@ function calcularPorcentajeProgreso(ficha) {
   return Math.max(0, Math.min(100, Math.round(puntos)));
 }
 
+function canonRaza(valor, maxRaza = 50) {
+  if (valor == null) return null;
+  const original = String(valor).trim();
+  if (!original) return null;
+  const limpio = original
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const indefinida =
+    /\b(mestiz[oa]s?|crioll[oa]s?|combinad[oa]s?|cruzad[oa]s?|cruce|mixt[oa]s?|mezcl[oa]s?|mezcla|callej[oa]s?|desconocid[oa]s?|corriente|ordinari[oa]|comun|indefinid[oa]s?|variad[oa]s?)\b/.test(
+      limpio,
+    ) ||
+    /sin raza|no tiene raza|no se sabe|no la se|no conozco|no es de raza|sin definir|sin pedigree|de la calle|ninguna raza|ningun raza|no aplica/.test(
+      limpio,
+    );
+  const relleno = new Set([
+    'es', 'un', 'una', 'el', 'la', 'lo', 'los', 'las', 'de', 'del', 'al', 'y', 'o',
+    'con', 'que', 'se', 'su', 'sus', 'por', 'para', 'como', 'tipo', 'parece', 'creo',
+    'dice', 'mascota', 'perro', 'perra', 'perrito', 'perrita', 'gato', 'gata',
+    'gatito', 'gatita', 'raza', 'tiene', 'tener', 'no', 'si', 'muy', 'solo', 'sola',
+    'puro', 'pura', 'definida', 'definido', 'algo', 'parecido', 'parecida', 'tambien',
+    'nuestro', 'nuestra',
+  ]);
+  const genericos = new Set([
+    'mestizo', 'mestiza', 'mestizos', 'mestizas', 'criollo', 'criolla', 'criollos',
+    'criollas', 'combinado', 'combinada', 'combinados', 'combinadas', 'cruzado',
+    'cruzada', 'cruzados', 'cruzadas', 'cruce', 'mixto', 'mixta', 'mixtos', 'mixtas',
+    'mezcla', 'mezclado', 'mezclada', 'mezclados', 'mezcladas', 'callejero',
+    'callejera', 'callejeros', 'callejeras', 'desconocido', 'desconocida',
+    'desconocidos', 'desconocidas', 'ninguno', 'ninguna', 'comun', 'corriente',
+    'ordinario', 'ordinaria', 'indefinido', 'indefinida', 'variado', 'variada',
+    'varias', 'varios', 'sin', 'sabe', 'conozco', 'aplica', 'pedigree', 'calle',
+  ]);
+  const especificos = limpio
+    .split(' ')
+    .filter((t) => t && !relleno.has(t) && !genericos.has(t));
+  if (indefinida && especificos.length === 0) return 'Mestizo';
+  return original.length <= maxRaza ? original : original.slice(0, maxRaza);
+}
+
 function normalizarFicha(raw = {}, fichaPrevia = {}, limites = {}) {
   const maxNombre = limites.nombre || 50;
   const maxRaza = limites.raza || 50;
@@ -499,17 +559,7 @@ function normalizarFicha(raw = {}, fichaPrevia = {}, limites = {}) {
 
   if (raw.raza !== undefined && raw.raza !== null) {
     const r = String(raw.raza).trim();
-    if (r) {
-      if (
-        /^(no se sabe|no la se|no la sé|no conozco|desconocid[oa]|crioll[oa]|mestiz[oa]|sin raza|ninguna)$/i.test(
-          r,
-        )
-      ) {
-        base.raza = 'Desconocida / Mestizo';
-      } else if (r.length <= maxRaza) {
-        base.raza = r;
-      }
-    }
+    if (r) base.raza = canonRaza(r, maxRaza);
   }
 
   const tamanoRaw = limpiarTexto(raw.tamano);
@@ -651,6 +701,8 @@ function normalizarFicha(raw = {}, fichaPrevia = {}, limites = {}) {
     base.estado_salud = ['No presenta necesidades veterinarias pendientes.'];
   }
 
+  base.raza = canonRaza(base.raza, maxRaza);
+
   return base;
 }
 
@@ -658,9 +710,16 @@ function normalizarFicha(raw = {}, fichaPrevia = {}, limites = {}) {
  * Guarda o actualiza el borrador progresivo de la mascota en PostgreSQL
  * inmediatamente después de cada respuesta válida del administrador.
  */
-async function guardarBorradorMascotaEnBd(idAdmin, ficha, pasoActual, historial) {
+async function guardarBorradorMascotaEnBd(
+  idAdmin,
+  ficha,
+  pasoActual = 'nombre',
+  historial = [],
+  origen = 'ia',
+  foto = null,
+) {
   await asegurarTablaBorradorMascota();
-  const fechaNac = calcularFechaNacimientoIso(ficha.edad, ficha.unidad_edad);
+  const fechaNac = ficha.fecha_nacimiento || calcularFechaNacimientoIso(ficha.edad, ficha.unidad_edad);
   const historialLimpio = Array.isArray(historial)
     ? historial.slice(-30).map((m) => ({
         rol: m.rol === 'asistente' ? 'asistente' : 'usuario',
@@ -668,74 +727,99 @@ async function guardarBorradorMascotaEnBd(idAdmin, ficha, pasoActual, historial)
       }))
     : [];
 
-  await pool.query(
-    `INSERT INTO borrador_registro_mascota_luna (
-      id_administrador, nombre, especie, sexo, edad, unidad_edad, fecha_nacimiento,
-      raza, tamano, es_cachorro_en_proceso, personalidad_definida, personalidad,
-      estado_salud, vacunas, esterilizado, detalle_salud, descripcion,
-      salud_consultada, historia_consultada, paso_actual, historial_chat, fecha_actualizacion
-    ) VALUES (
-      $1, $2, $3, $4, $5, $6, $7,
-      $8, $9, $10, $11, $12::jsonb,
-      $13::jsonb, $14, $15, $16, $17,
-      $18, $19, $20, $21::jsonb, CURRENT_TIMESTAMP
-    )
-    ON CONFLICT (id_administrador) DO UPDATE SET
-      nombre = EXCLUDED.nombre,
-      especie = EXCLUDED.especie,
-      sexo = EXCLUDED.sexo,
-      edad = EXCLUDED.edad,
-      unidad_edad = EXCLUDED.unidad_edad,
-      fecha_nacimiento = EXCLUDED.fecha_nacimiento,
-      raza = EXCLUDED.raza,
-      tamano = EXCLUDED.tamano,
-      es_cachorro_en_proceso = EXCLUDED.es_cachorro_en_proceso,
-      personalidad_definida = EXCLUDED.personalidad_definida,
-      personalidad = EXCLUDED.personalidad,
-      estado_salud = EXCLUDED.estado_salud,
-      vacunas = EXCLUDED.vacunas,
-      esterilizado = EXCLUDED.esterilizado,
-      detalle_salud = EXCLUDED.detalle_salud,
-      descripcion = EXCLUDED.descripcion,
-      salud_consultada = EXCLUDED.salud_consultada,
-      historia_consultada = EXCLUDED.historia_consultada,
-      paso_actual = EXCLUDED.paso_actual,
-      historial_chat = EXCLUDED.historial_chat,
-      fecha_actualizacion = CURRENT_TIMESTAMP`,
-    [
-      idAdmin,
-      ficha.nombre,
-      ficha.especie,
-      ficha.sexo,
-      ficha.edad,
-      ficha.unidad_edad,
-      fechaNac,
-      ficha.raza,
-      ficha.tamano,
-      ficha.es_cachorro_en_proceso,
-      ficha.personalidad_definida,
-      JSON.stringify(ficha.personalidad || {}),
-      JSON.stringify(ficha.estado_salud || []),
-      ficha.vacunas,
-      ficha.esterilizado,
-      ficha.detalle_salud,
-      ficha.descripcion,
-      Boolean(ficha.salud_consultada),
-      Boolean(ficha.historia_consultada),
-      pasoActual || 'nombre',
-      JSON.stringify(historialLimpio),
-    ],
-  );
+  const fotoFinal = foto || ficha.foto || null;
+  const origenFinal = origen || ficha.origen_registro || 'ia';
+
+  try {
+    await pool.query(
+      `INSERT INTO borrador_mascota_formulario_ia (
+        id_administrador, nombre, especie, sexo, edad, unidad_edad, fecha_nacimiento,
+        raza, tamano, es_cachorro_en_proceso, personalidad_definida, personalidad,
+        estado_salud, vacunas, esterilizado, detalle_salud, descripcion,
+        salud_consultada, historia_consultada, paso_actual, historial_chat,
+        origen_registro, foto, fecha_actualizacion
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12::jsonb,
+        $13::jsonb, $14, $15, $16, $17,
+        $18, $19, $20, $21::jsonb,
+        $22, $23, CURRENT_TIMESTAMP
+      )
+      ON CONFLICT (id_administrador) DO UPDATE SET
+        nombre = EXCLUDED.nombre,
+        especie = EXCLUDED.especie,
+        sexo = EXCLUDED.sexo,
+        edad = EXCLUDED.edad,
+        unidad_edad = EXCLUDED.unidad_edad,
+        fecha_nacimiento = EXCLUDED.fecha_nacimiento,
+        raza = EXCLUDED.raza,
+        tamano = EXCLUDED.tamano,
+        es_cachorro_en_proceso = EXCLUDED.es_cachorro_en_proceso,
+        personalidad_definida = EXCLUDED.personalidad_definida,
+        personalidad = EXCLUDED.personalidad,
+        estado_salud = EXCLUDED.estado_salud,
+        vacunas = EXCLUDED.vacunas,
+        esterilizado = EXCLUDED.esterilizado,
+        detalle_salud = EXCLUDED.detalle_salud,
+        descripcion = EXCLUDED.descripcion,
+        salud_consultada = EXCLUDED.salud_consultada,
+        historia_consultada = EXCLUDED.historia_consultada,
+        paso_actual = EXCLUDED.paso_actual,
+        historial_chat = CASE WHEN $21::jsonb = '[]'::jsonb THEN borrador_mascota_formulario_ia.historial_chat ELSE EXCLUDED.historial_chat END,
+        origen_registro = EXCLUDED.origen_registro,
+        foto = COALESCE(EXCLUDED.foto, borrador_mascota_formulario_ia.foto),
+        fecha_actualizacion = CURRENT_TIMESTAMP`,
+      [
+        idAdmin,
+        ficha.nombre || null,
+        ficha.especie || null,
+        ficha.sexo || null,
+        ficha.edad ?? null,
+        ficha.unidad_edad || null,
+        fechaNac,
+        ficha.raza || null,
+        ficha.tamano || null,
+        ficha.es_cachorro_en_proceso ?? null,
+        ficha.personalidad_definida ?? null,
+        JSON.stringify(ficha.personalidad || {}),
+        JSON.stringify(ficha.estado_salud || []),
+        ficha.vacunas ?? null,
+        ficha.esterilizado ?? null,
+        ficha.detalle_salud || null,
+        ficha.descripcion || null,
+        Boolean(ficha.salud_consultada),
+        Boolean(ficha.historia_consultada),
+        pasoActual || 'nombre',
+        JSON.stringify(historialLimpio),
+        origenFinal,
+        fotoFinal,
+      ],
+    );
+  } catch (err) {
+    console.error('Error guardando en borrador_mascota_formulario_ia:', err.message);
+  }
 }
 
 async function obtenerBorradorMascotaDeBd(idAdmin) {
-  await asegurarTablaBorradorMascota();
-  const res = await pool.query(
-    'SELECT * FROM borrador_registro_mascota_luna WHERE id_administrador = $1',
-    [idAdmin],
-  );
-  if (res.rows.length === 0) return null;
-  const r = res.rows[0];
+  await asegurarTablaBorradorMascota().catch(() => {});
+  let r = null;
+  try {
+    let res = await pool.query(
+      `SELECT * FROM borrador_mascota_formulario_ia WHERE id_administrador = $1`,
+      [idAdmin],
+    );
+    if (res.rows.length === 0) {
+      res = await pool.query(
+        `SELECT * FROM borrador_mascota_formulario_ia ORDER BY fecha_actualizacion DESC LIMIT 1`,
+      );
+    }
+    if (res.rows.length > 0) {
+      r = res.rows[0];
+    }
+  } catch (err) {
+    console.error('Error en obtenerBorradorMascotaDeBd:', err.message);
+  }
+  if (!r) return null;
   const limites = await obtenerLimitesColumnasMascota();
   const ficha = normalizarFicha(
     {
@@ -756,23 +840,81 @@ async function obtenerBorradorMascotaDeBd(idAdmin) {
       descripcion: r.descripcion,
       salud_consultada: r.salud_consultada,
       historia_consultada: r.historia_consultada,
+      foto: r.foto || null,
+      origen_registro: r.origen_registro || 'ia',
     },
     {},
     limites,
   );
   return {
+    id_borrador: r.id_borrador,
+    id_administrador: r.id_administrador,
     ficha,
+    foto: r.foto || null,
+    origen_registro: r.origen_registro || 'ia',
     paso_actual: r.paso_actual || 'nombre',
     historial: Array.isArray(r.historial_chat) ? r.historial_chat : [],
   };
 }
 
-async function eliminarBorradorMascotaDeBd(idAdmin) {
-  await asegurarTablaBorradorMascota();
-  await pool.query(
-    'DELETE FROM borrador_registro_mascota_luna WHERE id_administrador = $1',
-    [idAdmin],
-  );
+async function listarBorradoresMascotaDeBd(idAdmin) {
+  await asegurarTablaBorradorMascota().catch(() => {});
+  try {
+    const res = await pool.query(
+      `SELECT id_borrador, id_administrador, nombre, especie, sexo, edad, unidad_edad,
+              to_char(fecha_nacimiento, 'YYYY-MM-DD') as fecha_nacimiento,
+              raza, tamano, es_cachorro_en_proceso, personalidad_definida,
+              personalidad, estado_salud, vacunas, esterilizado, detalle_salud, descripcion,
+              salud_consultada, historia_consultada, paso_actual,
+              jsonb_array_length(COALESCE(historial_chat, '[]'::jsonb)) as total_mensajes,
+              COALESCE(foto, NULL) as foto,
+              COALESCE(origen_registro, 'ia') as origen_registro,
+              fecha_actualizacion
+       FROM borrador_mascota_formulario_ia
+       ORDER BY fecha_actualizacion DESC`,
+    );
+    return res.rows || [];
+  } catch (err) {
+    console.error('Error listando de borrador_mascota_formulario_ia:', err.message);
+    return [];
+  }
+}
+
+async function eliminarBorradorMascotaDeBd(idOAdmin, idAdminSecundario = null, nombre = null) {
+  await asegurarTablaBorradorMascota().catch(() => {});
+  const id1 = String(idOAdmin || '').trim();
+  const id2 = String(idAdminSecundario || '').trim();
+  const nombreLimpio = String(nombre || '').trim();
+
+  try {
+    const res = await pool.query(
+      `DELETE FROM borrador_mascota_formulario_ia 
+       WHERE (id_administrador::text = $1 AND $1 <> '')
+          OR (id_administrador::text = $2 AND $2 <> '')
+          OR (id_borrador::text = $1 AND $1 <> '')
+          OR (id_borrador::text = $2 AND $2 <> '')
+          OR ($3::text <> '' AND LOWER(TRIM(nombre)) = LOWER(TRIM($3)))`,
+      [id1, id2, nombreLimpio],
+    );
+    if (res.rowCount === 0) {
+      await pool.query(
+        `DELETE FROM borrador_mascota_formulario_ia
+         WHERE id_administrador::text = $1 
+            OR id_administrador::text = $2
+            OR ($3::text <> '' AND LOWER(TRIM(nombre)) LIKE LOWER(CONCAT('%', TRIM($3), '%')))`,
+        [id1, id2, nombreLimpio],
+      );
+    }
+  } catch (err) {
+    console.error('Error eliminando de borrador_mascota_formulario_ia:', err.message);
+  }
+
+  // Eliminar definitivamente y sin excepción cualquier tabla antigua o con nombres anteriores
+  for (const tablaAntigua of ['borrador_registro_mascota_luna', 'borrador_mascota_ia', 'borrador_mascota']) {
+    try {
+      await pool.query(`DROP TABLE IF EXISTS ${tablaAntigua} CASCADE;`);
+    } catch (_) {}
+  }
 }
 
 function construirMensajesPasoAPaso({
@@ -833,7 +975,7 @@ function construirMensajesPasoAPaso({
         '   - `sexo`: "Macho" o "Hembra" (infiérelo también de artículos y adjetivos como "el perrito", "es juguetón", "la gatita", "es cariñosa").',
         '   - `edad`: entero positivo, y `unidad_edad`: "meses" o "anos".',
         '   - `tamano`: "Pequeño", "Mediano" o "Grande".',
-        '   - `raza`: si la menciona ponla, si no la menciona o dice mestizo/criollo déjala o pon "Desconocida / Mestizo".',
+        '   - `raza`: si menciona una raza concreta ponla. Si dice que no tiene raza, que es criollo, mestizo, combinado, cruzado, mixto, callejero, desconocida o algo parecido, pon exactamente "Mestizo". Nunca uses "Desconocida".',
         '   - `personalidad`: valores enteros de 1 a 5 en `nivel_energia`, `sociabilidad_personas`, `sociabilidad_mascotas`, `independencia`, `nivel_juego`, `carino`, `proteccion`, `tolerancia_soledad`, `adaptabilidad`. Si es un cachorro muy pequeño con personalidad en desarrollo, pon `es_cachorro_en_proceso: true` y `personalidad_definida: false`.',
         '   - `salud_consultada`: `true` cuando responda sobre salud, vacunas o esterilización. Asigna `vacunas: true/false`, `esterilizado: true/false`, `detalle_salud` (sin inventar diagnósticos) y `estado_salud` usando solo valores de:',
         '     ["No presenta necesidades veterinarias pendientes.", "Requiere vacunación.", "Vacunación al día.", "Requiere esterilización.", "Esterilización realizada.", "Requiere desparasitación.", "Requiere exámenes médicos.", "Necesita medicamentos.", "Se encuentra en tratamiento veterinario.", "Requiere cuidados especiales."]',
@@ -938,8 +1080,9 @@ async function procesarTurnoEntrevistaMascota({
       const borradorExistente = await obtenerBorradorMascotaDeBd(idAdmin);
       const tieneRespuestasUsuario =
         borradorExistente &&
-        Array.isArray(borradorExistente.historial) &&
-        borradorExistente.historial.some((m) => m.rol === 'usuario');
+        ((Array.isArray(borradorExistente.historial) &&
+          borradorExistente.historial.some((m) => m.rol === 'usuario')) ||
+         Boolean(borradorExistente.ficha?.nombre || borradorExistente.ficha?.especie));
       if (tieneRespuestasUsuario) {
         const sigPaso = determinarSiguientePaso(borradorExistente.ficha);
         const faltantes = camposFaltantes(borradorExistente.ficha);
@@ -1025,7 +1168,9 @@ async function procesarTurnoEntrevistaMascota({
   const siguientePaso = determinarSiguientePaso(fichaActualizada);
   const completada = !necesitaAclaracion && siguientePaso === null;
   if (completada && !fichaActualizada.raza) {
-    fichaActualizada.raza = 'Desconocida / Mestizo';
+    fichaActualizada.raza = 'Mestizo';
+  } else if (fichaActualizada.raza) {
+    fichaActualizada.raza = canonRaza(fichaActualizada.raza, limites.raza || 50);
   }
   const faltantes = camposFaltantes(fichaActualizada);
   const porcentajeProgreso = calcularPorcentajeProgreso(fichaActualizada);
@@ -1088,6 +1233,7 @@ module.exports = {
   calcularPorcentajeProgreso,
   guardarBorradorMascotaEnBd,
   obtenerBorradorMascotaDeBd,
+  listarBorradoresMascotaDeBd,
   eliminarBorradorMascotaDeBd,
   procesarTurnoEntrevistaMascota,
 };

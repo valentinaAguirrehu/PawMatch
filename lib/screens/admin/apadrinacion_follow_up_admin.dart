@@ -4,6 +4,7 @@ import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/models/seguimiento_apadrinamiento.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/admin/apadrinamiento_form__follow_up.dart';
+import 'package:paw_match/screens/admin/cancelacion_apadrinamiento_form.dart';
 import 'package:paw_match/screens/apadrinamiento/apadrinamiento_admin_screen.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
@@ -18,6 +19,26 @@ import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 import 'package:paw_match/widgets/star_rating_selector.dart';
 import 'package:paw_match/widgets/tarjeta_seguimiento.dart';
+
+String? _fotoMascota(dynamic fotos) {
+  if (fotos is List && fotos.isNotEmpty) {
+    final primera = fotos.first.toString().trim();
+    if (primera.isNotEmpty && primera != 'null') return primera;
+  }
+  final texto = fotos?.toString().trim() ?? '';
+  if (texto.isEmpty || texto == 'null' || texto == '[]') return null;
+  if (texto.startsWith('[')) {
+    final primera = texto
+        .replaceAll('[', '')
+        .replaceAll(']', '')
+        .replaceAll('"', '')
+        .split(',')
+        .first
+        .trim();
+    return primera.isEmpty ? null : primera;
+  }
+  return texto;
+}
 
 /// Pantalla administrativa de Seguimiento de Apadrinamientos con vista de lista y calendario.
 class ApadrinacionFollowUpAdminScreen extends StatefulWidget {
@@ -35,6 +56,7 @@ class _ApadrinacionFollowUpAdminScreenState
   late Future<List<ApadrinamientoActivoSeguimiento>> _futureActivos;
   late Future<List<ItemCalendarioSeguimiento>> _futureCalendario;
   String _busqueda = '';
+  bool _verCanceladas = false;
 
   @override
   void initState() {
@@ -219,7 +241,7 @@ class _ApadrinacionFollowUpAdminScreenState
                               ),
                               Text(
                                 'Padrino: ${item.padrinoNombre}',
-                                style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                                style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                               ),
                             ],
                           ),
@@ -241,29 +263,30 @@ class _ApadrinacionFollowUpAdminScreenState
                         }
                         final lista = snap.data ?? [];
                         if (lista.isEmpty) {
-                          return Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'No se han registrado seguimientos para este apadrinamiento.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(color: Colors.grey.shade600),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(
-                                    'El reporte se habilita a partir de 3 seguimientos (${item.seguimientosEnCiclo}/3)',
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      color: Colors.grey.shade600,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
+                          return ListView(
+                            controller: scrollController,
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                            children: [
+                              if (!item.apadrinamientoCancelado) ...[
+                                _botonCancelarApadrinamiento(item),
+                                const SizedBox(height: 24),
+                              ],
+                              Text(
+                                'No se han registrado seguimientos para este apadrinamiento.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: AppColors.grisTexto),
                               ),
-                            ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'El reporte se habilita a partir de 3 seguimientos (${item.seguimientosEnCiclo}/3)',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: AppColors.grisTexto,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           );
                         }
 
@@ -284,6 +307,10 @@ class _ApadrinacionFollowUpAdminScreenState
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
                           children: [
+                            if (!item.apadrinamientoCancelado) ...[
+                              _botonCancelarApadrinamiento(item),
+                              const SizedBox(height: 12),
+                            ],
                             // FILAS DE REPORTES PDF CON BOTONES SEPARADOS "VER" Y "DESCARGAR" (CAMBIO 4)
                             if (ciclosConReporte.isNotEmpty) ...[
                               const Padding(
@@ -332,7 +359,7 @@ class _ApadrinacionFollowUpAdminScreenState
                                               ev != null
                                                   ? 'Evaluado (${ev.clasificacionTexto} · ${ev.promedio.toStringAsFixed(1)}/5)'
                                                   : 'Ciclo completo (3/3)',
-                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                                              style: TextStyle(fontSize: 11, color: AppColors.grisTexto),
                                             ),
                                           ],
                                         ),
@@ -351,7 +378,10 @@ class _ApadrinacionFollowUpAdminScreenState
                                             padrinoNombre: item.padrinoNombre,
                                             padrinoCorreo: item.padrinoCorreo,
                                             padrinoTelefono: item.padrinoTelefono,
+                                            padrinoCedula: item.padrinoCedula,
+                                            fechaInicio: item.fechaInicio,
                                             mascotaNombre: item.mascotaNombre,
+                                            mascotaFoto: _fotoMascota(item.mascotaFotos),
                                             mascotaEspecie: item.mascotaEspecie,
                                             mascotaRaza: item.mascotaRaza,
                                             mascotaEdad: '${item.mascotaEdad} ${item.mascotaUnidadEdad}',
@@ -386,7 +416,10 @@ class _ApadrinacionFollowUpAdminScreenState
                                             padrinoNombre: item.padrinoNombre,
                                             padrinoCorreo: item.padrinoCorreo,
                                             padrinoTelefono: item.padrinoTelefono,
+                                            padrinoCedula: item.padrinoCedula,
+                                            fechaInicio: item.fechaInicio,
                                             mascotaNombre: item.mascotaNombre,
+                                            mascotaFoto: _fotoMascota(item.mascotaFotos),
                                             mascotaEspecie: item.mascotaEspecie,
                                             mascotaRaza: item.mascotaRaza,
                                             mascotaEdad: '${item.mascotaEdad} ${item.mascotaUnidadEdad}',
@@ -423,7 +456,7 @@ class _ApadrinacionFollowUpAdminScreenState
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.info_outline_rounded, size: 17, color: Colors.grey.shade700),
+                                    Icon(Icons.info_outline_rounded, size: 17, color: AppColors.grisTexto),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
@@ -464,6 +497,55 @@ class _ApadrinacionFollowUpAdminScreenState
           },
         );
       },
+    );
+  }
+
+  void _abrirCancelacion(ApadrinamientoActivoSeguimiento item) {
+    final fotos = item.mascotaFotos;
+    String? foto;
+    if (fotos is List && fotos.isNotEmpty) {
+      foto = fotos.first.toString();
+    } else {
+      final texto = fotos?.toString() ?? '';
+      if (texto.isNotEmpty && texto != 'null') foto = texto;
+    }
+    final inicio = item.fechaInicio;
+    final inicioTexto = inicio == null
+        ? 'Sin fecha'
+        : '${inicio.day.toString().padLeft(2, '0')}/${inicio.month.toString().padLeft(2, '0')}/${inicio.year}';
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CancelacionApadrinamientoForm(
+          idSolicitud: item.idSolicitud,
+          nombreMascota: item.mascotaNombre,
+          fotoMascota: foto,
+          padrinoNombre: item.padrinoNombre,
+          inicioTexto: inicioTexto,
+          onGuardadoExitoso: () {
+            Navigator.of(context).pop();
+            _recargar();
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _botonCancelarApadrinamiento(ApadrinamientoActivoSeguimiento item) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.rosa,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        onPressed: () => _abrirCancelacion(item),
+        child: const Text(
+          'Cancelar apadrinamiento',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
     );
   }
 
@@ -651,6 +733,69 @@ class _ApadrinacionFollowUpAdminScreenState
     }
   }
 
+  void _verMotivo(ApadrinamientoActivoSeguimiento item) {
+    final fecha = item.fechaCancelacion;
+    const meses = [
+      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+      'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
+    ];
+    final fechaTexto = fecha == null
+        ? 'Sin fecha registrada'
+        : '${fecha.day} ${meses[fecha.month - 1]} ${fecha.year}';
+    final motivo = item.motivoCancelacion?.trim() ?? '';
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Apadrinamiento cancelado',
+          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Mascota: ${item.mascotaNombre}'),
+            const SizedBox(height: 4),
+            Text('Padrino: ${item.padrinoNombre}'),
+            const SizedBox(height: 4),
+            Text('Fecha: $fechaTexto'),
+            const SizedBox(height: 12),
+            const Text('Motivo', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            Text(motivo.isEmpty ? 'No hay un motivo registrado.' : motivo),
+            if ((item.observacionCancelacion ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text('Observación', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text(item.observacionCancelacion!.trim()),
+            ],
+            if ((item.fotoCancelacion ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text('Fotografía', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(
+                  height: 140,
+                  width: double.infinity,
+                  child: PetImage(url: item.fotoCancelacion),
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _evaluarPadrino(ApadrinamientoActivoSeguimiento item) {
     showModalBottomSheet<void>(
       context: context,
@@ -671,7 +816,7 @@ class _ApadrinacionFollowUpAdminScreenState
         children: [
           // Selector de pestañas: Lista Activos vs Calendario
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            margin: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
@@ -682,19 +827,21 @@ class _ApadrinacionFollowUpAdminScreenState
               indicatorColor: AppColors.rosa,
               indicatorSize: TabBarIndicatorSize.tab,
               labelColor: AppColors.rosa,
-              unselectedLabelColor: Colors.grey.shade600,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+              unselectedLabelColor: AppColors.grisTexto,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
               labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-              tabs: const [
+              tabs: [
                 Tab(
-                  height: 88,
+                  height: 56,
                   child: _EtiquetaPestana(
                     icono: Icons.list_alt_rounded,
-                    texto: 'Apadrinamientos\nactivos',
+                    texto: _verCanceladas
+                        ? 'Apadrinamientos\ncancelados'
+                        : 'Apadrinamientos\nactivos',
                   ),
                 ),
-                Tab(
-                  height: 88,
+                const Tab(
+                  height: 56,
                   child: _EtiquetaPestana(
                     icono: Icons.calendar_month_rounded,
                     texto: 'Próximos\nseguimientos',
@@ -736,12 +883,14 @@ class _ApadrinacionFollowUpAdminScreenState
           );
         }
 
-        final mascotas = _filtrar(snap.data ?? []);
+        final mascotas = _filtrar(snap.data ?? [])
+            .where((item) => item.apadrinamientoCancelado == _verCanceladas)
+            .toList();
 
         return Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
               child: TextField(
                 onChanged: (valor) => setState(() => _busqueda = valor),
                 decoration: InputDecoration(
@@ -749,7 +898,8 @@ class _ApadrinacionFollowUpAdminScreenState
                   prefixIcon: const Icon(Icons.search, color: AppColors.rosa),
                   filled: true,
                   fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
                     borderSide: const BorderSide(color: Color(0xFFF0E5EC)),
@@ -762,13 +912,13 @@ class _ApadrinacionFollowUpAdminScreenState
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+              padding: const EdgeInsets.fromLTRB(16, 2, 8, 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     '${mascotas.length} '
-                    '${mascotas.length == 1 ? 'apadrinamiento activo' : 'apadrinamientos activos'}',
+                    '${_verCanceladas ? (mascotas.length == 1 ? 'apadrinamiento cancelado' : 'apadrinamientos cancelados') : (mascotas.length == 1 ? 'apadrinamiento activo' : 'apadrinamientos activos')}',
                     style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       color: AppColors.texto,
@@ -777,9 +927,16 @@ class _ApadrinacionFollowUpAdminScreenState
                   ),
                   TextButton.icon(
                     style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                    onPressed: _recargar,
-                    icon: const Icon(Icons.refresh, size: 16, color: AppColors.rosa),
-                    label: const Text('Actualizar', style: TextStyle(fontSize: 12, color: AppColors.rosa)),
+                    onPressed: () => setState(() => _verCanceladas = !_verCanceladas),
+                    icon: Icon(
+                      _verCanceladas ? Icons.favorite_rounded : Icons.heart_broken_rounded,
+                      size: 16,
+                      color: AppColors.rosa,
+                    ),
+                    label: Text(
+                      _verCanceladas ? 'Ver Activas' : 'Ver Canceladas',
+                      style: const TextStyle(fontSize: 12, color: AppColors.rosa),
+                    ),
                   ),
                 ],
               ),
@@ -790,11 +947,12 @@ class _ApadrinacionFollowUpAdminScreenState
                 child: mascotas.isEmpty
                     ? ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        children: const [
-                          SizedBox(height: 80),
+                        children: [
+                          const SizedBox(height: 80),
                           _Vacio(
-                            texto:
-                                'No hay apadrinamientos activos con contrato firmado en este momento.',
+                            texto: _verCanceladas
+                                ? 'No hay apadrinamientos cancelados.'
+                                : 'No hay apadrinamientos activos con contrato firmado en este momento.',
                           ),
                         ],
                       )
@@ -808,7 +966,9 @@ class _ApadrinacionFollowUpAdminScreenState
                           return _TarjetaSeguimientoAdmin(
                             item: item,
                             onVerDetalles: () => _verDetallesSolicitud(item),
-                            onSeguimiento: () => _realizarSeguimiento(item),
+                            onSeguimiento: item.apadrinamientoCancelado
+                                ? () => _verMotivo(item)
+                                : () => _realizarSeguimiento(item),
                             onVerHistorial: () => _verHistorial(item),
                             onCancelarApadrinamiento: () => _dialogoCancelarApadrinamiento(item),
                             onEvaluarPadrino: () => _evaluarPadrino(item),
@@ -860,12 +1020,13 @@ class _EtiquetaPestana extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(icono),
-        const SizedBox(height: 6),
+        Icon(icono, size: 18),
+        const SizedBox(height: 2),
         Text(
           texto,
           textAlign: TextAlign.center,
           maxLines: 2,
+          style: const TextStyle(fontSize: 11.5, height: 1.05, fontWeight: FontWeight.w800),
         ),
       ],
     );
@@ -902,8 +1063,9 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tieneAlerta = item.tieneTresIncumplimientos;
-    final proximoVencido = item.proximoSeguimientoVencido;
+    final cancelado = item.apadrinamientoCancelado;
+    final tieneAlerta = !cancelado && item.tieneTresIncumplimientos;
+    final proximoVencido = !cancelado && item.proximoSeguimientoVencido;
 
     return Card(
       elevation: 2,
@@ -978,7 +1140,7 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
             ],
 
             // BANNER EVALUACIÓN PENDIENTE (Al completar 3/3 en el ciclo actual)
-            if (item.evaluacionPendiente) ...[
+            if (!cancelado && item.evaluacionPendiente) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1033,7 +1195,7 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
             ],
 
             // BANNER CICLO NUEVO POR COMENZAR (0/3 en un ciclo nuevo)
-            if (!item.evaluacionPendiente && item.seguimientosEnCiclo == 0 && item.cicloActual > 1) ...[
+            if (!cancelado && !item.evaluacionPendiente && item.seguimientosEnCiclo == 0 && item.cicloActual > 1) ...[
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1110,9 +1272,28 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 2),
+                      if (cancelado) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.rosaSuave,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.rosa),
+                          ),
+                          child: const Text(
+                            'Apadrinamiento cancelado',
+                            style: TextStyle(
+                              color: AppColors.rosa,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
                       Text(
                         item.resumenMascota,
-                        style: TextStyle(color: Colors.grey.shade700, fontSize: 13),
+                        style: TextStyle(color: AppColors.grisTexto, fontSize: 13),
                       ),
                       const SizedBox(height: 2),
                       Text(
@@ -1121,7 +1302,7 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                       ),
                       Text(
                         'Aporte: ${item.resumenAporte}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
                       ),
                     ],
                   ),
@@ -1129,6 +1310,7 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
               ],
             ),
 
+            if (!cancelado) ...[
             // BARRA DE PROGRESO DEL CICLO ACTUAL (CAMBIO 1)
             Container(
               margin: const EdgeInsets.only(top: 10, bottom: 6),
@@ -1191,7 +1373,7 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.history, size: 15, color: Colors.grey.shade600),
+                      Icon(Icons.history, size: 15, color: AppColors.grisTexto),
                       const SizedBox(width: 5),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1239,6 +1421,7 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                 ],
               ),
             ),
+            ],
 
             const SizedBox(height: 12),
 
@@ -1265,17 +1448,23 @@ class _TarjetaSeguimientoAdmin extends StatelessWidget {
                   flex: 2,
                   child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: item.evaluacionPendiente ? const Color(0xFFE65100) : AppColors.rosa,
+                      backgroundColor: cancelado
+                          ? AppColors.rosa
+                          : (item.evaluacionPendiente ? const Color(0xFFE65100) : AppColors.rosa),
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    onPressed: item.evaluacionPendiente ? onEvaluarPadrino : onSeguimiento,
+                    onPressed: cancelado
+                        ? onSeguimiento
+                        : (item.evaluacionPendiente ? onEvaluarPadrino : onSeguimiento),
                     child: Text(
-                      item.evaluacionPendiente
+                      cancelado
+                          ? 'Ver motivo'
+                          : (item.evaluacionPendiente
                           ? 'Evaluar Ciclo ${item.cicloActual}'
                           : (item.seguimientosEnCiclo == 0 && item.cicloActual > 1
                               ? 'Comenzar Ciclo ${item.cicloActual}'
-                              : 'Realizar Seguimiento'),
+                              : 'Realizar Seguimiento')),
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                     ),
@@ -1306,7 +1495,7 @@ class _Vacio extends StatelessWidget {
           Text(
             texto,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
+            style: TextStyle(color: AppColors.grisTexto, fontSize: 15),
           ),
         ],
       ),
@@ -1337,7 +1526,7 @@ class _ErrorCarga extends StatelessWidget {
             const SizedBox(height: 12),
             Text(mensaje, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 6),
-            Text(detalle, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+            Text(detalle, textAlign: TextAlign.center, style: TextStyle(color: AppColors.grisTexto, fontSize: 13)),
             const SizedBox(height: 14),
             FilledButton.icon(
               style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
@@ -1370,13 +1559,6 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
   final _formKey = GlobalKey<FormState>();
   final _notaCtrl = TextEditingController();
   bool _guardando = false;
-  late Future<List<SeguimientoApadrinamientoItem>> _historialFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _historialFuture = SeguimientoApadrinamientoService.obtenerHistorial(widget.item.idSolicitud);
-  }
 
   @override
   void dispose() {
@@ -1605,7 +1787,7 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
                         ),
                         Text(
                           'Padrino: ${item.padrinoNombre} · Mascota: ${item.mascotaNombre}',
-                          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700),
+                          style: TextStyle(fontSize: 12.5, color: AppColors.grisTexto),
                         ),
                       ],
                     ),
@@ -1666,7 +1848,7 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
                               const SizedBox(width: 6),
                               Text(
                                 '(Ciclo ${item.cicloActual} · ${item.seguimientosEnCiclo}/3 seg.)',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
                               ),
                             ],
                           ),
@@ -1679,137 +1861,21 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
 
               const SizedBox(height: 16),
 
-              // Historial resumido del ciclo
-              FutureBuilder<List<SeguimientoApadrinamientoItem>>(
-                future: _historialFuture,
-                builder: (context, snap) {
-                  final seguimientos = snap.data ?? [];
-                  final cargando = snap.connectionState == ConnectionState.waiting;
-                  final segsCiclo = seguimientos
-                      .where((s) => s.ciclo == item.cicloActual || seguimientos.length <= 3)
-                      .toList();
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Seguimientos del ciclo actual:',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                      ),
-                      const SizedBox(height: 8),
-                      if (cargando)
-                        const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-                      else if (segsCiclo.isEmpty)
-                        Text('Sin seguimientos registrados en este ciclo',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13))
-                      else
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFC),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFECEFF5)),
-                          ),
-                          child: ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: segsCiclo.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (_, idx) {
-                              final s = segsCiclo[idx];
-                              return ListTile(
-                                dense: true,
-                                leading: CircleAvatar(
-                                  radius: 14,
-                                  backgroundColor: s.cumplimiento ? Colors.green.shade100 : Colors.red.shade100,
-                                  child: Icon(
-                                    s.cumplimiento ? Icons.check : Icons.close,
-                                    size: 16,
-                                    color: s.cumplimiento ? Colors.green.shade800 : Colors.red.shade800,
-                                  ),
-                                ),
-                                title: Text(
-                                  '#${s.numeroSeguimiento} · ${s.fechaSeguimiento.day}/${s.fechaSeguimiento.month}/${s.fechaSeguimiento.year} · ${s.calificacion} / 5',
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
-                                ),
-                                subtitle: Text(
-                                  s.observaciones.isNotEmpty ? s.observaciones : 'Sin observaciones',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 11.5),
-                                ),
-                                trailing: Text(
-                                  s.adminNombre.isNotEmpty ? s.adminNombre : 'Admin',
-                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-
-              const SizedBox(height: 20),
-
-              // Alerta de calificación crítica si aplica
-              if (esMal) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFEBEE),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.red.shade300, width: 1.2),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 24),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Padrino con calificación crítica (< 3.0)',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w800,
-                                fontSize: 13,
-                                color: Colors.red.shade900,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Para continuar con el apadrinamiento, la nota explicativa es obligatoria.',
-                              style: TextStyle(fontSize: 12, color: Colors.red.shade800, height: 1.3),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-              ],
-
-              // Nota de la decisión
               TextFormField(
                 controller: _notaCtrl,
-                maxLines: 3,
+                maxLines: 4,
+                textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
-                  labelText: esMal
-                      ? 'Nota de la decisión (Obligatoria para seguir) *'
-                      : 'Nota u observaciones del ciclo (Opcional)',
-                  hintText: esMal
-                      ? 'Ej. Se concede continuidad bajo compromiso de pago puntual.'
-                      : 'Ej. Excelente cumplimiento y puntualidad en los aportes.',
+                  labelText: 'Observación *',
+                  hintText: 'Escribe la observación de esta evaluación.',
+                  alignLabelWithHint: true,
                   filled: true,
                   fillColor: const Color(0xFFF9FAFC),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 validator: (v) {
-                  if (esMal && (v == null || v.trim().isEmpty)) {
-                    return 'La nota es obligatoria para continuar con un padrino con promedio < 3';
+                  if (v == null || v.trim().isEmpty) {
+                    return 'La observación es obligatoria';
                   }
                   return null;
                 },
@@ -1822,11 +1888,26 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
               if (_guardando)
                 const Center(child: CircularProgressIndicator())
               else
-                Column(
+                Row(
                   children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                          side: BorderSide(color: Colors.red.shade700, width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        onPressed: _dialogoConfirmarCancelar,
+                        child: const Text(
+                          'Cancelar',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.rosa,
                           padding: const EdgeInsets.symmetric(vertical: 13),
@@ -1837,28 +1918,9 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
                             _ejecutarDecision('continuar');
                           }
                         },
-                        icon: const Icon(Icons.check_circle_outline_rounded),
-                        label: Text(
-                          'Seguir con el apadrinamiento (Cerrar Ciclo ${item.cicloActual} y comenzar Ciclo ${item.cicloActual + 1})',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red.shade700,
-                          side: BorderSide(color: Colors.red.shade700, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        ),
-                        onPressed: _dialogoConfirmarCancelar,
-                        icon: const Icon(Icons.cancel_outlined),
-                        label: const Text(
-                          'Cancelar apadrinamiento',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        child: const Text(
+                          'Guardar',
+                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                         ),
                       ),
                     ),

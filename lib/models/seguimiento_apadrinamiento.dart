@@ -239,6 +239,7 @@ class ApadrinamientoActivoSeguimiento {
   final String padrinoNombre;
   final String padrinoCorreo;
   final String padrinoTelefono;
+  final String padrinoCedula;
   final String? padrinoFoto;
   final bool padrinoBloqueado;
   final double calificacionPromedio;
@@ -264,6 +265,8 @@ class ApadrinamientoActivoSeguimiento {
 
   // Cancelación
   final String? motivoCancelacion;
+  final String? observacionCancelacion;
+  final String? fotoCancelacion;
   final DateTime? fechaCancelacion;
 
   // Evaluación del administrador
@@ -290,6 +293,8 @@ class ApadrinamientoActivoSeguimiento {
     this.aportaOtro = false,
     this.detalleOtro,
     this.motivoCancelacion,
+    this.observacionCancelacion,
+    this.fotoCancelacion,
     this.fechaCancelacion,
     this.decisionAdmin,
     this.notaDecision,
@@ -307,6 +312,7 @@ class ApadrinamientoActivoSeguimiento {
     required this.padrinoNombre,
     required this.padrinoCorreo,
     required this.padrinoTelefono,
+    this.padrinoCedula = '',
     this.padrinoFoto,
     required this.padrinoBloqueado,
     required this.calificacionPromedio,
@@ -324,6 +330,9 @@ class ApadrinamientoActivoSeguimiento {
     required this.tieneTresIncumplimientos,
     required this.ultimoCorreoAlertaEnviado,
   });
+
+  bool get apadrinamientoCancelado =>
+      estado == 'cancelada' || estadoApadrinamiento == 'cancelada';
 
   bool get esMalPadrino => (evaluacionPendiente ? promedioCicloActual : calificacionPromedio) < 3.0;
   bool get esBuenPadrino => (evaluacionPendiente ? promedioCicloActual : calificacionPromedio) >= 4.0;
@@ -416,6 +425,7 @@ class ApadrinamientoActivoSeguimiento {
       padrinoNombre: nombreCompleto.isNotEmpty ? nombreCompleto : 'Padrino',
       padrinoCorreo: (json['usuario_correo'] ?? json['correo'] ?? '').toString(),
       padrinoTelefono: (json['usuario_telefono'] ?? json['telefono'] ?? '').toString(),
+      padrinoCedula: (json['usuario_cedula'] ?? json['documento_identidad'] ?? '').toString(),
       padrinoFoto: json['usuario_foto']?.toString(),
       padrinoBloqueado: json['usuario_bloqueado'] == true || json['bloqueado_apadrinar'] == true,
       calificacionPromedio: double.tryParse(json['calificacion_promedio']?.toString() ?? '0') ?? 0.0,
@@ -435,6 +445,8 @@ class ApadrinamientoActivoSeguimiento {
       tieneTresIncumplimientos: json['tiene_tres_incumplimientos'] == true || json['tiene_tres_incumplimientos'] == 'true',
       ultimoCorreoAlertaEnviado: json['ultimo_correo_enviado'] == true || json['ultimo_correo_enviado'] == 'true',
       motivoCancelacion: json['motivo_cancelacion']?.toString(),
+      observacionCancelacion: json['observacion_cancelacion']?.toString(),
+      fotoCancelacion: json['foto_cancelacion']?.toString(),
       fechaCancelacion: parseFecha(json['fecha_cancelacion']),
       decisionAdmin: json['decision_admin']?.toString(),
       notaDecision: json['nota_decision']?.toString(),
