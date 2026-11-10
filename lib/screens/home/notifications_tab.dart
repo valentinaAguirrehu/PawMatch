@@ -114,7 +114,7 @@ class NotificationsTab extends StatelessWidget {
                       : 'Al día con tus notificaciones',
                   style: TextStyle(
                     fontSize: 13,
-                    color: total > 0 ? AppColors.rosa : Colors.grey.shade600,
+                    color: total > 0 ? AppColors.rosa : AppColors.grisTexto,
                     fontWeight: total > 0 ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
@@ -214,7 +214,7 @@ class NotificationsTab extends StatelessWidget {
                                     'Escríbele por WhatsApp a ${FundacionInfo.nombre}.',
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.grey.shade600,
+                                      color: AppColors.grisTexto,
                                     ),
                                   ),
                                 ],
@@ -345,7 +345,7 @@ class _TarjetaNotificacion extends StatelessWidget {
                       subtitulo,
                       style: TextStyle(
                         fontSize: 12.5,
-                        color: Colors.grey.shade600,
+                        color: AppColors.grisTexto,
                         height: 1.35,
                       ),
                     ),

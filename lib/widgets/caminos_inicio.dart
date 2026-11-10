@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/widgets/fila_punto.dart';
 import 'package:paw_match/widgets/foto_tarjeta.dart';
 
@@ -124,7 +125,7 @@ class _CaminosInicioState extends State<CaminosInicio> {
                         _caminos[idx].etiqueta,
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          color: activo ? Colors.white : Colors.grey.shade700,
+                          color: activo ? Colors.white : AppColors.grisTexto,
                         ),
                       ),
                     ),

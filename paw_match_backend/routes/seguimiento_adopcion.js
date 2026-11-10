@@ -335,9 +335,24 @@ router.get('/activos', requireAdmin, async (_req, res) => {
   }
 });
 
-router.get('/historial/:idSolicitud', requireAdmin, async (req, res) => {
+router.get('/historial/:idSolicitud', async (req, res) => {
+  const { idSolicitud } = req.params;
+  const usuario = await autenticarUsuario(req);
+  if (!usuario) {
+    return res.status(401).json({ error: 'Debes iniciar sesión para consultar el historial' });
+  }
+
   try {
-    const { idSolicitud } = req.params;
+    if (!esAdministrador(usuario.rol)) {
+      const dueno = await pool.query(
+        'SELECT id_usuario FROM solicitudadopcion WHERE id_solicitud_adopcion = $1',
+        [idSolicitud]
+      );
+      if (dueno.rows.length === 0 || dueno.rows[0].id_usuario !== usuario.id_usuario) {
+        return res.status(403).json({ error: 'No tienes autorización para ver este historial' });
+      }
+    }
+
     const resultado = await pool.query(
       `SELECT
          s.*,

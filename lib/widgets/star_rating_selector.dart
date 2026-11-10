@@ -145,7 +145,7 @@ class StarRatingBadge extends StatelessWidget {
               '($totalSeguimientos)',
               style: TextStyle(
                 fontSize: 11,
-                color: Colors.grey.shade700,
+                color: AppColors.grisTexto,
                 fontWeight: FontWeight.w500,
               ),
             ),

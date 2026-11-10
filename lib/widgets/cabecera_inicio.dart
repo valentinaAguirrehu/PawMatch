@@ -54,7 +54,7 @@ class CabeceraInicio extends StatelessWidget {
                     'Hola, bienvenido',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey.shade700,
+                      color: AppColors.grisTexto,
                     ),
                   ),
                   const SizedBox(height: 2),

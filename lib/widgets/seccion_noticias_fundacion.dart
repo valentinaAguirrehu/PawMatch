@@ -220,7 +220,7 @@ class _SeccionNoticiasFundacionState extends State<SeccionNoticiasFundacion> {
                         'Eventos, jornadas, rescates y novedades destacadas.',
                         style: TextStyle(
                           fontSize: 12.5,
-                          color: Colors.grey.shade700,
+                          color: AppColors.grisTexto,
                           height: 1.35,
                         ),
                       ),
@@ -299,7 +299,7 @@ class _SeccionNoticiasFundacionState extends State<SeccionNoticiasFundacion> {
                       Text(
                         'Próximamente la fundación compartirá aquí sus eventos y rescates.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+                        style: TextStyle(fontSize: 12.5, color: AppColors.grisTexto),
                       ),
                     ],
                   ),

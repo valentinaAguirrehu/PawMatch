@@ -355,7 +355,14 @@ class _MisApadrinamientosScreenState extends State<MisApadrinamientosScreen> {
               iconoTitulo: Icons.favorite_rounded,
               titulo: 'Mis Apadrinamientos',
               onCerrarSesion: _confirmarCerrarSesion,
-              forzarHuella: true,
+              onVolver: () {
+                final ir = Navegacion.volverANotificaciones;
+                if (ir != null) {
+                  ir();
+                  return;
+                }
+                if (Navigator.canPop(context)) Navigator.pop(context);
+              },
             ),
             Expanded(
               child: FutureBuilder<List<SolicitudApadrinamiento>>(
@@ -963,7 +970,12 @@ class _TarjetaApadrinamientoPrincipalState
           padrinoNombre: widget.solicitud.solicitanteNombreCompleto,
           padrinoCorreo: widget.solicitud.solicitanteCorreo,
           padrinoTelefono: widget.solicitud.solicitanteTelefono,
+          padrinoCedula: widget.solicitud.solicitanteCedula,
+          fechaInicio: DateTime.tryParse(
+            (widget.solicitud.fechaInicioApadrinamiento ?? '').replaceFirst(' ', 'T'),
+          ),
           mascotaNombre: widget.solicitud.mascotaNombre,
+          mascotaFoto: widget.solicitud.mascotaFotos,
           mascotaEspecie: widget.solicitud.mascotaEspecie,
           mascotaRaza: widget.solicitud.mascotaRaza,
           mascotaEdad: widget.solicitud.mascotaEdad != null
@@ -986,7 +998,12 @@ class _TarjetaApadrinamientoPrincipalState
           padrinoNombre: widget.solicitud.solicitanteNombreCompleto,
           padrinoCorreo: widget.solicitud.solicitanteCorreo,
           padrinoTelefono: widget.solicitud.solicitanteTelefono,
+          padrinoCedula: widget.solicitud.solicitanteCedula,
+          fechaInicio: DateTime.tryParse(
+            (widget.solicitud.fechaInicioApadrinamiento ?? '').replaceFirst(' ', 'T'),
+          ),
           mascotaNombre: widget.solicitud.mascotaNombre,
+          mascotaFoto: widget.solicitud.mascotaFotos,
           mascotaEspecie: widget.solicitud.mascotaEspecie,
           mascotaRaza: widget.solicitud.mascotaRaza,
           mascotaEdad: widget.solicitud.mascotaEdad != null
@@ -1553,8 +1570,10 @@ class _TarjetaApadrinamientoPrincipalState
           ],
         ),
         const SizedBox(height: 4),
-        _construirBadgeCorreo(s),
-        const SizedBox(height: 6),
+        if (s.esPendiente) ...[
+          _construirBadgeCorreo(s),
+          const SizedBox(height: 6),
+        ],
         Row(
           children: [
             const Icon(Icons.calendar_today_rounded, size: 13, color: Color(0xFFE91E63)),
@@ -1705,22 +1724,18 @@ class _TarjetaApadrinamientoPrincipalState
   }
 
   Widget _construirBadgeEstado(SolicitudApadrinamiento s) {
-    final bool aprobada = s.esAprobada;
-    final bool rechazada = s.esRechazada;
+    final bool aprobada = s.etiquetaEstado == 'Aprobada';
+    final bool cerrada = s.etiquetaEstado != 'Pendiente' && !aprobada;
 
     final Color fondo = aprobada
         ? const Color(0xFFDCFCE7)
-        : (rechazada ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7));
+        : (cerrada ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7));
     final Color texto = aprobada
         ? const Color(0xFF15803D)
-        : (rechazada ? const Color(0xFFB91C1C) : const Color(0xFFB45309));
+        : (cerrada ? const Color(0xFFB91C1C) : const Color(0xFFB45309));
     final IconData icono = aprobada
         ? Icons.check_circle_rounded
-        : (rechazada ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
-
-    final String etiqueta = aprobada
-        ? 'Aprobada'
-        : (rechazada ? 'Rechazada' : 'Pendiente');
+        : (cerrada ? Icons.cancel_rounded : Icons.hourglass_top_rounded);
 
     return FittedBox(
       fit: BoxFit.scaleDown,
@@ -1737,7 +1752,7 @@ class _TarjetaApadrinamientoPrincipalState
             Icon(icono, size: 14, color: texto),
             const SizedBox(width: 4),
             Text(
-              etiqueta,
+              s.etiquetaEstado,
               style: TextStyle(
                 fontSize: 11.5,
                 fontWeight: FontWeight.w800,
@@ -2130,12 +2145,16 @@ class _TarjetaOtraApadrinacion extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = solicitud;
 
-    final Color colorEstado = s.esAprobada
+    final Color colorEstado = s.etiquetaEstado == 'Aprobada'
         ? const Color(0xFF15803D)
-        : (s.esRechazada ? const Color(0xFFB91C1C) : const Color(0xFFB45309));
-    final Color fondoEstado = s.esAprobada
+        : (s.etiquetaEstado == 'Pendiente'
+            ? const Color(0xFFB45309)
+            : const Color(0xFFB91C1C));
+    final Color fondoEstado = s.etiquetaEstado == 'Aprobada'
         ? const Color(0xFFDCFCE7)
-        : (s.esRechazada ? const Color(0xFFFEE2E2) : const Color(0xFFFEF3C7));
+        : (s.etiquetaEstado == 'Pendiente'
+            ? const Color(0xFFFEF3C7)
+            : const Color(0xFFFEE2E2));
 
     return Container(
       decoration: BoxDecoration(
@@ -2198,9 +2217,7 @@ class _TarjetaOtraApadrinacion extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            s.esAprobada
-                                ? 'Aprobada'
-                                : (s.esRechazada ? 'Rechazada' : 'Pendiente'),
+                            s.etiquetaEstado,
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w800,

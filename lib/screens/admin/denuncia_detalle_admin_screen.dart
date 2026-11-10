@@ -662,7 +662,7 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
         children: [
           SizedBox(
             width: 160,
-            child: Text(etiqueta, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+            child: Text(etiqueta, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: AppColors.grisTexto)),
           ),
           Expanded(
             child: Text(valor, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, color: AppColors.texto)),

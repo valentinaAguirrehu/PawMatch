@@ -161,6 +161,9 @@ class PetCard extends StatelessWidget {
   final VoidCallback? onToggleFavorito;
   final bool ocultarMatch;
 
+  /// Solo la mascota recién registrada en esta sesión. No persiste al volver a entrar.
+  final bool insigniaNuevo;
+
   const PetCard({
     super.key,
     required this.pet,
@@ -172,6 +175,7 @@ class PetCard extends StatelessWidget {
     this.esFavorito = false,
     this.onToggleFavorito,
     this.ocultarMatch = false,
+    this.insigniaNuevo = false,
   });
 
   /// Verifica si la mascota realmente tiene personalidad registrada en la base de datos.
@@ -378,37 +382,23 @@ class PetCard extends StatelessWidget {
                                   ),
                                 ),
 
-                                // Esquina superior izquierda: Insignia «NUEVO» (visible durante 48 horas reales)
-                                if (pet.esNuevo)
-                                  Positioned(
-                                    top: 6,
-                                    left: 6,
-                                    child: _InsigniaNuevo(compacto: compacto),
-                                  ),
-
-                                // Esquina superior derecha:
-                                // - Usuario: Porcentaje real de Match
-                                // - Administrador: Estado administrativo (Disponible, En proceso, Apadrinada, Adoptada)
-                                if (esVistaAdmin || porcentajeMatch != null)
+                                if (insigniaNuevo || esVistaAdmin || porcentajeMatch != null)
                                   Positioned(
                                     top: 6,
                                     right: 6,
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth: ancho * (pet.esNuevo ? 0.54 : 0.78),
-                                      ),
-                                      child: esVistaAdmin
-                                          ? _InsigniaEstadoAdmin(
-                                              pet: pet,
-                                              compacto: compacto,
-                                            )
-                                          : _InsigniaMatch(
-                                              porcentaje: porcentajeMatch,
-                                              esMejorMatch: esMejorMatch,
-                                              esMatchInicial: esMatchInicial,
-                                              compacto: compacto,
-                                            ),
-                                    ),
+                                    child: insigniaNuevo
+                                        ? _InsigniaNuevo(compacto: compacto)
+                                        : esVistaAdmin
+                                            ? _InsigniaEstadoAdmin(
+                                                pet: pet,
+                                                compacto: compacto,
+                                              )
+                                            : _InsigniaMatch(
+                                                porcentaje: porcentajeMatch,
+                                                esMejorMatch: esMejorMatch,
+                                                esMatchInicial: esMatchInicial,
+                                                compacto: compacto,
+                                              ),
                                   ),
 
                                 if (!esVistaAdmin && onToggleFavorito != null)
@@ -703,8 +693,7 @@ class PetCard extends StatelessWidget {
   }
 }
 
-/// Insignia «NUEVO» en la esquina superior izquierda de la fotografía
-/// (visible únicamente durante las primeras 48 horas desde su creación en la BD).
+/// Insignia «NUEVO» en el mismo lugar de la etiqueta de estado.
 class _InsigniaNuevo extends StatelessWidget {
   final bool compacto;
 
@@ -714,21 +703,16 @@ class _InsigniaNuevo extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: compacto ? 7 : 9,
-        vertical: compacto ? 3.5 : 4.5,
+        horizontal: compacto ? 9 : 11,
+        vertical: compacto ? 4.5 : 5.5,
       ),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            Color(0xFFFF4D94),
-            Color(0xFFED4F9D),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white, width: 1.3),
+        color: const Color(0xFF7C3AED),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white, width: 1.6),
         boxShadow: [
           BoxShadow(
-            color: AppColors.rosa.withValues(alpha: 0.35),
+            color: const Color(0xFF7C3AED).withValues(alpha: 0.28),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
@@ -739,17 +723,17 @@ class _InsigniaNuevo extends StatelessWidget {
         children: [
           Icon(
             Icons.auto_awesome_rounded,
-            size: compacto ? 10 : 11.5,
+            size: compacto ? 13 : 14.5,
             color: Colors.white,
           ),
-          const SizedBox(width: 3),
+          const SizedBox(width: 4),
           Text(
             'NUEVO',
             style: TextStyle(
-              fontSize: compacto ? 9.5 : 10.5,
-              fontWeight: FontWeight.w900,
+              fontSize: compacto ? 11.5 : 12.5,
+              fontWeight: FontWeight.w800,
               color: Colors.white,
-              letterSpacing: 0.5,
+              letterSpacing: 0.4,
               height: 1.0,
             ),
           ),
@@ -891,45 +875,41 @@ class _InsigniaEstadoAdmin extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: compacto ? 7.5 : 9.5,
-        vertical: compacto ? 3.5 : 4.5,
+        horizontal: compacto ? 9 : 11,
+        vertical: compacto ? 4.5 : 5.5,
       ),
       decoration: BoxDecoration(
         color: fondo,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borde, width: 1.2),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borde, width: 1.6),
         boxShadow: [
           BoxShadow(
-            color: AppColors.rosa.withValues(alpha: 0.14),
+            color: Colors.black.withValues(alpha: 0.16),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerRight,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icono,
-              size: compacto ? 11 : 12.5,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icono,
+            size: compacto ? 13 : 14.5,
+            color: colorTexto,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            etiqueta,
+            maxLines: 1,
+            style: TextStyle(
+              fontSize: compacto ? 11.5 : 12.5,
+              fontWeight: FontWeight.w800,
               color: colorTexto,
+              height: 1.1,
             ),
-            const SizedBox(width: 3.5),
-            Text(
-              etiqueta,
-              maxLines: 1,
-              style: TextStyle(
-                fontSize: compacto ? 10.2 : 11.2,
-                fontWeight: FontWeight.w800,
-                color: colorTexto,
-                height: 1.1,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -318,7 +318,7 @@ class _CalendarioSeguimientosWidgetState
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
-                  color: seleccionados.isEmpty ? Colors.grey.shade700 : AppColors.rosa,
+                  color: seleccionados.isEmpty ? AppColors.grisTexto : AppColors.rosa,
                 ),
               ),
             ),
@@ -342,7 +342,7 @@ class _CalendarioSeguimientosWidgetState
                 Text(
                   'No hay seguimientos programados para este día.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13.5),
+                  style: TextStyle(color: AppColors.grisTexto, fontSize: 13.5),
                 ),
               ],
             ),
@@ -480,7 +480,7 @@ class _TarjetaEventoCalendario extends StatelessWidget {
                             'Fecha: ${item.proximoSeguimiento.day}/${item.proximoSeguimiento.month}/${item.proximoSeguimiento.year}',
                             style: TextStyle(
                               fontSize: 12,
-                              color: vencido ? Colors.red.shade700 : Colors.grey.shade700,
+                              color: vencido ? Colors.red.shade700 : AppColors.grisTexto,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

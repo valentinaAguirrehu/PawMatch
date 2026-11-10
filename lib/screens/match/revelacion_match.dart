@@ -159,7 +159,7 @@ class _RevelacionMatchScreenState extends State<RevelacionMatchScreen>
             child: Text(
               'Estamos buscando al peludito que mejor conecta con tu corazón.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, height: 1.35, color: Colors.black54),
+              style: TextStyle(fontSize: 15, height: 1.35, color: AppColors.grisTexto),
             ),
           ),
         ],

@@ -17,6 +17,7 @@ const {
   normalizarFicha,
   guardarBorradorMascotaEnBd,
   obtenerBorradorMascotaDeBd,
+  listarBorradoresMascotaDeBd,
   eliminarBorradorMascotaDeBd,
   procesarTurnoEntrevistaMascota,
 } = require('../utils/entrevista_mascota_admin');
@@ -211,6 +212,74 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/borradores', requireAdmin, async (req, res) => {
+  try {
+    const borradores = await listarBorradoresMascotaDeBd(req.adminId);
+    res.set('Cache-Control', 'no-store');
+    res.json(borradores);
+  } catch (error) {
+    console.error('Error listando borradores:', error.message || error);
+    res.status(500).json({ error: 'No se pudieron cargar los borradores.' });
+  }
+});
+
+router.get('/borrador', requireAdmin, async (req, res) => {
+  try {
+    const borrador = await obtenerBorradorMascotaDeBd(req.adminId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, borrador });
+  } catch (error) {
+    console.error('Error obteniendo borrador:', error.message || error);
+    res.status(500).json({ error: 'No se pudo cargar el borrador.' });
+  }
+});
+
+router.put('/borrador', requireAdmin, async (req, res) => {
+  try {
+    const limites = await obtenerLimitesColumnasMascota();
+    const existente = await obtenerBorradorMascotaDeBd(req.adminId);
+    const fichaNormalizada = normalizarFicha(
+      req.body || {},
+      existente?.ficha || {},
+      limites,
+    );
+    await guardarBorradorMascotaEnBd(
+      req.adminId,
+      fichaNormalizada,
+      req.body?.paso_actual || existente?.paso_actual || 'manual',
+      Array.isArray(req.body?.historial) ? req.body.historial : (existente?.historial || []),
+      req.body?.origen_registro || existente?.origen_registro || 'manual',
+      req.body?.foto || existente?.foto || null,
+    );
+    res.json({ ok: true, ficha: fichaNormalizada, guardado_en_bd: true });
+  } catch (error) {
+    console.error('Error guardando borrador:', error.message || error);
+    res.status(500).json({ error: 'No se pudo guardar el borrador en la base de datos.' });
+  }
+});
+
+router.delete('/borradores/:id', requireAdmin, async (req, res) => {
+  try {
+    const nombre = req.query.nombre || req.body?.nombre;
+    await eliminarBorradorMascotaDeBd(req.params.id, req.adminId, nombre);
+    res.json({ ok: true, mensaje: 'Borrador eliminado correctamente' });
+  } catch (error) {
+    console.error('Error eliminando borrador:', error.message || error);
+    res.status(500).json({ error: 'No se pudo eliminar el borrador.' });
+  }
+});
+
+router.delete('/borrador', requireAdmin, async (req, res) => {
+  try {
+    const nombre = req.query.nombre || req.body?.nombre;
+    await eliminarBorradorMascotaDeBd(req.adminId, null, nombre);
+    res.json({ ok: true, mensaje: 'Borrador eliminado correctamente' });
+  } catch (error) {
+    console.error('Error eliminando borrador:', error.message || error);
+    res.status(500).json({ error: 'No se pudo eliminar el borrador.' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const result = await pool.query(`${petSelect} WHERE m.id_mascota = $1`, [req.params.id]);
@@ -334,8 +403,14 @@ router.post('/', requireAdmin, async (req, res) => {
       [randomUUID(), idMascota, ...personalidadLeida.valores],
     );
     const result = await client.query(`${petSelect} WHERE m.id_mascota = $1`, [idMascota]);
+    // Eliminación transaccional del borrador: garantiza que no quede como borrador y como mascota definitiva
+    await client.query(
+      'DELETE FROM borrador_mascota_formulario_ia WHERE id_administrador::text = $1::text OR LOWER(nombre) = LOWER($2)',
+      [String(req.adminId), String(nombre).trim()],
+    ).catch(() => {});
+    await client.query('DROP TABLE IF EXISTS borrador_registro_mascota_luna CASCADE').catch(() => {});
+    await client.query('DROP TABLE IF EXISTS borrador_mascota_ia CASCADE').catch(() => {});
     await client.query('COMMIT');
-    eliminarBorradorMascotaDeBd(req.adminId).catch(() => {});
     procesarNuevaMascotaParaUsuarios(idMascota).catch((err) => {
       console.error('Error evaluando nueva mascota para Match:', err.message);
     });

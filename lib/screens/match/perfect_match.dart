@@ -200,7 +200,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
             child: Text(
               detalle,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54, fontSize: 12),
+              style: const TextStyle(color: AppColors.grisTexto, fontSize: 12),
             ),
           ),
         Center(
@@ -279,7 +279,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
           Text(
             'Ellos también hacen Match con tu forma de ser y estarían encantados de conocerte.',
             textAlign: TextAlign.center,
-            style: t.bodySmall?.copyWith(color: Colors.black54, height: 1.35),
+            style: t.bodySmall?.copyWith(color: AppColors.grisTexto, height: 1.35),
           ),
           const SizedBox(height: 12),
           LayoutBuilder(
@@ -353,7 +353,7 @@ class _PerfectMatchScreenState extends State<PerfectMatchScreen> {
           Text(
             detalle,
             textAlign: TextAlign.center,
-            style: t.bodyMedium?.copyWith(color: Colors.black54),
+            style: t.bodyMedium?.copyWith(color: AppColors.grisTexto),
           ),
           if (accion != null) ...[
             const SizedBox(height: 14),
@@ -469,7 +469,7 @@ class _TarjetaDestacadaState extends State<_TarjetaDestacada> {
                     Text(
                       _subtitulo(pet),
                       textAlign: TextAlign.center,
-                      style: t.bodyMedium?.copyWith(color: Colors.black54),
+                      style: t.bodyMedium?.copyWith(color: AppColors.grisTexto),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -735,7 +735,7 @@ class _TarjetaSecundariaState extends State<_TarjetaSecundaria> {
                           Text(
                             _caracteristicasEnLineas(pet),
                             style: t.bodySmall?.copyWith(
-                              color: Colors.black54,
+                              color: AppColors.grisTexto,
                               height: 1.35,
                             ),
                           ),

@@ -645,7 +645,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           const SizedBox(height: 6),
           const Text(
             'Diligencia los siguientes campos para que podamos evaluar la situación de manera responsable.',
-            style: TextStyle(fontSize: 13.5, color: Colors.black54),
+            style: TextStyle(fontSize: 13.5, color: AppColors.grisTexto),
           ),
           const Divider(height: 36, color: AppColors.bordeRosa),
 
@@ -865,7 +865,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           const SizedBox(height: 6),
           const Text(
             'Organiza la información observable. Diligencia los aspectos que conozcas para facilitar la evaluación.',
-            style: TextStyle(fontSize: 12.5, color: Colors.black54),
+            style: TextStyle(fontSize: 12.5, color: AppColors.grisTexto),
           ),
           const SizedBox(height: 16),
 
@@ -930,7 +930,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           const SizedBox(height: 12),
           Text(
             'Formatos permitidos: JPG, JPEG, PNG, WEBP, MP4, MOV, WEBM. Máximo 25MB por archivo (hasta 10 archivos).',
-            style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 11.5, color: AppColors.grisTexto),
           ),
           const SizedBox(height: 16),
 
@@ -1058,7 +1058,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
         const SizedBox(height: 2),
         Text(
           ayuda,
-          style: const TextStyle(fontSize: 12, color: Colors.black54),
+          style: const TextStyle(fontSize: 12, color: AppColors.grisTexto),
         ),
         const SizedBox(height: 6),
         TextFormField(
@@ -1158,7 +1158,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
                     const SizedBox(height: 2),
                     Text(
                       '$tamanoTexto • ${esVideo ? "Video listo para enviar" : "Fotografía lista para enviar"}',
-                      style: const TextStyle(fontSize: 11.5, color: Colors.black54),
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.grisTexto),
                     ),
                   ],
                 ),
@@ -1217,7 +1217,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
   }) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(fontSize: 13.5, color: Colors.black54),
+      labelStyle: const TextStyle(fontSize: 13.5, color: AppColors.grisTexto),
       prefixIcon: Icon(icono, color: AppColors.rosa, size: 22),
       suffixIcon: sufijo,
       filled: true,
