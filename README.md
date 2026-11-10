@@ -1,17 +1,13 @@
-# paw_match
+# PawMatch 🐾
 
-A new Flutter project.
+Plataforma móvil para la gestión y facilitación de procesos de adopción responsable de mascotas.
 
-## Getting Started
+## Descripción
 
-This project is a starting point for a Flutter application.
+PawMatch es una aplicación móvil desarrollada con Flutter y Dart, orientada a facilitar la conexión entre personas interesadas en adoptar mascotas y quienes promueven su adopción.
 
-A few resources to get you started if this is your first Flutter project:
+El proyecto contempla la gestión de usuarios, mascotas, publicaciones y procesos de adopción, utilizando una arquitectura modular y una base de datos relacional para la persistencia de información.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Tecnologías
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+* **Flutter:** desarrollo de la aplicación móvil.
