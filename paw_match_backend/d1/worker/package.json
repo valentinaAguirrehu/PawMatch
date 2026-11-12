@@ -1,0 +1,9 @@
+{
+  "name": "pawmatch-d1-worker",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "bcryptjs": "^2.4.3"
+  }
+}
