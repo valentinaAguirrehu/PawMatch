@@ -1,0 +1,43 @@
+
+name = "pawmatch-api"
+main = "src/index.js"
+compatibility_date = "2026-11-10"
+
+# Secretos, fuera de este archivo:
+# npx wrangler secret put SESION_SECRETO
+# npx wrangler secret put OPENAI_API_KEY
+# npx wrangler secret put RESEND_API_KEY
+# npx wrangler secret put CORREO_DESDE
+# npx wrangler secret put CORREO_RESPUESTA
+
+# Configuración local
+[vars]
+CORS_ORIGINS = "http://localhost:8080,http://127.0.0.1:8080"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pawmatch"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "../migrations"
+
+[[r2_buckets]]
+binding = "ARCHIVOS"
+bucket_name = "pawmatch-archivos"
+
+# Configuración de producción
+[env.production]
+name = "pawmatch-api"
+
+[env.production.vars]
+CORS_ORIGINS = "https://pawmatchpet.com,https://www.pawmatchpet.com"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "pawmatch_db"
+database_id = "55940c9b-b780-44cd-84a5-38dba3e8aa80"
+migrations_dir = "../migrations"
+
+[[env.production.r2_buckets]]
+binding = "ARCHIVOS"
+bucket_name = "pawmatch-archivos"
+

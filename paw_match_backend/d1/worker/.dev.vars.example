@@ -1,0 +1,4 @@
+SESION_SECRETO=cambia-esta-clave-local-de-al-menos-32-caracteres
+OPENAI_API_KEY=
+RESEND_API_KEY=
+CORREO_DESDE=
