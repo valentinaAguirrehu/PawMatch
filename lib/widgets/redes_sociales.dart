@@ -7,11 +7,14 @@ import 'package:paw_match/core/fundacion_info.dart';
 /// Botones horizontales, compactos y modernos de redes sociales y contacto de la Fundación.
 /// Muestra dinámicamente solo las redes que tienen URL configurada.
 class RedesSociales extends StatelessWidget {
-  final bool conTexto, sobreRosa;
+  final bool conTexto, sobreRosa, enColumna;
+  final Set<String>? solo;
   const RedesSociales({
     super.key,
     this.conTexto = false,
     this.sobreRosa = false,
+    this.enColumna = false,
+    this.solo,
   });
 
   @override
@@ -23,31 +26,17 @@ class RedesSociales extends StatelessWidget {
         final letra = sobreRosa ? AppColors.rosa : Colors.white;
 
         final datos = <(FaIconData, String, String)>[];
-
-        final facebook = FundacionInfo.redes['facebook'] ?? '';
-        if (facebook.isNotEmpty) {
-          datos.add((FontAwesomeIcons.facebookF, 'Facebook', facebook));
+        void agregar(String clave, FaIconData icono, String nombre, String enlace) {
+          if (enlace.isEmpty) return;
+          if (solo != null && !solo!.contains(clave)) return;
+          datos.add((icono, nombre, enlace));
         }
 
-        final instagram = FundacionInfo.redes['instagram'] ?? '';
-        if (instagram.isNotEmpty) {
-          datos.add((FontAwesomeIcons.instagram, 'Instagram', instagram));
-        }
-
-        final whatsapp = FundacionInfo.whatsappUrl;
-        if (whatsapp.isNotEmpty) {
-          datos.add((FontAwesomeIcons.whatsapp, 'WhatsApp', whatsapp));
-        }
-
-        final tiktok = FundacionInfo.redes['tiktok'] ?? '';
-        if (tiktok.isNotEmpty) {
-          datos.add((FontAwesomeIcons.tiktok, 'TikTok', tiktok));
-        }
-
-        final correo = FundacionInfo.correo;
-        if (correo.isNotEmpty) {
-          datos.add((FontAwesomeIcons.envelope, 'Correo', FundacionInfo.correoUrl));
-        }
+        agregar('facebook', FontAwesomeIcons.facebookF, 'Facebook', FundacionInfo.redes['facebook'] ?? '');
+        agregar('tiktok', FontAwesomeIcons.tiktok, 'TikTok', FundacionInfo.redes['tiktok'] ?? '');
+        agregar('instagram', FontAwesomeIcons.instagram, 'Instagram', FundacionInfo.redes['instagram'] ?? '');
+        agregar('whatsapp', FontAwesomeIcons.whatsapp, 'WhatsApp', FundacionInfo.whatsappUrl);
+        agregar('correo', FontAwesomeIcons.envelope, 'Correo', FundacionInfo.correo.isEmpty ? '' : FundacionInfo.correoUrl);
 
         if (datos.isEmpty) {
           return const SizedBox.shrink();
@@ -85,9 +74,11 @@ class RedesSociales extends StatelessWidget {
                 : MediaQuery.sizeOf(context).width;
             final muyCompacto = maxW < 210;
             final sep = muyCompacto ? 6.0 : 8.0;
-            final int porFila = maxW >= 290
-                ? datos.length.clamp(1, 3)
-                : (maxW >= 205 ? 2 : 1);
+            final int porFila = enColumna
+                ? 1
+                : maxW >= 290
+                    ? datos.length.clamp(1, 3)
+                    : (maxW >= 205 ? 2 : 1);
             final double anchoBoton = porFila > 1
                 ? ((maxW - sep * (porFila - 1)) / porFila).clamp(80.0, 190.0)
                 : maxW;

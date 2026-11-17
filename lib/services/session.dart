@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:paw_match/services/api_service.dart';
+import 'package:paw_match/services/almacen_seguro.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/services/match_estado.dart';
 
 /// Guarda al usuario que inició sesión y persiste la sesión en almacenamiento local.
@@ -62,8 +65,18 @@ class Session {
     } catch (_) {}
   }
 
-  /// Restaura la sesión guardada previamente si existe
+  /// Restaura la sesión guardada previamente si existe.
+  /// En celular exige el token del almacén seguro. En web usa la cookie.
   static Future<bool> restaurar() async {
+    await _olvidarContrasenaPlana();
+    if (AlmacenSeguro.persisteToken) {
+      final token = await AlmacenSeguro.leer();
+      if (token == null || token.isEmpty) {
+        await _limpiarUsuarioLocal();
+        return false;
+      }
+      http.recordarSesion(token, persistir: true);
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final str = prefs.getString(_kKeyUsuario);
@@ -88,34 +101,32 @@ class Session {
     return false;
   }
 
-  /// Guarda o borra las credenciales recordadas del formulario de login
+  /// Guarda el correo para el formulario. Nunca guarda la contraseña.
   static Future<void> guardarCredenciales({
     required bool recordar,
     required String correo,
-    required String contrasena,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kKeyRecordar, recordar);
+      await prefs.remove(_kKeyContrasena);
       if (recordar) {
         await prefs.setString(_kKeyCorreo, correo);
-        await prefs.setString(_kKeyContrasena, contrasena);
       } else {
         await prefs.remove(_kKeyCorreo);
-        await prefs.remove(_kKeyContrasena);
       }
     } catch (_) {}
   }
 
-  /// Obtiene las credenciales recordadas para el formulario de login
+  /// Obtiene el correo recordado. La contraseña siempre vuelve vacía.
   static Future<({bool recordar, String correo, String contrasena})>
       obtenerCredencialesRecordadas() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kKeyContrasena);
       final recordar = prefs.getBool(_kKeyRecordar) ?? true;
       final c = prefs.getString(_kKeyCorreo) ?? '';
-      final p = prefs.getString(_kKeyContrasena) ?? '';
-      return (recordar: recordar, correo: c, contrasena: p);
+      return (recordar: recordar, correo: c, contrasena: '');
     } catch (_) {
       return (recordar: true, correo: '', contrasena: '');
     }
@@ -137,6 +148,8 @@ class Session {
 
   /// Cierra la sesión activa borrando la persistencia del usuario
   static void cerrar() {
+    http.post(Uri.parse('${ApiService.baseUrl}/usuarios/logout')).then((_) {}, onError: (_) {});
+    http.recordarSesion(null);
     MatchEstado.instancia.reiniciar();
     idUsuario = null;
     nombre = '';
@@ -149,6 +162,22 @@ class Session {
 
     SharedPreferences.getInstance().then((prefs) {
       prefs.remove(_kKeyUsuario);
+      prefs.remove(_kKeyContrasena);
     }).catchError((_) {});
+  }
+
+  static Future<void> _olvidarContrasenaPlana() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kKeyContrasena);
+    } catch (_) {}
+  }
+
+  static Future<void> _limpiarUsuarioLocal() async {
+    idUsuario = null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kKeyUsuario);
+    } catch (_) {}
   }
 }

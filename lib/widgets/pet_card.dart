@@ -2,16 +2,145 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import '../models/pet.dart';
 import '../services/api_service.dart';
 import '../services/session.dart';
 
+const _carpetasPrivadas = {
+  'seguimientos_adopcion',
+  'cancelaciones_adopcion',
+  'cancelaciones_apadrinamiento',
+  'adopciones',
+  'apadrinamientos',
+  'contratos',
+  'denuncias',
+};
+
 /// En la BD la foto se guarda como ruta relativa (/uploads/mascotas/x.jpg).
-/// Aquí se le antepone el servidor (así funciona en emulador, celular y web).
+/// Las carpetas públicas siguen en `/uploads`. Las privadas se leen por
+/// `/api/archivos`, donde viaja la cookie o el token de sesión.
 String urlFoto(String ruta) {
-  if (ruta.startsWith('http')) return ruta;
+  final limpia = ruta.trim();
+  if (limpia.startsWith('http')) return limpia;
+  final partes = RegExp(r'^/uploads/([^/]+)/(.+)$').firstMatch(limpia);
+  if (partes != null && _carpetasPrivadas.contains(partes.group(1))) {
+    return '${ApiService.baseUrl}/archivos/${partes.group(1)}/${partes.group(2)}';
+  }
   final host = ApiService.baseUrl.replaceFirst(RegExp(r'/api$'), '');
-  return '$host$ruta';
+  return '$host$limpia';
+}
+
+bool _esPrivada(String url) => url.contains('/api/archivos/');
+
+/// Muestra una foto del servidor. Si la ruta es privada, la descarga con la
+/// sesión (cookie en web, token en celular) en lugar de una URL anónima.
+class FotoServidor extends StatelessWidget {
+  final String ruta;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+  final Widget? error;
+  final Widget? cargando;
+
+  const FotoServidor({
+    super.key,
+    required this.ruta,
+    this.fit = BoxFit.cover,
+    this.width,
+    this.height,
+    this.error,
+    this.cargando,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final destino = urlFoto(ruta);
+    if (!_esPrivada(destino)) {
+      return Image.network(
+        destino,
+        fit: fit,
+        width: width,
+        height: height,
+        errorBuilder: (_, _, _) => error ?? const Icon(Icons.broken_image_outlined),
+      );
+    }
+    return _FotoPrivada(
+      url: destino,
+      fit: fit,
+      width: width,
+      height: height,
+      error: error,
+      cargando: cargando,
+    );
+  }
+}
+
+class _FotoPrivada extends StatefulWidget {
+  final String url;
+  final BoxFit fit;
+  final double? width;
+  final double? height;
+  final Widget? error;
+  final Widget? cargando;
+
+  const _FotoPrivada({
+    required this.url,
+    required this.fit,
+    this.width,
+    this.height,
+    this.error,
+    this.cargando,
+  });
+
+  @override
+  State<_FotoPrivada> createState() => _FotoPrivadaState();
+}
+
+class _FotoPrivadaState extends State<_FotoPrivada> {
+  Uint8List? _bytes;
+  bool _fallo = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargar();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FotoPrivada oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _bytes = null;
+      _fallo = false;
+      _cargar();
+    }
+  }
+
+  Future<void> _cargar() async {
+    try {
+      final respuesta = await http.get(Uri.parse(widget.url)).timeout(const Duration(seconds: 12));
+      if (!mounted) return;
+      if (respuesta.statusCode == 200 && respuesta.bodyBytes.isNotEmpty) {
+        setState(() => _bytes = respuesta.bodyBytes);
+      } else {
+        setState(() => _fallo = true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _fallo = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_fallo) return widget.error ?? const Icon(Icons.broken_image_outlined);
+    final bytes = _bytes;
+    if (bytes == null) {
+      return widget.cargando ??
+          const Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa));
+    }
+    return Image.memory(bytes, fit: widget.fit, width: widget.width, height: widget.height);
+  }
 }
 
 /// Foto de la mascota con un ícono de respaldo si no hay foto o falla la carga.
@@ -89,11 +218,26 @@ class PetImage extends StatelessWidget {
       );
     }
 
+    final destino = urlFoto(url!);
+    if (_esPrivada(destino)) {
+      return Container(
+        color: backgroundColor,
+        alignment: Alignment.center,
+        child: _FotoPrivada(
+          url: destino,
+          fit: fit,
+          width: double.infinity,
+          height: double.infinity,
+          error: placeholder,
+        ),
+      );
+    }
+
     return Container(
       color: backgroundColor,
       alignment: Alignment.center,
       child: Image.network(
-        urlFoto(url!),
+        destino,
         fit: fit,
         alignment: Alignment.center,
         width: double.infinity,

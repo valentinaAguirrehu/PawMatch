@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/denuncia.dart';
 import 'package:paw_match/services/denuncias_service.dart';
+import 'package:paw_match/widgets/dialogo_escritura.dart';
 import 'package:paw_match/services/previsualizar_video.dart';
 
 class DenunciaDetalleAdminScreen extends StatefulWidget {
@@ -59,72 +60,73 @@ class _DenunciaDetalleAdminScreenState extends State<DenunciaDetalleAdminScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            title: const Row(
+          return DialogoEscritura(
+            titulo: const Row(
               children: [
                 Icon(Icons.edit_note_rounded, color: AppColors.rosa),
                 SizedBox(width: 10),
                 Text('Gestionar Caso', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Estado del caso:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: nuevoEstado,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: AppColors.rosaSuave,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.bordeRosa)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'recibido', child: Text('Recibido')),
-                      DropdownMenuItem(value: 'en_revision', child: Text('En revisión')),
-                      DropdownMenuItem(value: 'en_gestion', child: Text('En gestión')),
-                      DropdownMenuItem(value: 'derivado', child: Text('Derivado a otra entidad')),
-                      DropdownMenuItem(value: 'atendido', child: Text('Atendido')),
-                      DropdownMenuItem(value: 'cerrado', child: Text('Cerrado')),
-                    ],
-                    onChanged: (val) {
-                      if (val != null) setModalState(() => nuevoEstado = val);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Observaciones internas:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: ctrlObservaciones,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Anotaciones privadas del equipo...',
-                      filled: true,
-                      fillColor: AppColors.rosaSuave,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.bordeRosa)),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('Acciones realizadas:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: ctrlAcciones,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Ej. Se visitó el lugar, se coordinó con rescate, etc.',
-                      filled: true,
-                      fillColor: AppColors.rosaSuave,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.bordeRosa)),
-                    ),
-                  ),
+            cuerpo: [
+              const Text('Estado del caso:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: nuevoEstado,
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: AppColors.rosaSuave,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.bordeRosa)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'recibido', child: Text('Recibido')),
+                  DropdownMenuItem(value: 'en_revision', child: Text('En revisión')),
+                  DropdownMenuItem(value: 'en_gestion', child: Text('En gestión')),
+                  DropdownMenuItem(value: 'derivado', child: Text('Derivado a otra entidad')),
+                  DropdownMenuItem(value: 'atendido', child: Text('Atendido')),
+                  DropdownMenuItem(value: 'cerrado', child: Text('Cerrado')),
                 ],
+                onChanged: (val) {
+                  if (val != null) setModalState(() => nuevoEstado = val);
+                },
               ),
-            ),
-            actions: [
+              const SizedBox(height: 16),
+              const Text('Observaciones internas:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+              const SizedBox(height: 6),
+              ZonaCampo(
+                builder: (foco) => TextField(
+                  focusNode: foco,
+                  controller: ctrlObservaciones,
+                  maxLines: 3,
+                  scrollPadding: rellenoCampoDialogo,
+                  decoration: InputDecoration(
+                    hintText: 'Anotaciones privadas del equipo...',
+                    filled: true,
+                    fillColor: AppColors.rosaSuave,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.bordeRosa)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Acciones realizadas:', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+              const SizedBox(height: 6),
+              ZonaCampo(
+                builder: (foco) => TextField(
+                  focusNode: foco,
+                  controller: ctrlAcciones,
+                  maxLines: 3,
+                  scrollPadding: rellenoCampoDialogo,
+                  decoration: InputDecoration(
+                    hintText: 'Ej. Se visitó el lugar, se coordinó con rescate, etc.',
+                    filled: true,
+                    fillColor: AppColors.rosaSuave,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.bordeRosa)),
+                  ),
+                ),
+              ),
+            ],
+            acciones: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancelar'),

@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/denuncia.dart';
 import 'package:paw_match/screens/admin/denuncia_detalle_admin_screen.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
+import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/apadrinamiento_service.dart';
 import 'package:paw_match/services/denuncias_service.dart';
+import 'package:paw_match/services/navegacion.dart';
+import 'package:paw_match/services/session.dart';
+import 'package:paw_match/widgets/barra_superior.dart';
+import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 
 class DenunciasAdminScreen extends StatefulWidget {
   const DenunciasAdminScreen({super.key});
@@ -112,27 +119,46 @@ class _DenunciasAdminScreenState extends State<DenunciasAdminScreen> {
     );
   }
 
+  Future<void> _confirmarCerrarSesion() async {
+    final confirmar = await DialogoCerrarSesion.mostrar(context);
+    if (!confirmar || !mounted) return;
+    ApadrinamientoService.detenerMonitoreo();
+    AdoptionService.detenerMonitoreo();
+    DenunciasService.detenerMonitoreo();
+    Session.cerrar();
+    Navegacion.ir(context, const WelcomeScreen());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF8F9),
-      appBar: AppBar(
-        title: const Text('Denuncias de Maltrato Animal', style: TextStyle(fontWeight: FontWeight.w800)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.rosa),
-          onPressed: () => Navigator.pop(context),
+      backgroundColor: const Color(0xFFFFF0F5),
+      body: SafeArea(
+        child: Column(
+          children: [
+            BarraSuperior(
+              iconoTitulo: Icons.campaign_rounded,
+              titulo: 'Denuncias',
+              onCerrarSesion: _confirmarCerrarSesion,
+              onVolver: () {
+                final ir = Navegacion.volverANotificaciones;
+                if (ir != null) {
+                  ir();
+                  return;
+                }
+                if (Navigator.canPop(context)) Navigator.pop(context);
+              },
+            ),
+            Expanded(child: _contenido()),
+          ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.rosa),
-            onPressed: _cargar,
-          ),
-        ],
       ),
-      body: Column(
-        children: [
+    );
+  }
+
+  Widget _contenido() {
+    return Column(
+      children: [
           // Barra de búsqueda
           Container(
             color: Colors.white,
@@ -250,7 +276,6 @@ class _DenunciasAdminScreenState extends State<DenunciasAdminScreen> {
                           ),
           ),
         ],
-      ),
     );
   }
 

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -39,7 +39,7 @@ class PersonalidadUsuarioService {
       headers: {'Content-Type': 'application/json', 'x-usuario-id': id},
       body: jsonEncode(cuerpo),
     );
-    if (resp.statusCode == 201) return;
+    if (resp.statusCode == 201 || resp.statusCode == 200) return;
     if (resp.statusCode == 409 && respuestas == null) return;
     throw Exception(
       _mensaje(_leer(resp), 'No se pudo guardar tu personalidad', resp),

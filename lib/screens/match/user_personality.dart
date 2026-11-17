@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/entrevista_personalidad.dart';
 import 'package:paw_match/models/rasgos.dart';
+import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/home/menu_screen.dart';
 import 'package:paw_match/screens/match/revelacion_match.dart';
 import 'package:paw_match/services/entrevista_personalidad_service.dart';
@@ -14,6 +15,7 @@ import 'package:paw_match/services/session.dart';
 import 'package:paw_match/screens/users/voz_asistente_screen.dart';
 import 'package:paw_match/services/voz_asistente_service.dart';
 import 'package:paw_match/services/voz_entrevista.dart';
+import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/logo_paw.dart';
 
 String _textoBienvenida(String? genero) {
@@ -173,7 +175,17 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
       if (!mounted) return;
 
       _voz.vozActiva = voz;
-      _preguntas = preguntas;
+      _preguntas = [
+        for (final pregunta in preguntas)
+          PreguntaEntrevista(
+            orden: pregunta.orden,
+            id: pregunta.id,
+            titulo: pregunta.titulo,
+            pregunta: Rasgo.concordarGenero(pregunta.pregunta, Session.genero),
+            minimo: Rasgo.concordarGenero(pregunta.minimo, Session.genero),
+            maximo: Rasgo.concordarGenero(pregunta.maximo, Session.genero),
+          ),
+      ];
       _aplicarProgreso(remotas, local);
       setState(() => _cargando = false);
       _hablarInicio(local);
@@ -285,6 +297,18 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
       if (!confirmadas.any((r) => r.clave == id)) return i;
     }
     return null;
+  }
+
+  Future<void> _cerrarSesion() async {
+    final confirmar = await DialogoCerrarSesion.mostrar(context);
+    if (!confirmar || !mounted) return;
+    try {
+      await _voz.callar();
+    } catch (_) {}
+    await _persistir();
+    Session.cerrar();
+    if (!mounted) return;
+    Navegacion.ir(context, const WelcomeScreen());
   }
 
   Future<void> _persistir() async {
@@ -606,9 +630,8 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
       if (!mounted) return;
       final mensaje = _textoError(e);
       if (mensaje.contains('Ya registraste')) {
-        await EntrevistaPersonalidadService.borrarBorradorLocal();
-        if (!mounted) return;
-        Navegacion.ir(context, const RevelacionMatchScreen());
+        setState(() => _guardando = false);
+        _aviso('Ya registraste tu personalidad. El registro anterior se conservó.');
         return;
       }
       setState(() => _guardando = false);
@@ -750,79 +773,107 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
   Widget _encabezado() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
-      child: Row(
+      child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-            child: const LogoPaw(tamano: 40),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Paw Match',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                  ),
-                ),
-                Text(
-                  'Entrevista de personalidad',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const MarcaVozAsistente(),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _cargando || _error != null ? null : _alternarVelocidadCiclica,
-            child: Tooltip(
-              message: 'Cambiar velocidad de voz (X1, X1.5, X2, X3)',
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 9,
-                  vertical: 5,
-                ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.24),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    width: 1.2,
-                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: Text(
-                  _voz.etiquetaVelocidad.toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w900,
+                child: const LogoPaw(tamano: 40),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Paw Match',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Nunito',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                    Text(
+                      'Entrevista de personalidad',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const MarcaVozAsistente(),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _cargando || _error != null ? null : _alternarVelocidadCiclica,
+                child: Tooltip(
+                  message: 'Cambiar velocidad de voz (X1, X1.5, X2, X3)',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.24),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: Text(
+                      _voz.etiquetaVelocidad.toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              IconButton(
+                tooltip: _voz.vozActiva
+                    ? 'Silenciar la lectura'
+                    : 'Leer las preguntas en voz alta',
+                onPressed: _cargando || _error != null ? null : _alternarVoz,
+                icon: Icon(
+                  _voz.vozActiva ? Icons.volume_up : Icons.volume_off,
+                  color: Colors.white.withValues(alpha: 0.95),
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: _voz.vozActiva
-                ? 'Silenciar la lectura'
-                : 'Leer las preguntas en voz alta',
-            onPressed: _cargando || _error != null ? null : _alternarVoz,
-            icon: Icon(
-              _voz.vozActiva ? Icons.volume_up : Icons.volume_off,
-              color: Colors.white.withValues(alpha: 0.95),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2, right: 4),
+              child: TextButton.icon(
+                onPressed: _cerrarSesion,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  backgroundColor: Colors.white.withValues(alpha: 0.22),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.9)),
+                  ),
+                ),
+                icon: const Icon(Icons.logout, size: 16),
+                label: const Text(
+                  'Cerrar sesión',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5),
+                ),
+              ),
             ),
           ),
         ],
@@ -1375,13 +1426,15 @@ class _UserPersonalityScreenState extends State<UserPersonalityScreen>
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.rosa),
                     ),
                   const SizedBox(width: 8),
-                  Text(
-                    _grabando
-                        ? 'Escuchando…'
-                        : _transcribiendo
-                            ? 'Transcribiendo tu voz…'
-                            : 'Interpretando tu respuesta…',
-                    style: const TextStyle(color: AppColors.rosa, fontWeight: FontWeight.w700),
+                  Expanded(
+                    child: Text(
+                      _grabando
+                          ? 'Escuchando… Al terminar, toca otra vez el micrófono.'
+                          : _transcribiendo
+                              ? 'Transcribiendo tu voz…'
+                              : 'Interpretando tu respuesta…',
+                      style: const TextStyle(color: AppColors.rosa, fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
               ),

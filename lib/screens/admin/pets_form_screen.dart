@@ -145,6 +145,12 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
         personalidad: _ocultaEvaluacion ? const {} : _personalidad.personalidad,
         foto: _fotoRutaSubida ?? _fotoActual,
       );
+      if (_borradorDescartado) {
+        await EntrevistaMascotaLunaService.eliminarBorrador(
+          widget.borrador?.idBorrador ?? '',
+          nombre: nombre.isEmpty ? null : nombre,
+        );
+      }
     } catch (_) {
     } finally {
       if (mounted) setState(() => _guardandoBorrador = false);
@@ -454,6 +460,14 @@ class _PetsFormScreenState extends State<PetsFormScreen> {
       final guardada = _esEdicion
           ? await PetsService.actualizar(widget.pet!.id, pet)
           : await PetsService.crear(pet);
+      if (!_esEdicion) {
+        _borradorDescartado = true;
+        _debounceAutoSave?.cancel();
+        await EntrevistaMascotaLunaService.eliminarBorrador(
+          widget.borrador?.idBorrador ?? '',
+          nombre: guardada.nombre,
+        );
+      }
       if (!mounted) return;
       _borradorDescartado = true;
       _debounceAutoSave?.cancel();

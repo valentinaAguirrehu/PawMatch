@@ -241,7 +241,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             children: [
                               _hero(m),
                               Padding(
-                                padding: EdgeInsets.fromLTRB(pad, 6, pad, 80),
+                                padding: EdgeInsets.fromLTRB(pad, 6, pad, 12),
                                 child: Column(
                                   children: [
                                     if (FundacionInfo
@@ -320,6 +320,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Stack(
           children: [
@@ -327,13 +328,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               child: CustomPaint(painter: FondoHeroPainter()),
             ),
             Padding(
-              padding: EdgeInsets.fromLTRB(pad, 8, pad, 16),
+              padding: EdgeInsets.fromLTRB(pad, 4, pad, 0),
               child: _heroTitulo(compacto: compacto, ancho: m.ancho),
             ),
           ],
         ),
         Padding(
-          padding: EdgeInsets.fromLTRB(pad, 6, pad, 4),
+          padding: EdgeInsets.fromLTRB(pad, 18, pad, 0),
           child: cuerpo,
         ),
       ],
@@ -677,7 +678,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.30),
+              color: Colors.white.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: Colors.white.withValues(alpha: 0.60),
@@ -880,8 +881,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         color: AppColors.rosaSuave,
         width: anchoImg,
         height: altoImg,
-        child: Image.asset(
-          'assets/images/denuncias_hero.jpg',
+        child: FundacionImagen(
+          ruta: FundacionInfo.fotoDenuncias,
           fit: BoxFit.cover,
         ),
       ),
@@ -970,21 +971,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ruta: FundacionInfo.fotoFondoAyudas,
                     fit: BoxFit.cover,
                     icono: Icons.pets,
-                    fondo: const Color(0xFFF9B0CE),
+                    fondo: const Color(0xFFCF4C8F),
                   ),
                 ),
                 Positioned.fill(
                   child: Container(
                     decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Color(0xFFFDCADA),
-                          Color(0xFFF9B0CE),
-                          Color(0xFFF396BF),
-                        ],
-                      ),
+                      color: Color(0xFFCF4C8F),
                     ),
                   ),
                 ),
@@ -1146,7 +1139,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              encabezadoTarjeta(Icons.location_on_rounded, 'UBICACIÓN'),
+              encabezadoTarjeta(Icons.location_on_rounded, 'UBICACIÓN Y CONTACTO'),
               SizedBox(height: muyCompacto ? 9 : 14),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1237,6 +1230,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ),
                 ),
               ],
+              const SizedBox(height: 8),
+              const RedesSociales(
+                conTexto: true,
+                enColumna: true,
+                solo: {'whatsapp', 'correo'},
+              ),
             ],
           ),
         );
@@ -1262,11 +1261,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               encabezadoTarjeta(
-                Icons.favorite_border_rounded,
-                'CONTACTO Y REDES',
+                Icons.share_outlined,
+                'REDES SOCIALES',
               ),
               SizedBox(height: muyCompacto ? 9 : 14),
-              const RedesSociales(conTexto: true),
+              const RedesSociales(
+                conTexto: true,
+                enColumna: true,
+                solo: {'facebook', 'tiktok', 'instagram'},
+              ),
             ],
           ),
         );
@@ -1392,7 +1395,7 @@ class _RetratoHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final anillo = lado * 0.05;
     final ancho = lado * 1.36;
-    final alto = lado * 1.12;
+    final alto = lado * 1.08;
     return SizedBox(
       width: ancho,
       height: alto,
@@ -1417,7 +1420,7 @@ class _RetratoHero extends StatelessWidget {
           ),
           Positioned(
             left: lado * 0.15,
-            top: lado * 0.07,
+            top: 0,
             child: Container(
               width: lado,
               height: lado,

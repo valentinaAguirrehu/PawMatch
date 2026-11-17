@@ -30,7 +30,7 @@ class SeguimientoAporteItem {
       idSeguimiento: (json['id_seguimiento_apadrinacion'] ?? '').toString(),
       tipo: (json['tipo'] ?? 'monetario').toString(),
       comprometido: json['comprometido']?.toString(),
-      recibido: json['recibido'] == true || json['recibido'] == 'true',
+      recibido: json['recibido'] == true || json['recibido'] == 1 || json['recibido'] == '1' || json['recibido'] == 'true',
       medio: json['medio']?.toString(),
       montoRecibido: double.tryParse(json['monto_recibido']?.toString() ?? ''),
       referencia: json['referencia']?.toString(),
@@ -103,7 +103,7 @@ class CicloEvaluacionItem {
       idAdministrador: json['id_administrador']?.toString(),
       adminNombre: adminNom.isNotEmpty ? adminNom : 'Administrador',
       fechaDecision: parseFecha(json['fecha_decision']),
-      vistoPorUsuario: json['visto_por_usuario'] == true || json['visto_por_usuario'] == 'true',
+      vistoPorUsuario: json['visto_por_usuario'] == true || json['visto_por_usuario'] == 1 || json['visto_por_usuario'] == '1' || json['visto_por_usuario'] == 'true',
       fechaVistaUsuario: json['fecha_vista_usuario'] != null ? DateTime.tryParse(json['fecha_vista_usuario'].toString()) : null,
     );
   }
@@ -192,11 +192,11 @@ class SeguimientoApadrinamientoItem {
       idAdministrador: (json['id_administrador'] ?? '').toString(),
       adminNombre: adminNom.isNotEmpty ? adminNom : 'Administrador',
       fechaSeguimiento: parseFecha(json['fecha_seguimiento']),
-      cumplimiento: json['cumplimiento'] == true || json['cumplimiento'] == 'true',
+      cumplimiento: json['cumplimiento'] == true || json['cumplimiento'] == 1 || json['cumplimiento'] == '1' || json['cumplimiento'] == 'true',
       observaciones: (json['observaciones'] ?? '').toString(),
       proximoSeguimiento: parseFechaOpcional(json['proximo_seguimiento']),
       calificacion: int.tryParse(json['calificacion']?.toString() ?? '5') ?? 5,
-      correoAlertaEnviado: json['correo_alerta_enviado'] == true || json['correo_alerta_enviado'] == 'true',
+      correoAlertaEnviado: json['correo_alerta_enviado'] == true || json['correo_alerta_enviado'] == 1 || json['correo_alerta_enviado'] == '1' || json['correo_alerta_enviado'] == 'true',
       numeroSeguimiento: numSeg,
       ciclo: cicloCalc,
       createdAt: parseFechaOpcional(json['created_at']),
@@ -443,7 +443,10 @@ class ApadrinamientoActivoSeguimiento {
       ultimoSeguimientoObservaciones: json['ultimo_seguimiento_observaciones']?.toString(),
       proximoSeguimientoFecha: parseFecha(json['proximo_seguimiento_fecha']),
       tieneTresIncumplimientos: json['tiene_tres_incumplimientos'] == true || json['tiene_tres_incumplimientos'] == 'true',
-      ultimoCorreoAlertaEnviado: json['ultimo_correo_enviado'] == true || json['ultimo_correo_enviado'] == 'true',
+      ultimoCorreoAlertaEnviado: json['ultimo_correo_enviado'] == true ||
+          json['ultimo_correo_enviado'] == 1 ||
+          json['ultimo_correo_enviado'] == '1' ||
+          json['ultimo_correo_enviado'] == 'true',
       motivoCancelacion: json['motivo_cancelacion']?.toString(),
       observacionCancelacion: json['observacion_cancelacion']?.toString(),
       fotoCancelacion: json['foto_cancelacion']?.toString(),

@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:paw_match/models/rasgos.dart';
 import 'package:paw_match/services/entrevista_personalidad_service.dart';
+import 'package:paw_match/services/session.dart';
+import 'package:paw_match/services/microfono_plataforma.dart';
 import 'package:paw_match/services/voz_asistente_service.dart';
 import 'package:record/record.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -74,6 +77,7 @@ class VozEntrevista {
   bool _grabandoArchivo = false;
   String _parcial = '';
   String? _rutaAudio;
+  String _nombreAudio = 'respuesta.wav';
   void Function(String texto)? _alCambiar;
 
   /// Callback opcional para notificar a la interfaz cambios en el estado/progreso de reproducción.
@@ -585,11 +589,11 @@ class VozEntrevista {
         r == 0x2026;
   }
 
-  /// El dispositivo se traba en formas como «activo/a» y solo debe leer hasta el punto final sin emojis.
+  /// El dispositivo se traba en formas como «activo/a». Se leen en el género
+  /// de la persona y solo hasta el punto final, sin emojis.
   String _paraHablar(String texto) {
-    var limpio = String.fromCharCodes(texto.runes.where(_esCaracterLegible))
-        .replaceAll(RegExp('o/a'), 'a')
-        .replaceAll(RegExp('O/A'), 'A')
+    final concordado = Rasgo.concordarGenero(texto, Session.genero);
+    var limpio = String.fromCharCodes(concordado.runes.where(_esCaracterLegible))
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
@@ -667,21 +671,31 @@ class VozEntrevista {
   }
 
   Future<void> empezar({required void Function(String texto) alCambiar}) async {
-    await callar();
     _alCambiar = alCambiar;
     _parcial = '';
     _usandoArchivo = false;
+    _nombreAudio = 'respuesta.wav';
+    // En el navegador del celular el reconocimiento local pide permiso y
+    // después se rinde. La grabación tiene que arrancar en el mismo toque.
+    if (kIsWeb) {
+      final permiso = pedirMicrofono();
+      await callar();
+      if (!await permiso) {
+        throw Exception(
+          'El navegador no dejó usar el micrófono. En el celular, abre la configuración del sitio y permite el micrófono. Luego toca el botón otra vez.',
+        );
+      }
+      await iniciarGrabacion();
+      _usandoArchivo = true;
+      _grabandoArchivo = true;
+      return;
+    }
+    await callar();
     if (_reconocimientoLocal) {
       try {
         await _empezarLocal();
         return;
-      } catch (_) {
-        if (kIsWeb) {
-          throw Exception(
-            'El micrófono no está disponible en este navegador. Escribe tu respuesta.',
-          );
-        }
-      }
+      } catch (_) {}
     }
     await _empezarArchivo();
   }
@@ -690,9 +704,20 @@ class VozEntrevista {
     if (_usandoArchivo) {
       if (!_grabandoArchivo) return _parcial.trim();
       _grabandoArchivo = false;
+      if (kIsWeb) {
+        final audio = await detenerGrabacion();
+        return EntrevistaPersonalidadService.transcribirBytes(
+          audio.bytes,
+          audio.nombre,
+        );
+      }
       final ruta = await _grabadora.stop();
-      if (ruta == null || ruta.isEmpty) return '';
-      return EntrevistaPersonalidadService.transcribir(ruta);
+      if (ruta == null || ruta.isEmpty) {
+        throw Exception(
+          'No se grabó audio. Habla y toca otra vez el micrófono para transcribir.',
+        );
+      }
+      return EntrevistaPersonalidadService.transcribir(ruta, nombre: _nombreAudio);
     }
     if (_speech.isListening) {
       await _speech.stop();
@@ -709,7 +734,11 @@ class VozEntrevista {
       if (_speech.isListening) await _speech.cancel();
     } catch (_) {}
     try {
-      if (_grabandoArchivo) await _grabadora.stop();
+      if (kIsWeb) {
+        await cancelarGrabacion();
+      } else if (_grabandoArchivo) {
+        await _grabadora.stop();
+      }
     } catch (_) {}
     try {
       await _grabadora.dispose();
@@ -791,6 +820,7 @@ class VozEntrevista {
         path: wav,
       );
       _rutaAudio = wav;
+      _nombreAudio = 'respuesta.wav';
     } catch (_) {
       final m4a = p.join(dir.path, 'pawmatch_entrevista.m4a');
       await _grabadora.start(
@@ -798,6 +828,7 @@ class VozEntrevista {
         path: m4a,
       );
       _rutaAudio = m4a;
+      _nombreAudio = 'respuesta.m4a';
     }
     if (_rutaAudio == null) {
       throw Exception(

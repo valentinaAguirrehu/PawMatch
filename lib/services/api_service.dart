@@ -1,25 +1,21 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/archivo_multipart.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/models/admin_user.dart';
 import 'package:paw_match/models/user.dart';
 import 'package:paw_match/services/session.dart';
 
 class ApiService {
-  // IP local de tu PC en la red Wi-Fi compartida con el celular.
-  // Si cambias de red, actualízala: en PowerShell, ipconfig y mira la IPv4 de Wi-Fi.
-  static const String _servidorIp = '192.168.172.176';
+  /// En producción, Flutter Web usa el mismo origen que Cloudflare Pages: `/api`.
+  /// Para otro destino: flutter run --dart-define=API_BASE=https://tu-worker.workers.dev/api
+  static const String _definida = String.fromEnvironment('API_BASE');
 
-  // Elige la URL según donde corra la app:
-  // - Web (Chrome/Edge): localhost
-  // - Android (celular físico en la misma red Wi-Fi): _servidorIp
-  // - Windows / Desktop: localhost
   static String get baseUrl {
-    if (kIsWeb) return 'http://localhost:3000/api';
-    if (Platform.isAndroid) return 'http://$_servidorIp:3000/api';
-    return 'http://localhost:3000/api';
+    if (_definida.isNotEmpty) return _definida;
+    if (kIsWeb) return '/api';
+    return 'http://127.0.0.1:8787/api';
   }
 
   static Future<Map<String, dynamic>> registrarUsuario({
@@ -52,7 +48,12 @@ class ApiService {
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 201) {
-      return data as Map<String, dynamic>;
+      final mapa = Map<String, dynamic>.from(data as Map);
+      final sesion = mapa.remove('sesion');
+      if (sesion is String && sesion.isNotEmpty) {
+        http.recordarSesion(sesion, persistir: true);
+      }
+      return mapa;
     } else {
       throw Exception(data['error'] ?? 'Error al registrar el usuario');
     }
@@ -61,17 +62,25 @@ class ApiService {
   static Future<Map<String, dynamic>> iniciarSesion({
     required String correo,
     required String contrasena,
+    bool recordar = false,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/usuarios/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'correo': correo, 'contrasena': contrasena}),
+      body: jsonEncode({
+        'correo': correo.trim().toLowerCase(),
+        'contrasena': contrasena,
+        'recordar': recordar,
+      }),
     );
 
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
-      return data as Map<String, dynamic>;
+      final mapa = data as Map<String, dynamic>;
+      final sesion = mapa.remove('sesion');
+      if (sesion is String) http.recordarSesion(sesion, persistir: recordar);
+      return mapa;
     } else {
       throw Exception(data['error'] ?? 'Error al iniciar sesión');
     }
@@ -317,9 +326,7 @@ class ApiService {
       Uri.parse('$baseUrl/usuarios/foto'),
     );
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
-    req.files.add(
-      http.MultipartFile.fromBytes('foto', bytes, filename: nombreArchivo),
-    );
+    req.files.add(archivoMultipart('foto', bytes, nombreArchivo));
     final response = await http.Response.fromStream(await req.send());
     final data = jsonDecode(response.body);
     if (response.statusCode == 201) {

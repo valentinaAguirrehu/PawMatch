@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/archivo_multipart.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -51,9 +52,7 @@ class FundacionService {
   static Future<String> subirImagen(Uint8List bytes, String nombreArchivo) async {
     final req = http.MultipartRequest('POST', Uri.parse('$_url/imagen'));
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
-    req.files.add(
-      http.MultipartFile.fromBytes('foto', bytes, filename: nombreArchivo),
-    );
+    req.files.add(archivoMultipart('foto', bytes, nombreArchivo));
     final resp = await http.Response.fromStream(await req.send());
     final data = _leer(resp);
     if (resp.statusCode == 201 && data is Map && data['ruta'] is String) {

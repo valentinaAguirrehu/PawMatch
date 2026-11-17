@@ -487,9 +487,7 @@ class _DenunciaReporteScreenState extends State<DenunciaReporteScreen> {
           ),
           const SizedBox(height: 16),
           const Text(
-            'Cada animal merece vivir con dignidad, cuidado y respeto. Si conoces una situación en la que un animal esté sufriendo maltrato, haya sido abandonado o se encuentre en condiciones que pongan en riesgo su bienestar, puedes compartir la información con nosotros.\n\n'
-            'Tu reporte nos ayudará a conocer lo que está sucediendo, evaluar la situación y determinar qué alternativas de atención pueden estar disponibles. Cuantos más detalles relevantes puedas proporcionar, mejor podremos comprender el caso.\n\n'
-            'Si cuentas con fotografías, videos u otros elementos que permitan documentar lo ocurrido, podrás adjuntarlos al formulario, siempre que puedas obtenerlos de forma segura.',
+            'Cada animal merece vivir con dignidad, cuidado y respeto. Si conoces una situación en la que un animal esté sufriendo maltrato, haya sido abandonado o se encuentre en condiciones que pongan en riesgo su bienestar, puedes compartir la información con nosotros.',
             style: TextStyle(fontSize: 14.5, height: 1.55, color: AppColors.texto),
           ),
           const SizedBox(height: 22),

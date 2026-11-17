@@ -10,6 +10,7 @@ import 'package:paw_match/core/fundacion_info.dart';
 import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/services/acuerdo_adopcion_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/limite_pdf.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/pet_card.dart';
@@ -26,6 +27,7 @@ class AdoptionFormScreen extends StatefulWidget {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => AdoptionFormScreen(pet: pet),
     );
@@ -230,6 +232,11 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
           final file = files.first;
           bytes = await file.xFile.readAsBytes();
           nombre = file.name;
+          if (LimitePdf.estaPesado(nombre, bytes.length, bytes)) {
+            if (!mounted) return;
+            _avisoPdfPesado();
+            return;
+          }
         }
       } else {
         final source = opcion == 'camara' ? ImageSource.camera : ImageSource.gallery;
@@ -266,6 +273,16 @@ class _AdoptionFormScreenState extends State<AdoptionFormScreen> {
         SnackBar(content: Text('No se pudo seleccionar el archivo: $e')),
       );
     }
+  }
+
+  void _avisoPdfPesado() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.redAccent,
+        content: Text(LimitePdf.mensajePesado),
+      ),
+    );
   }
 
   bool _esBytesPdf(String? nombre, Uint8List? bytes) {

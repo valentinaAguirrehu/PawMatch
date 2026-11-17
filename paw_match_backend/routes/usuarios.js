@@ -115,7 +115,7 @@ router.post('/login', async (req, res) => {
   try {
     const resultado = await pool.query(
       `SELECT id_usuario, nombres, apellidos, correo, telefono, documento_identidad, genero, rol, estado_cuenta, contrasena_hash
-       FROM Usuario WHERE correo = $1`,
+       FROM Usuario WHERE lower(trim(correo)) = lower(trim($1))`,
       [correo]
     );
 

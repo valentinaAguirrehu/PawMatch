@@ -9,12 +9,14 @@ import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/favoritos_mascotas.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/noticias_service.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
+import 'package:paw_match/widgets/noticia_form_dialog.dart';
 import 'package:paw_match/widgets/pet_card.dart' show urlFoto;
 
 /// Vista principal de Paw Match (HomeTab)
@@ -50,9 +52,6 @@ class _HomeTabState extends State<HomeTab> {
   late Future<List<Pet>> _futureMascotas;
   late Future<List<Noticia>> _futureNoticias;
 
-  // Estado local de favoritos de mascotas
-  final Set<String> _mascotasFavoritas = {'Luna'};
-
   // Estado local de likes en noticias
   final Set<String> _noticiasLiked = {};
   final Map<String, int> _noticiasLikeCounts = {};
@@ -61,13 +60,20 @@ class _HomeTabState extends State<HomeTab> {
   void initState() {
     super.initState();
     PetsService.iniciarMonitoreo();
+    FavoritosMascotas.ids.addListener(_onFavoritos);
+    FavoritosMascotas.asegurar();
     _cargarDatos();
   }
 
   @override
   void dispose() {
+    FavoritosMascotas.ids.removeListener(_onFavoritos);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onFavoritos() {
+    if (mounted) setState(() {});
   }
 
   void _cargarDatos() {
@@ -75,6 +81,72 @@ class _HomeTabState extends State<HomeTab> {
       _futureMascotas = PetsService.listar(estado: 'disponible');
       _futureNoticias = NoticiasService.listar();
     });
+  }
+
+  bool _esNoticiaDeEjemplo(Noticia noticia) => noticia.id.startsWith('noticia-');
+
+  Future<void> _agregarNoticia() async {
+    final creada = await NoticiaFormDialog.mostrar(context);
+    if (creada == true && mounted) _cargarDatos();
+  }
+
+  Future<void> _editarNoticia(Noticia noticia) async {
+    if (_esNoticiaDeEjemplo(noticia)) {
+      _avisoNoticiaEjemplo();
+      return;
+    }
+    final editada = await NoticiaFormDialog.mostrar(context, noticia: noticia);
+    if (editada == true && mounted) _cargarDatos();
+  }
+
+  Future<void> _eliminarNoticia(Noticia noticia) async {
+    if (_esNoticiaDeEjemplo(noticia)) {
+      _avisoNoticiaEjemplo();
+      return;
+    }
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Eliminar noticia'),
+        content: Text('¿Seguro que quieres eliminar "${noticia.titulo}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+    try {
+      await NoticiasService.eliminar(noticia.id);
+      if (!mounted) return;
+      _cargarDatos();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Noticia eliminada')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
+  void _avisoNoticiaEjemplo() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Esta noticia es un ejemplo. Usa Agregar noticia para publicar una real.',
+        ),
+      ),
+    );
   }
 
   Future<void> _refrescar() async {
@@ -105,16 +177,14 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
-  void _toggleFavoritoMascota(Pet pet) {
-    setState(() {
-      if (_mascotasFavoritas.contains(pet.nombre)) {
-        _mascotasFavoritas.remove(pet.nombre);
-        _mostrarToast('Eliminaste a ${pet.nombre} de favoritos 🤍');
-      } else {
-        _mascotasFavoritas.add(pet.nombre);
-        _mostrarToast('¡Añadiste a ${pet.nombre} a favoritos! 💖');
-      }
-    });
+  Future<void> _toggleFavoritoMascota(Pet pet) async {
+    final ahoraEsFavorito = await FavoritosMascotas.alternar(pet.id);
+    if (!mounted) return;
+    _mostrarToast(
+      ahoraEsFavorito
+          ? '¡Añadiste a ${pet.nombre} a favoritos! 💖'
+          : 'Eliminaste a ${pet.nombre} de favoritos 🤍',
+    );
   }
 
   void _mostrarToast(String mensaje) {
@@ -362,7 +432,60 @@ class _HomeTabState extends State<HomeTab> {
                         color: Colors.white,
                         border: Border(top: BorderSide(color: _rosaWelcomeTop.withValues(alpha: 0.4))),
                       ),
-                      child: Row(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (Session.esAdmin) ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      _editarNoticia(noticia);
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: _rosaPrincipal,
+                                      side: const BorderSide(color: _rosaPrincipal),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                    ),
+                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    label: const Text(
+                                      'Editar',
+                                      style: TextStyle(fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      Navigator.pop(ctx);
+                                      _eliminarNoticia(noticia);
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red.shade700,
+                                      side: BorderSide(color: Colors.red.shade700),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                    ),
+                                    icon: const Icon(Icons.delete_outline, size: 18),
+                                    label: const Text(
+                                      'Eliminar',
+                                      style: TextStyle(fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          Row(
                         children: [
                               Expanded(
                                 child: InkWell(
@@ -438,6 +561,8 @@ class _HomeTabState extends State<HomeTab> {
                                 ),
                               ),
                             ],
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -729,7 +854,7 @@ class _HomeTabState extends State<HomeTab> {
         children: [
           // Foto hero institucional (ilustración con Maritza y perritos)
           Image.asset(
-            'assets/images/inicio/fundacion_hero.jpg',
+            'assets/images/inicio/fundacion_hero.jpeg',
             fit: BoxFit.cover,
             errorBuilder: (_, _, _) => Image.asset(
               'assets/images/fundacion_hero.jpg',
@@ -953,7 +1078,7 @@ class _HomeTabState extends State<HomeTab> {
                 separatorBuilder: (_, _) => SizedBox(width: esEscritorio ? 16 : 12),
                 itemBuilder: (context, index) {
                   final pet = mascotas[index];
-                  final esFav = _mascotasFavoritas.contains(pet.nombre);
+                  final esFav = FavoritosMascotas.esFavorito(pet.id);
 
                   return _TarjetaMascotaEstiloFoto(
                     pet: pet,
@@ -1028,25 +1153,60 @@ class _HomeTabState extends State<HomeTab> {
             ),
             const SizedBox(width: 8),
 
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: esEscritorio ? 12 : 9,
-                vertical: esEscritorio ? 4 : 3,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
+            if (Session.esAdmin)
+              Material(
+                color: _rosaPrincipal,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _rosaWelcomeTop.withValues(alpha: 0.6)),
-              ),
-              child: Text(
-                'Importante',
-                style: TextStyle(
-                  fontSize: esEscritorio ? 12 : 10,
-                  fontWeight: FontWeight.w800,
-                  color: _rosaPrincipal,
+                child: InkWell(
+                  onTap: _agregarNoticia,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: esEscritorio ? 12 : 10,
+                      vertical: esEscritorio ? 7 : 6,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add_rounded,
+                          size: esEscritorio ? 16 : 14,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Agregar noticia',
+                          style: TextStyle(
+                            fontSize: esEscritorio ? 12 : 10,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            else
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: esEscritorio ? 12 : 9,
+                  vertical: esEscritorio ? 4 : 3,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _rosaWelcomeTop.withValues(alpha: 0.6)),
+                ),
+                child: Text(
+                  'Importante',
+                  style: TextStyle(
+                    fontSize: esEscritorio ? 12 : 10,
+                    fontWeight: FontWeight.w800,
+                    color: _rosaPrincipal,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
         ),

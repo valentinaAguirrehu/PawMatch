@@ -31,7 +31,7 @@ class _ImpactoCarruselState extends State<ImpactoCarrusel> {
   static const _fotosRespaldo = [
     'assets/images/inicio/familia.jpg',
     'assets/images/inicio/juntos.jpg',
-    'assets/images/inicio/fundacion_hero.jpg',
+    'assets/images/inicio/fundacion_hero.jpeg',
   ];
 
   @override

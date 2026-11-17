@@ -16,7 +16,7 @@ function preguntaPorClave(clave) {
   return PREGUNTAS.find((pregunta) => pregunta.clave === clave) || null;
 }
 
-function concordar(texto, genero) {
+export function concordar(texto, genero) {
   const cual = String(genero || '').trim().toLowerCase();
   if (cual !== 'mujer' && cual !== 'hombre') return texto;
   return texto.replace(/([\p{L}]+)\/a/gu, (_, base) => {

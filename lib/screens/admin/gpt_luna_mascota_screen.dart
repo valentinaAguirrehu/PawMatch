@@ -681,6 +681,7 @@ class _GptLunaMascotaScreenState extends State<GptLunaMascotaScreen>
       );
 
       final creada = await PetsService.crear(nuevaMascota);
+      await EntrevistaMascotaLunaService.eliminarBorrador('', nombre: creada.nombre);
       if (!mounted) return;
       _aviso('¡"${creada.nombre}" se registró exitosamente en Paw Match! 🐾');
       Navigator.pop(context, creada);

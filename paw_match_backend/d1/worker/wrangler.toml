@@ -29,7 +29,7 @@ bucket_name = "pawmatch-archivos"
 name = "pawmatch-api"
 
 [env.production.vars]
-CORS_ORIGINS = "https://pawmatchpet.com,https://www.pawmatchpet.com"
+CORS_ORIGINS = "https://pawmatchpet.com,https://www.pawmatchpet.com,https://pawmatchpet.angiebenavides1809.workers.dev"
 
 [[env.production.d1_databases]]
 binding = "DB"

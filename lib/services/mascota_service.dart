@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/archivo_multipart.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import '../models/pet.dart';
 import 'api_service.dart';
 import 'session.dart';
@@ -36,9 +37,7 @@ class PetsService {
   static Future<String> subirFoto(Uint8List bytes, String nombreArchivo) async {
     final req = http.MultipartRequest('POST', Uri.parse('$_url/foto'));
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
-    req.files.add(
-      http.MultipartFile.fromBytes('foto', bytes, filename: nombreArchivo),
-    );
+    req.files.add(archivoMultipart('foto', bytes, nombreArchivo));
     final resp = await http.Response.fromStream(await req.send());
     _validar(resp, 201);
     return (jsonDecode(resp.body) as Map<String, dynamic>)['ruta'] as String;

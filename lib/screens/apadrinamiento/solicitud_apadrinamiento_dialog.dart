@@ -10,6 +10,7 @@ import 'package:paw_match/models/pet.dart';
 import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/limite_pdf.dart';
 import 'package:paw_match/services/pets_service.dart';
 import 'package:paw_match/services/seguimiento_apadrinamiento_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -97,6 +98,7 @@ class SolicitudApadrinamientoDialog extends StatefulWidget {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => SolicitudApadrinamientoDialog(
         pet: pet,
@@ -231,6 +233,11 @@ class _SolicitudApadrinamientoDialogState
           final file = files.first;
           bytes = await file.xFile.readAsBytes();
           nombre = file.name;
+          if (LimitePdf.estaPesado(nombre, bytes.length, bytes)) {
+            if (!mounted) return;
+            _avisoPdfPesado();
+            return;
+          }
         }
       } else {
         final source = opcion == 'camara' ? ImageSource.camera : ImageSource.gallery;
@@ -256,6 +263,16 @@ class _SolicitudApadrinamientoDialogState
         SnackBar(content: Text('No se pudo seleccionar el documento: $e')),
       );
     }
+  }
+
+  void _avisoPdfPesado() {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: Colors.redAccent,
+        content: Text(LimitePdf.mensajePesado),
+      ),
+    );
   }
 
   void _verDocumento() {
