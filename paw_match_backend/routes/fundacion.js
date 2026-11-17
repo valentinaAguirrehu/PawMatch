@@ -25,7 +25,7 @@ const upload = multer({
 // `redes_sociales` va aparte porque se guarda como JSON.
 const campos = [
   'nombre', 'descripcion', 'mision', 'vision', 'direccion', 'ciudad',
-  'telefono', 'correo', 'logo', 'imagen_principal', 'imagen_fondo',
+  'telefono', 'correo', 'logo', 'imagen_principal', 'imagen_fondo', 'imagen_denuncias',
   'rescatista_nombre', 'rescatista_texto', 'rescatista_foto',
   'mapa_url', 'ayuda_adopta_titulo', 'ayuda_adopta_texto',
   'ayuda_apadrina_titulo', 'ayuda_apadrina_texto', 'contacto_texto',
@@ -54,6 +54,7 @@ const valoresIniciales = {
   logo: 'assets/images/logo.png',
   imagen_principal: 'assets/fundacion/Maritzanimada.jpg',
   imagen_fondo: null,
+  imagen_denuncias: null,
   rescatista_nombre: 'Maritza Arévalo',
   rescatista_texto:
     'Maritza Arévalo acompaña la labor de la Fundación en San Juan de Pasto: '
@@ -88,7 +89,8 @@ const listo = (async () => {
       ADD COLUMN IF NOT EXISTS ayuda_adopta_texto TEXT,
       ADD COLUMN IF NOT EXISTS ayuda_apadrina_titulo VARCHAR(100),
       ADD COLUMN IF NOT EXISTS ayuda_apadrina_texto TEXT,
-      ADD COLUMN IF NOT EXISTS contacto_texto TEXT
+      ADD COLUMN IF NOT EXISTS contacto_texto TEXT,
+      ADD COLUMN IF NOT EXISTS imagen_denuncias TEXT
   `);
   // Varias redes en JSON no caben en 255 caracteres.
   await pool.query('ALTER TABLE informacionfundacion ALTER COLUMN redes_sociales TYPE TEXT');

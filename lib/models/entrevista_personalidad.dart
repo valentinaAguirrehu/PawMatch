@@ -1,4 +1,6 @@
 /// Pregunta real del formulario de personalidad, servida por el backend.
+
+/// Pregunta real del formulario de personalidad, servida por el backend.
 class PreguntaEntrevista {
   final int orden;
   final String id;
@@ -17,20 +19,27 @@ class PreguntaEntrevista {
   });
 
   factory PreguntaEntrevista.fromJson(Map<String, dynamic> json) {
-    final id = (json['pregunta_id'] ?? '').toString().trim();
+    final id = (json['clave'] ?? json['pregunta_id'] ?? '').toString().trim();
     final titulo = (json['titulo'] ?? '').toString().trim();
     final pregunta = (json['pregunta'] ?? '').toString().trim();
-    final minimo = (json['minimo'] ?? '').toString().trim();
-    final maximo = (json['maximo'] ?? '').toString().trim();
+
+    // Valores predeterminados para la escala de personalidad de 1 a 5.
+    final minimo = (json['minimo'] ?? '1').toString().trim();
+    final maximo = (json['maximo'] ?? '5').toString().trim();
+
     final ordenRaw = json['orden'];
-    final orden = ordenRaw is int ? ordenRaw : int.tryParse('$ordenRaw') ?? 0;
+    final orden = ordenRaw is int
+        ? ordenRaw
+        : int.tryParse('$ordenRaw') ?? 0;
+
     if (id.isEmpty ||
         titulo.isEmpty ||
         pregunta.isEmpty ||
         minimo.isEmpty ||
         maximo.isEmpty) {
-      throw const FormatException('pregunta');
+      throw const FormatException('Pregunta de personalidad incompleta');
     }
+
     return PreguntaEntrevista(
       orden: orden,
       id: id,

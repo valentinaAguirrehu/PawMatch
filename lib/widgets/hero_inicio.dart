@@ -50,7 +50,7 @@ class HeroInicio extends StatelessWidget {
             GestureDetector(
               onTap: onVerMascotas,
               child: Image.asset(
-                'assets/images/inicio/fundacion_hero.jpg',
+                'assets/images/inicio/fundacion_hero.jpeg',
                 fit: BoxFit.cover,
               ),
             ),

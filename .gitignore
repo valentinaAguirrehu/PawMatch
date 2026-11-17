@@ -46,6 +46,9 @@ app.*.map.json
 
 # Node.js / Backend (paw_match_backend) related
 paw_match_backend/node_modules/
+paw_match_backend/d1/worker/node_modules/
+paw_match_backend/d1/worker/.wrangler/
+paw_match_backend/d1/worker/.dev.vars
 paw_match_backend/.env
 paw_match_backend/npm-debug.log*
 paw_match_backend/.npm/

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/bytes_audio.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/models/entrevista_personalidad.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -104,14 +106,29 @@ class EntrevistaPersonalidadService {
     throw Exception(_mensaje(_leer(resp), 'No se pudo corregir esa respuesta'));
   }
 
-  static Future<String> transcribir(String ruta) async {
+  static Future<String> transcribir(String ruta, {String nombre = ''}) async {
+    final bytes = await leerBytesAudio(ruta);
+    final archivo = nombre.trim().isNotEmpty
+        ? nombre.trim()
+        : ruta.split(RegExp(r'[/\\]')).last;
+    return transcribirBytes(bytes, archivo);
+  }
+
+  static Future<String> transcribirBytes(Uint8List bytes, String nombre) async {
+    if (bytes.isEmpty) {
+      throw Exception(
+        'La grabación quedó vacía. Habla un poco más y toca otra vez el micrófono.',
+      );
+    }
     final id = _id();
     final solicitud = http.MultipartRequest(
       'POST',
       Uri.parse('${ApiService.baseUrl}/usuarios/$id/personalidad/transcribir'),
     );
     solicitud.headers['x-usuario-id'] = id;
-    solicitud.files.add(await http.MultipartFile.fromPath('audio', ruta));
+    solicitud.files.add(
+      http.MultipartFile.fromBytes('audio', bytes, filename: nombre),
+    );
     final enviada = await solicitud.send().timeout(const Duration(seconds: 50));
     final resp = await http.Response.fromStream(enviada);
     final data = _leer(resp);

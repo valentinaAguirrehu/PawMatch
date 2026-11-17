@@ -34,9 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() {
       _recordarContrasena = creds.recordar;
-      if (creds.recordar) {
-        if (creds.correo.isNotEmpty) _correoCtrl.text = creds.correo;
-        if (creds.contrasena.isNotEmpty) _contrasenaCtrl.text = creds.contrasena;
+      if (creds.recordar && creds.correo.isNotEmpty) {
+        _correoCtrl.text = creds.correo;
       }
     });
   }
@@ -57,15 +56,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final usuario = await ApiService.iniciarSesion(
         correo: _correoCtrl.text.trim(),
         contrasena: _contrasenaCtrl.text,
+        recordar: _recordarContrasena,
       );
 
       if (!mounted) return;
 
-      // Guarda o elimina las credenciales según la preferencia seleccionada
       await Session.guardarCredenciales(
         recordar: _recordarContrasena,
         correo: _correoCtrl.text.trim(),
-        contrasena: _contrasenaCtrl.text,
       );
 
       if (!mounted) return;
@@ -224,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                                           ),
                                                           const SizedBox(width: 8),
                                                           Text(
-                                                            'Recordar contraseña',
+                                                            'Recordar sesión',
                                                             style: TextStyle(
                                                               color: AppColors.texto.withValues(alpha: 0.78),
                                                               fontSize: 12.5,

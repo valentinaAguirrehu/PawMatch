@@ -4,7 +4,7 @@ import {
   cookieSesion, cookieVacia, abrirSesion, revocarSesion, revocarSesionesDeUsuario, revocarOtrasSesiones, guardarArchivo, borrarArchivo, leerArchivo,
   enviarCorreo, RASGOS, edadSql, unidadEdadSql,
 } from './http.js';
-import { interpretarPersonalidad } from './personalidad_ia.js';
+import { concordar, interpretarPersonalidad } from './personalidad_ia.js';
 import { turnoLuna } from './luna.js';
 import * as correos from './correos.js';
 
@@ -234,16 +234,21 @@ async function registrar(request, env) {
      VALUES (?, ?, ?, ?, ?, ?, ?, 'usuario')
      RETURNING id_usuario, nombres, apellidos, correo, telefono, fecha_nacimiento, genero, rol, fecha_registro`
   ).bind(nombres, apellidos, correo, telefono || null, fecha_nacimiento || null, genero, bcrypt.hashSync(pass, 10)).first();
-  return json(creado, 201);
+  // Sin sesión, el cuestionario de personalidad responde 401 justo después del registro.
+  const sesionAbierta = await abrirSesion(env, creado.id_usuario, true);
+  const publico = { ...creado };
+  if (request.headers.get('X-Paw-Client') === 'native') publico.sesion = sesionAbierta.token;
+  return json(publico, 201, { 'Set-Cookie': cookieSesion(sesionAbierta.token, request, sesionAbierta.segundos) });
 }
 
 async function iniciarSesion(request, env) {
   const body = await cuerpo(request);
-  if (!body.correo || !body.contrasena) return json({ error: 'Correo y contraseña son obligatorios' }, 400);
+  const correo = String(body.correo || '').trim().toLowerCase();
+  if (!correo || !body.contrasena) return json({ error: 'Correo y contraseña son obligatorios' }, 400);
   const usuario = await env.DB.prepare(
     `SELECT id_usuario, nombres, apellidos, correo, telefono, documento_identidad, genero, rol, estado_cuenta, contrasena_hash
-     FROM usuario WHERE correo = ?`
-  ).bind(body.correo).first();
+     FROM usuario WHERE lower(trim(correo)) = ?`
+  ).bind(correo).first();
   if (!usuario || !bcrypt.compareSync(String(body.contrasena), usuario.contrasena_hash)) {
     return json({ error: 'Correo o contraseña incorrectos' }, 401);
   }
@@ -577,7 +582,12 @@ async function crearMascota(request, env) {
     body.detalle_salud || null, body.fecha_nacimiento || null, bool(body.personalidad_definida) ?? 1
   ).run();
   await guardarRasgos(env, 'personalidadmascota', 'id_mascota', id, body.personalidad);
-  return unaMascota(env, id);
+  await env.DB.prepare(
+    `DELETE FROM borrador_mascota_formulario_ia
+     WHERE id_administrador = ? AND lower(trim(COALESCE(nombre, ''))) = lower(trim(?))`
+  ).bind(acceso.usuario.id_usuario, String(body.nombre).trim()).run();
+  const creada = await unaMascota(env, id);
+  return json(await creada.json(), 201);
 }
 
 async function editarMascota(request, env, id) {
@@ -608,9 +618,24 @@ async function borrarMascota(request, env, id) {
   if (acceso.error) return acceso.error;
   const actual = await env.DB.prepare('SELECT fotos FROM mascota WHERE id_mascota = ?').bind(id).first();
   if (!actual) return json({ error: 'Mascota no encontrada' }, 404);
-  const fila = await env.DB.prepare('DELETE FROM mascota WHERE id_mascota = ? RETURNING id_mascota').bind(id).first();
-  if (!fila) return json({ error: 'Mascota no encontrada' }, 404);
-  for (const ruta of rutasDeFotos(actual.fotos)) await borrarArchivo(env, ruta);
+  const proceso = await env.DB.prepare(
+    `SELECT
+       (SELECT COUNT(*) FROM solicitudadopcion WHERE id_mascota = ?) AS adopciones,
+       (SELECT COUNT(*) FROM solicitudapadrinamiento WHERE id_mascota = ?) AS apadrinamientos,
+       (SELECT COUNT(*) FROM cancelacion_adopcion WHERE id_mascota = ?) AS cancelaciones`
+  ).bind(id, id, id).first();
+  if (Number(proceso?.adopciones) > 0 || Number(proceso?.apadrinamientos) > 0 || Number(proceso?.cancelaciones) > 0) {
+    return json({ error: 'No se puede eliminar: esta mascota tiene solicitudes o un proceso registrado' }, 409);
+  }
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM personalidadmascota WHERE id_mascota = ?').bind(id),
+    env.DB.prepare('DELETE FROM respuestamascota WHERE id_mascota = ?').bind(id),
+    env.DB.prepare('DELETE FROM mascota WHERE id_mascota = ?').bind(id),
+  ]);
+  for (const ruta of rutasDeFotos(actual.fotos)) {
+    const otra = await env.DB.prepare('SELECT 1 AS ok FROM mascota WHERE fotos = ?').bind(ruta).first();
+    if (!otra) await borrarArchivo(env, ruta);
+  }
   return json({ mensaje: 'Mascota eliminada' });
 }
 
@@ -665,20 +690,23 @@ async function guardarBorrador(request, env) {
   const personalidad = JSON.stringify(ficha.personalidad || {});
   const salud = JSON.stringify(ficha.estado_salud || []);
   const historial = JSON.stringify(body.historial || []);
+  const origen = (body.origen_registro || ficha.origen_registro) === 'manual' ? 'manual' : 'ia';
   await env.DB.prepare(
     `INSERT INTO borrador_mascota_formulario_ia (
       id_administrador, nombre, especie, sexo, edad, unidad_edad, fecha_nacimiento, raza, tamano,
-      personalidad, estado_salud, vacunas, esterilizado, detalle_salud, descripcion, paso_actual, historial_chat, foto
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      personalidad, estado_salud, vacunas, esterilizado, detalle_salud, descripcion, paso_actual, historial_chat, foto, origen_registro
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (id_administrador) DO UPDATE SET
       nombre = excluded.nombre, especie = excluded.especie, sexo = excluded.sexo, edad = excluded.edad,
       personalidad = excluded.personalidad, estado_salud = excluded.estado_salud, historial_chat = excluded.historial_chat,
-      paso_actual = excluded.paso_actual, foto = excluded.foto, fecha_actualizacion = CURRENT_TIMESTAMP`
+      paso_actual = excluded.paso_actual, foto = excluded.foto, origen_registro = excluded.origen_registro,
+      fecha_actualizacion = CURRENT_TIMESTAMP`
   ).bind(
     acceso.usuario.id_usuario, ficha.nombre || null, ficha.especie || null, ficha.sexo || null, ficha.edad || null,
     ficha.unidad_edad || null, ficha.fecha_nacimiento || null, ficha.raza || null, ficha.tamano || null,
     personalidad, salud, bool(ficha.vacunas), bool(ficha.esterilizado), ficha.detalle_salud || null,
-    ficha.descripcion || null, body.paso_actual || 'nombre', historial, body.foto || ficha.foto || null
+    ficha.descripcion || null, body.paso_actual || ficha.paso_actual || 'nombre', historial, body.foto || ficha.foto || null,
+    origen
   ).run();
   return json({ ok: true, ficha, guardado_en_bd: true });
 }
@@ -713,7 +741,15 @@ async function luna(request, env) {
   return json(turno.body);
 }
 
+async function asegurarImagenDenuncias(env) {
+  const info = await env.DB.prepare('PRAGMA table_info(informacionfundacion)').all();
+  const columnas = info.results || [];
+  if (columnas.some((columna) => columna.name === 'imagen_denuncias')) return;
+  await env.DB.prepare('ALTER TABLE informacionfundacion ADD COLUMN imagen_denuncias TEXT').run();
+}
+
 async function fundacion(env) {
+  await asegurarImagenDenuncias(env);
   const fila = await env.DB.prepare('SELECT * FROM informacionfundacion LIMIT 1').first();
   if (!fila) return json({ error: 'Sin información de la fundación' }, 404);
   try { fila.redes_sociales = JSON.parse(fila.redes_sociales || '{}'); } catch { fila.redes_sociales = {}; }
@@ -725,7 +761,8 @@ async function guardarFundacion(request, env) {
   if (acceso.error) return acceso.error;
   const body = await cuerpo(request);
   if (!String(body.nombre || '').trim()) return json({ error: 'El nombre de la fundación es obligatorio' }, 400);
-  const campos = ['nombre', 'descripcion', 'mision', 'vision', 'direccion', 'ciudad', 'telefono', 'correo', 'logo', 'imagen_principal', 'imagen_fondo', 'rescatista_nombre', 'rescatista_texto', 'rescatista_foto', 'mapa_url', 'ayuda_adopta_titulo', 'ayuda_adopta_texto', 'ayuda_apadrina_titulo', 'ayuda_apadrina_texto', 'contacto_texto'];
+  await asegurarImagenDenuncias(env);
+  const campos = ['nombre', 'descripcion', 'mision', 'vision', 'direccion', 'ciudad', 'telefono', 'correo', 'logo', 'imagen_principal', 'imagen_fondo', 'imagen_denuncias', 'rescatista_nombre', 'rescatista_texto', 'rescatista_foto', 'mapa_url', 'ayuda_adopta_titulo', 'ayuda_adopta_texto', 'ayuda_apadrina_titulo', 'ayuda_apadrina_texto', 'contacto_texto'];
   const valores = campos.map((campo) => {
     const valor = body[campo];
     if (valor == null) return null;
@@ -739,12 +776,19 @@ async function guardarFundacion(request, env) {
     if (!/^https?:\/\//i.test(enlace)) return json({ error: `El enlace de ${red} debe empezar con http:// o https://` }, 400);
     redes[red] = String(enlace).trim();
   }
-  const fila = await env.DB.prepare(
-    `UPDATE informacionfundacion SET ${campos.map((campo) => `${campo} = ?`).join(', ')}, redes_sociales = ?
-     WHERE id_fundacion = (SELECT id_fundacion FROM informacionfundacion LIMIT 1)
-     RETURNING *`
-  ).bind(...valores, JSON.stringify(redes)).first();
-  if (!fila) return json({ error: 'Sin información de la fundación' }, 404);
+  const redesJson = JSON.stringify(redes);
+  const actual = await env.DB.prepare('SELECT id_fundacion FROM informacionfundacion LIMIT 1').first();
+  const consulta = actual?.id_fundacion
+    ? await env.DB.prepare(
+      `UPDATE informacionfundacion SET ${campos.map((campo) => `${campo} = ?`).join(', ')}, redes_sociales = ?
+       WHERE id_fundacion = ? RETURNING *`
+    ).bind(...valores, redesJson, actual.id_fundacion).all()
+    : await env.DB.prepare(
+      `INSERT INTO informacionfundacion (id_fundacion, ${campos.join(', ')}, redes_sociales)
+       VALUES (?, ${campos.map(() => '?').join(', ')}, ?) RETURNING *`
+    ).bind(crypto.randomUUID(), ...valores, redesJson).all();
+  const fila = consulta.results?.[0];
+  if (!fila) return json({ error: 'No se pudo guardar la información de la fundación' }, 500);
   fila.redes_sociales = redes;
   return json(fila);
 }
@@ -788,7 +832,8 @@ async function crearNoticia(request, env) {
     `INSERT INTO noticia (id_noticia, titulo, contenido, imagen, fecha, lugar, id_administrador)
      VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_DATE), ?, ?)`
   ).bind(id, body.titulo.trim(), body.contenido.trim(), body.imagen || null, body.fecha || null, body.lugar || 'Fundación Maritza Arévalo', acceso.usuario.id_usuario).run();
-  return unaNoticia(request, env, id);
+  const creada = await unaNoticia(request, env, id);
+  return json(await creada.json(), 201);
 }
 
 async function editarNoticia(request, env, id) {
@@ -1436,23 +1481,33 @@ async function finalizarApadrinamiento(request, env, id) {
 async function resumenAdopcion(request, env) {
   const acceso = await exigirUsuario(request, env);
   if (acceso.error) return acceso.error;
+  let totalAdmin = 0;
   if (esAdmin(acceso.usuario.rol)) {
-    const total = await env.DB.prepare(`SELECT COUNT(*) AS total FROM solicitudadopcion WHERE leido_admin = 0 AND estado = 'pendiente'`).first();
-    return json({ total: total.total });
+    const admin = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM solicitudadopcion WHERE leido_admin = 0 AND estado = 'pendiente'`
+    ).first();
+    totalAdmin = Number(admin?.total || 0);
   }
-  const total = await env.DB.prepare(`SELECT COUNT(*) AS total FROM solicitudadopcion WHERE id_usuario = ? AND leido_usuario = 0 AND estado IN ('aprobada', 'rechazada')`).bind(acceso.usuario.id_usuario).first();
-  return json({ total: total.total });
+  const usuario = await env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM solicitudadopcion WHERE id_usuario = ? AND leido_usuario = 0 AND estado IN ('aprobada', 'rechazada')`
+  ).bind(acceso.usuario.id_usuario).first();
+  return json({ totalAdmin, totalUsuario: Number(usuario?.total || 0) });
 }
 
 async function resumenApadrinamiento(request, env) {
   const acceso = await exigirUsuario(request, env);
   if (acceso.error) return acceso.error;
+  let totalAdmin = 0;
   if (esAdmin(acceso.usuario.rol)) {
-    const total = await env.DB.prepare(`SELECT COUNT(*) AS total FROM solicitudapadrinamiento WHERE leido_admin = 0 AND estado = 'pendiente'`).first();
-    return json({ total: total.total });
+    const admin = await env.DB.prepare(
+      `SELECT COUNT(*) AS total FROM solicitudapadrinamiento WHERE leido_admin = 0 AND estado = 'pendiente'`
+    ).first();
+    totalAdmin = Number(admin?.total || 0);
   }
-  const total = await env.DB.prepare(`SELECT COUNT(*) AS total FROM solicitudapadrinamiento WHERE id_usuario = ? AND leido_usuario = 0 AND estado IN ('aprobada', 'rechazada', 'cancelada')`).bind(acceso.usuario.id_usuario).first();
-  return json({ total: total.total });
+  const usuario = await env.DB.prepare(
+    `SELECT COUNT(*) AS total FROM solicitudapadrinamiento WHERE id_usuario = ? AND leido_usuario = 0 AND estado IN ('aprobada', 'rechazada', 'cancelada')`
+  ).bind(acceso.usuario.id_usuario).first();
+  return json({ totalAdmin, totalUsuario: Number(usuario?.total || 0) });
 }
 
 async function marcarLeido(request, env, tabla, columna, admin) {
@@ -1611,7 +1666,7 @@ async function crearDenuncia(request, env) {
 async function exigirDenuncias(request, env) {
   const acceso = await exigirUsuario(request, env);
   if (acceso.error) return acceso;
-  if (acceso.usuario.rol !== 'administrador') {
+  if (!esAdmin(acceso.usuario.rol)) {
     return { error: json({ error: 'Acceso restringido solo para personal autorizado de la Fundación Maritza Arévalo' }, 403) };
   }
   return acceso;
@@ -1792,13 +1847,13 @@ async function archivoPrivado(request, env, carpeta, nombre) {
   if (!archivo) return json({ error: 'Archivo no encontrado' }, 404);
   const acceso = await exigirUsuario(request, env);
   if (acceso.error) return acceso.error;
-  if (carpeta === 'denuncias' && acceso.usuario.rol !== 'administrador') {
+  if (carpeta === 'denuncias' && !esAdmin(acceso.usuario.rol)) {
     return json({ error: 'Acceso restringido solo para personal autorizado de la Fundación Maritza Arévalo' }, 403);
   }
   const rutaArchivo = `/uploads/${carpeta}/${archivo}`;
   const dueno = await duenoDeArchivo(env, carpeta, rutaArchivo);
   if (!dueno) return json({ error: 'Archivo no encontrado' }, 404);
-  const admin = carpeta === 'denuncias' ? acceso.usuario.rol === 'administrador' : esAdmin(acceso.usuario.rol);
+  const admin = esAdmin(acceso.usuario.rol);
   if (!admin && dueno.id !== acceso.usuario.id_usuario) {
     return json({ error: 'No puedes ver este archivo' }, 403);
   }
@@ -1820,7 +1875,12 @@ async function preguntas(request, env) {
   const acceso = await exigirUsuario(request, env);
   if (acceso.error) return acceso.error;
   return json({
-    preguntas: PREGUNTAS.map(([clave, titulo, pregunta], indice) => ({ orden: indice + 1, clave, titulo, pregunta })),
+    preguntas: PREGUNTAS.map(([clave, titulo, pregunta], indice) => ({
+      orden: indice + 1,
+      clave,
+      titulo,
+      pregunta: concordar(pregunta, acceso.usuario.genero),
+    })),
   });
 }
 
@@ -1916,19 +1976,39 @@ async function guardarPersonalidad(request, env, id, metodo) {
   if (valores.some((valor) => !Number.isInteger(valor) || valor < 1 || valor > 5)) {
     return json({ error: 'Cada rasgo debe estar entre 1 y 5' }, 400);
   }
-  const existente = await env.DB.prepare('SELECT id_perfil_usuario FROM personalidadusuario WHERE id_usuario = ?').bind(id).first();
-  if (existente && metodo === 'POST') return json({ error: 'Ya registraste tu personalidad' }, 409);
+  const existente = await env.DB.prepare(`SELECT id_perfil_usuario, ${RASGOS.join(', ')} FROM personalidadusuario WHERE id_usuario = ?`).bind(id).first();
+  if (existente && metodo === 'POST') {
+    const iguales = RASGOS.every((rasgo, indice) => Number(existente[rasgo]) === valores[indice]);
+    if (iguales) {
+      const actual = await obtenerPersonalidad(env, id);
+      return json(await actual.json(), 201);
+    }
+    return json({ error: 'Ya registraste tu personalidad' }, 409);
+  }
   if (existente) {
     await env.DB.prepare(`UPDATE personalidadusuario SET ${RASGOS.map((rasgo) => `${rasgo} = ?`).join(', ')}, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id_usuario = ?`).bind(...valores, id).run();
-  } else {
-    await env.DB.prepare(`INSERT INTO personalidadusuario (id_usuario, ${RASGOS.join(', ')}) VALUES (?, ${RASGOS.map(() => '?').join(', ')})`).bind(id, ...valores).run();
+    return obtenerPersonalidad(env, id);
   }
-  return obtenerPersonalidad(env, id);
+  await env.DB.prepare(`INSERT INTO personalidadusuario (id_usuario, ${RASGOS.join(', ')}) VALUES (?, ${RASGOS.map(() => '?').join(', ')})`).bind(id, ...valores).run();
+  const creada = await obtenerPersonalidad(env, id);
+  return json(await creada.json(), 201);
+}
+
+function respuestaMatchVacia() {
+  return {
+    tiene_personalidad: false,
+    id_mascota_match_inicial: null,
+    porcentaje_match_inicial: null,
+    fecha_match_inicial: null,
+    aviso_reasignacion: null,
+    notificaciones: [],
+    no_leidas: 0,
+  };
 }
 
 async function sincronizarMatch(env, id) {
   const perfil = await env.DB.prepare(`SELECT * FROM personalidadusuario WHERE id_usuario = ?`).bind(id).first();
-  if (!perfil) return json({ existe: false });
+  if (!perfil) return json(respuestaMatchVacia());
   const mascotas = await env.DB.prepare(`SELECT m.nombre, m.estado_adopcion, pm.* FROM personalidadmascota pm JOIN mascota m ON m.id_mascota = pm.id_mascota`).all();
   let mejor = null;
   let porcentaje = -1;
@@ -1941,17 +2021,48 @@ async function sincronizarMatch(env, id) {
       mejor = mascota;
     }
   }
-  if (!mejor) return json({ existe: true, match: null });
-  await env.DB.prepare(
-    `UPDATE personalidadusuario SET id_mascota_match_inicial = COALESCE(id_mascota_match_inicial, ?), porcentaje_match_inicial = COALESCE(porcentaje_match_inicial, ?), fecha_match_inicial = COALESCE(fecha_match_inicial, CURRENT_TIMESTAMP) WHERE id_usuario = ?`
-  ).bind(mejor.id_mascota, porcentaje, id).run();
-  if (porcentaje >= 75) {
+  if (mejor) {
     await env.DB.prepare(
-      `INSERT INTO notificacion_match_usuario (id_notificacion, id_usuario, id_mascota, porcentaje_match)
-       VALUES (?, ?, ?, ?) ON CONFLICT (id_usuario, id_mascota) DO NOTHING`
-    ).bind(crypto.randomUUID(), id, mejor.id_mascota, porcentaje).run();
+      `UPDATE personalidadusuario SET id_mascota_match_inicial = COALESCE(id_mascota_match_inicial, ?), porcentaje_match_inicial = COALESCE(porcentaje_match_inicial, ?), fecha_match_inicial = COALESCE(fecha_match_inicial, CURRENT_TIMESTAMP) WHERE id_usuario = ?`
+    ).bind(mejor.id_mascota, porcentaje, id).run();
+    if (porcentaje >= 75 && mejor.id_mascota !== perfil.id_mascota_match_inicial) {
+      await env.DB.prepare(
+        `INSERT INTO notificacion_match_usuario (id_notificacion, id_usuario, id_mascota, porcentaje_match)
+         VALUES (?, ?, ?, ?) ON CONFLICT (id_usuario, id_mascota) DO NOTHING`
+      ).bind(crypto.randomUUID(), id, mejor.id_mascota, porcentaje).run();
+    }
   }
-  return json({ existe: true, id_mascota: mejor.id_mascota, nombre: mejor.nombre, porcentaje });
+  const actual = await env.DB.prepare(
+    `SELECT id_mascota_match_inicial, porcentaje_match_inicial, fecha_match_inicial,
+            aviso_reasignacion_pendiente, nombre_match_anterior, id_aviso_reasignacion
+     FROM personalidadusuario WHERE id_usuario = ?`
+  ).bind(id).first();
+  const avisos = await env.DB.prepare(
+    `SELECT n.id_notificacion, n.id_mascota, n.porcentaje_match, n.leida, n.mostrada_en_mascotas, n.fecha_creacion,
+            m.nombre AS nombre_mascota, m.fotos AS foto_mascota, m.especie AS especie_mascota,
+            m.sexo AS sexo_mascota, m.tamano AS tamano_mascota
+     FROM notificacion_match_usuario n
+     INNER JOIN mascota m ON m.id_mascota = n.id_mascota
+     WHERE n.id_usuario = ? AND lower(COALESCE(m.estado_adopcion, '')) <> 'adoptado'
+     ORDER BY n.fecha_creacion DESC`
+  ).bind(id).all();
+  const notificaciones = (avisos.results || []).map((fila) => ({
+    ...fila,
+    leida: fila.leida === 1 || fila.leida === true,
+    mostrada_en_mascotas: fila.mostrada_en_mascotas === 1 || fila.mostrada_en_mascotas === true,
+  }));
+  const aviso = actual?.aviso_reasignacion_pendiente === 1 && actual.nombre_match_anterior && actual.id_aviso_reasignacion
+    ? { id: actual.id_aviso_reasignacion, nombre_anterior: actual.nombre_match_anterior }
+    : null;
+  return json({
+    tiene_personalidad: true,
+    id_mascota_match_inicial: actual?.id_mascota_match_inicial || null,
+    porcentaje_match_inicial: actual?.porcentaje_match_inicial ?? null,
+    fecha_match_inicial: actual?.fecha_match_inicial || null,
+    aviso_reasignacion: aviso,
+    notificaciones,
+    no_leidas: notificaciones.filter((fila) => !fila.leida).length,
+  });
 }
 
 function compatibilidad(usuario, mascota) {

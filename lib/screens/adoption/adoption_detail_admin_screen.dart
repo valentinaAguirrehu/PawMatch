@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/services/adoption_service.dart';
+import 'package:paw_match/services/limite_pdf.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 /// Detalle de una solicitud de adopción, con la misma revisión que Apadrinamiento.
@@ -287,6 +288,16 @@ class _AdoptionDetailAdminScreenState extends State<AdoptionDetailAdminScreen> {
       if (files.isEmpty) return;
       final file = files.first;
       final bytes = await file.xFile.readAsBytes();
+      if (LimitePdf.estaPesado(file.name, bytes.length, bytes)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text(LimitePdf.mensajePesado),
+          ),
+        );
+        return;
+      }
       if (bytes.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

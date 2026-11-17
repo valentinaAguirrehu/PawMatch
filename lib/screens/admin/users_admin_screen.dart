@@ -9,6 +9,7 @@ import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
+import 'package:paw_match/widgets/dialogo_escritura.dart';
 import 'package:paw_match/widgets/pet_card.dart' show urlFoto;
 
 class UsersAdminScreen extends StatefulWidget {
@@ -464,20 +465,20 @@ class _MotivoInactivacionDialogState extends State<_MotivoInactivacionDialog> {
   @override
   Widget build(BuildContext context) {
     final listo = _motivo.text.trim().isNotEmpty;
-    return AlertDialog(
-      title: const Text('Inactivar cuenta'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Explica por qué inactivas la cuenta de ${widget.nombre}.'),
-          const SizedBox(height: 12),
-          TextField(
+    return DialogoEscritura(
+      titulo: const Text('Inactivar cuenta'),
+      cuerpo: [
+        Text('Explica por qué inactivas la cuenta de ${widget.nombre}.'),
+        const SizedBox(height: 12),
+        ZonaCampo(
+          builder: (foco) => TextField(
+            focusNode: foco,
             controller: _motivo,
             autofocus: true,
             minLines: 3,
             maxLines: 5,
             textCapitalization: TextCapitalization.sentences,
+            scrollPadding: rellenoCampoDialogo,
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => _confirmar(),
             decoration: const InputDecoration(
@@ -486,9 +487,9 @@ class _MotivoInactivacionDialogState extends State<_MotivoInactivacionDialog> {
               hintText: 'Escribe la razón de la inactivación',
             ),
           ),
-        ],
-      ),
-      actions: [
+        ),
+      ],
+      acciones: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancelar'),

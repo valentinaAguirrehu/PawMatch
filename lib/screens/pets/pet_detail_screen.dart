@@ -13,7 +13,7 @@ import 'package:paw_match/screens/match/dog_personality.dart';
 import 'package:paw_match/screens/adoption/adoption_form_screen.dart';
 import 'package:paw_match/screens/adoption/pasos_adopcion_screen.dart';
 import 'package:paw_match/screens/adoption/validacion_perfil_adopcion.dart';
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/screens/apadrinamiento/pasos_apadrinamiento_screen.dart';
 import 'package:paw_match/screens/apadrinamiento/solicitud_apadrinamiento_dialog.dart';
 import 'package:paw_match/services/adoption_service.dart';

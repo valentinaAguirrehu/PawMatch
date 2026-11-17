@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:paw_match/models/seguimiento_adopcion.dart';
 import 'package:paw_match/models/seguimiento_apadrinamiento.dart';

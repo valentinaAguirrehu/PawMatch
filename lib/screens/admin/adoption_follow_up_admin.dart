@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:printing/printing.dart';
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/adoption_request.dart';
@@ -717,10 +717,12 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
           child: SizedBox(
             width: 72,
             height: 72,
-            child: Image.network(
-              urlFoto(ruta),
+            child: FotoServidor(
+              ruta: ruta,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const ColoredBox(
+              width: 72,
+              height: 72,
+              error: const ColoredBox(
                 color: Color(0xFFF4F4F4),
                 child: Icon(Icons.broken_image_outlined),
               ),
@@ -764,10 +766,10 @@ class _AdoptionFollowUpAdminScreenState extends State<AdoptionFollowUpAdminScree
                           maxHeight: MediaQuery.sizeOf(ctx).height * 0.68,
                           maxWidth: 520,
                         ),
-                        child: Image.network(
-                          urlFoto(ruta),
+                        child: FotoServidor(
+                          ruta: ruta,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const ColoredBox(
+                          error: const ColoredBox(
                             color: Colors.white,
                             child: SizedBox(
                               height: 180,

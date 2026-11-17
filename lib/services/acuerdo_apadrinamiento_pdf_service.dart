@@ -616,83 +616,7 @@ class AcuerdoApadrinamientoPdfService {
             ),
           ),
 
-          // ───────── DOCUMENTO DE IDENTIDAD Y FOTOGRAFÍA (SEGUNDA HOJA) ─────────
-          if (fotoCedula != null && fotoMascota != null) ...[
-            pw.SizedBox(height: 12),
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Expanded(
-                  child: pw.Container(
-                    padding: const pw.EdgeInsets.all(8),
-                    margin: const pw.EdgeInsets.only(right: 6),
-                    decoration: pw.BoxDecoration(
-                      color: PdfColor.fromHex('#F9FAFB'),
-                      borderRadius:
-                          const pw.BorderRadius.all(pw.Radius.circular(8)),
-                      border: pw.Border.all(color: verdeClaroBorde, width: 1),
-                    ),
-                    child: pw.Column(
-                      children: [
-                        pw.Text(
-                          'Documento de Identidad Adjunto',
-                          style: pw.TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: pw.FontWeight.bold,
-                            color: verdePrincipal,
-                          ),
-                        ),
-                        pw.SizedBox(height: 6),
-                        pw.ClipRRect(
-                          horizontalRadius: 6,
-                          verticalRadius: 6,
-                          child: pw.Image(
-                            fotoCedula,
-                            height: 125,
-                            fit: pw.BoxFit.contain,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                pw.Expanded(
-                  child: pw.Container(
-                    padding: const pw.EdgeInsets.all(8),
-                    margin: const pw.EdgeInsets.only(left: 6),
-                    decoration: pw.BoxDecoration(
-                      color: PdfColor.fromHex('#F9FAFB'),
-                      borderRadius:
-                          const pw.BorderRadius.all(pw.Radius.circular(8)),
-                      border: pw.Border.all(color: verdeClaroBorde, width: 1),
-                    ),
-                    child: pw.Column(
-                      children: [
-                        pw.Text(
-                          'Fotografía de ${datos.nombreMascota}',
-                          style: pw.TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: pw.FontWeight.bold,
-                            color: verdePrincipal,
-                          ),
-                        ),
-                        pw.SizedBox(height: 6),
-                        pw.ClipRRect(
-                          horizontalRadius: 6,
-                          verticalRadius: 6,
-                          child: pw.Image(
-                            fotoMascota,
-                            height: 125,
-                            fit: pw.BoxFit.contain,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ] else if (fotoCedula != null) ...[
+          if (fotoCedula != null) ...[
             pw.SizedBox(height: 12),
             pw.Center(
               child: pw.Container(
@@ -700,14 +624,13 @@ class AcuerdoApadrinamientoPdfService {
                 padding: const pw.EdgeInsets.all(8),
                 decoration: pw.BoxDecoration(
                   color: PdfColor.fromHex('#F9FAFB'),
-                  borderRadius:
-                      const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
                   border: pw.Border.all(color: verdeClaroBorde, width: 1),
                 ),
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      'Documento de Identidad Adjunto',
+                      'Documento de identidad adjunto',
                       style: pw.TextStyle(
                         fontSize: 9.5,
                         fontWeight: pw.FontWeight.bold,
@@ -720,42 +643,6 @@ class AcuerdoApadrinamientoPdfService {
                       verticalRadius: 6,
                       child: pw.Image(
                         fotoCedula,
-                        height: 130,
-                        fit: pw.BoxFit.contain,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ] else if (fotoMascota != null) ...[
-            pw.SizedBox(height: 12),
-            pw.Center(
-              child: pw.Container(
-                width: 260,
-                padding: const pw.EdgeInsets.all(8),
-                decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#F9FAFB'),
-                  borderRadius:
-                      const pw.BorderRadius.all(pw.Radius.circular(8)),
-                  border: pw.Border.all(color: verdeClaroBorde, width: 1),
-                ),
-                child: pw.Column(
-                  children: [
-                    pw.Text(
-                      'Fotografía de ${datos.nombreMascota}',
-                      style: pw.TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: verdePrincipal,
-                      ),
-                    ),
-                    pw.SizedBox(height: 6),
-                    pw.ClipRRect(
-                      horizontalRadius: 6,
-                      verticalRadius: 6,
-                      child: pw.Image(
-                        fotoMascota,
                         height: 130,
                         fit: pw.BoxFit.contain,
                       ),

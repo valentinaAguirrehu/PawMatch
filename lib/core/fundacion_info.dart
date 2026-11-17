@@ -45,6 +45,10 @@ class FundacionInfo {
   static String fotoRescatista = 'assets/fundacion/maitza.jpeg';
   static String fotoFondoAyudas = '';
 
+  /// Foto de la sección Protección animal. Si no hay una subida, se usa la ilustración incluida.
+  static const fotoDenunciasPredeterminada = 'assets/images/denuncias_hero.jpg';
+  static String fotoDenuncias = fotoDenunciasPredeterminada;
+
   // ───────── Contacto y Ubicación ─────────
   /// Columna `telefono`: país + número, solo dígitos. Ejemplo Colombia: 573001234567
   static String whatsappNumero = '573136177747';
@@ -115,6 +119,8 @@ class FundacionInfo {
     imagenPrincipal = t('imagen_principal');
     final fondo = t('imagen_fondo');
     fotoFondoAyudas = fondo == 'assets/fundacion/bebe.jpg' ? '' : fondo;
+    final denuncias = t('imagen_denuncias');
+    fotoDenuncias = denuncias.isEmpty ? fotoDenunciasPredeterminada : denuncias;
     rescatistaNombre = t('rescatista_nombre');
     rescatistaTexto = t('rescatista_texto');
     fotoRescatista = t('rescatista_foto');
@@ -161,6 +167,7 @@ class FundacionInfo {
     'logo': logo,
     'imagen_principal': imagenPrincipal,
     'imagen_fondo': fotoFondoAyudas,
+    'imagen_denuncias': fotoDenuncias,
     'rescatista_nombre': rescatistaNombre,
     'rescatista_texto': rescatistaTexto,
     'rescatista_foto': fotoRescatista,

@@ -20,6 +20,7 @@ dependencies:
   web: ^1.1.1
   file_picker: ^13.1.0
   shared_preferences: ^2.5.6
+  flutter_secure_storage: ^11.2.0
   table_calendar: ^3.1.3
   flutter_localizations:
     sdk: flutter
@@ -51,7 +52,7 @@ flutter:
     - assets/images/Logo Fundación.png
     - assets/images/denuncias_hero.jpg
     - assets/images/inicio/
-    - assets/images/inicio/fundacion_hero.jpg
+    - assets/images/inicio/fundacion_hero.jpeg
     - assets/images/inicio/familia.jpg
     - assets/images/inicio/juntos.jpg
     - assets/fundacion/

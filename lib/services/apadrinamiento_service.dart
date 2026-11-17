@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/archivo_multipart.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -51,13 +52,7 @@ class ApadrinamientoService {
       req.fields['correo_contacto'] = correoContacto.trim();
     }
 
-    req.files.add(
-      http.MultipartFile.fromBytes(
-        'documento',
-        bytesDocumento,
-        filename: nombreArchivo,
-      ),
-    );
+    req.files.add(archivoMultipart('documento', bytesDocumento, nombreArchivo));
 
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
@@ -117,7 +112,9 @@ class ApadrinamientoService {
   }
 
   /// Actualiza el estado de la solicitud (Aprobar, Rechazar o Cancelar).
-  static Future<void> actualizarEstado({
+  ///
+  /// Devuelve la respuesta del Worker, incluido `correo_enviado`.
+  static Future<Map<String, dynamic>> actualizarEstado({
     required String idSolicitud,
     required String estado, // 'aprobada', 'rechazada' o 'cancelada'
     String? fechaInicio,
@@ -141,6 +138,10 @@ class ApadrinamientoService {
       } catch (_) {}
       throw Exception(mensaje);
     }
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return {};
   }
 
   /// Cancela un apadrinamiento dejando el motivo obligatorio.
@@ -148,7 +149,7 @@ class ApadrinamientoService {
     required String idSolicitud,
     required String motivo,
   }) async {
-    return actualizarEstado(
+    await actualizarEstado(
       idSolicitud: idSolicitud,
       estado: 'cancelada',
       observaciones: motivo,
@@ -164,13 +165,7 @@ class ApadrinamientoService {
     final uri = Uri.parse('$_url/$idSolicitud/contrato');
     final req = http.MultipartRequest('POST', uri);
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
-    req.files.add(
-      http.MultipartFile.fromBytes(
-        'contrato',
-        bytesContrato,
-        filename: nombreArchivo,
-      ),
-    );
+    req.files.add(archivoMultipart('contrato', bytesContrato, nombreArchivo));
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
 

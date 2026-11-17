@@ -73,7 +73,7 @@ class SeguimientoAdopcionItem {
         (json['proxima_fecha_seguimiento'] ?? json['proximo_seguimiento'])?.toString() ?? '',
       ),
       calificacion: int.tryParse(json['calificacion']?.toString() ?? '5') ?? 5,
-      cumplimiento: json['cumplimiento'] == true || json['cumplimiento'] == 'true',
+      cumplimiento: json['cumplimiento'] == true || json['cumplimiento'] == 1 || json['cumplimiento'] == '1' || json['cumplimiento'] == 'true',
       numeroSeguimiento: numSeg,
     );
   }
@@ -116,7 +116,7 @@ class CancelacionAdopcion {
       observacion: (json['observacion'] ?? '').toString(),
       foto1: foto(json['foto_1']),
       foto2: foto(json['foto_2']),
-      inhabilitarCuenta: json['inhabilitar_cuenta'] == true || json['inhabilitar_cuenta'] == 'true',
+      inhabilitarCuenta: json['inhabilitar_cuenta'] == true || json['inhabilitar_cuenta'] == 1 || json['inhabilitar_cuenta'] == '1' || json['inhabilitar_cuenta'] == 'true',
       adminNombre: admin.isNotEmpty ? admin : 'Administrador',
     );
   }

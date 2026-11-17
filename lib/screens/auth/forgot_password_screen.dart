@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:paw_match/core/app_colors.dart';
@@ -24,13 +26,43 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _paso = 1;
   bool _cargando = false;
 
+  /// Segundos que faltan para poder volver a pedir el código.
+  int _segundosReenvio = 0;
+  Timer? _timerReenvio;
+
+  static const _esperaReenvioSegundos = 5 * 60;
+
   @override
   void dispose() {
+    _timerReenvio?.cancel();
     _correo.dispose();
     _codigo.dispose();
     _nueva.dispose();
     _confirmar.dispose();
     super.dispose();
+  }
+
+  void _iniciarEsperaReenvio() {
+    _timerReenvio?.cancel();
+    setState(() => _segundosReenvio = _esperaReenvioSegundos);
+    _timerReenvio = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_segundosReenvio <= 1) {
+        timer.cancel();
+        setState(() => _segundosReenvio = 0);
+      } else {
+        setState(() => _segundosReenvio--);
+      }
+    });
+  }
+
+  String get _relojReenvio {
+    final minutos = (_segundosReenvio ~/ 60).toString().padLeft(2, '0');
+    final segundos = (_segundosReenvio % 60).toString().padLeft(2, '0');
+    return '$minutos:$segundos';
   }
 
   void _aviso(String texto) {
@@ -47,12 +79,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String _mensaje(Object e) => e.toString().replaceFirst('Exception: ', '');
 
   Future<void> _enviarCodigo({bool esReenvio = false}) async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!esReenvio && !_formKey.currentState!.validate()) return;
     setState(() => _cargando = true);
     try {
       await RecuperacionService.solicitarCodigo(_correo.text);
       if (!mounted) return;
       setState(() => _paso = 2);
+      _iniciarEsperaReenvio();
       _aviso(
         esReenvio
             ? 'Hemos reenviado un nuevo código de 4 dígitos a ${_correo.text.trim()}'
@@ -224,12 +257,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                           onPressed: _verificarCodigo,
                                         ),
                                         const SizedBox(height: 18),
-                                        Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                        Wrap(
+                                          alignment: WrapAlignment.center,
+                                          crossAxisAlignment: WrapCrossAlignment.center,
                                           children: [
                                             TextButton(
                                               style: TextButton.styleFrom(
                                                 foregroundColor: AppColors.rosa,
+                                                disabledForegroundColor:
+                                                    AppColors.texto.withValues(alpha: 0.38),
                                                 padding: const EdgeInsets.symmetric(
                                                   horizontal: 4,
                                                   vertical: 2,
@@ -237,12 +273,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                                 minimumSize: Size.zero,
                                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                               ),
-                                              onPressed: _cargando ? null : () => _enviarCodigo(esReenvio: true),
-                                              child: const Text(
-                                                'Reenviar código',
-                                                style: TextStyle(
+                                              onPressed: (_cargando || _segundosReenvio > 0)
+                                                  ? null
+                                                  : () => _enviarCodigo(esReenvio: true),
+                                              child: Text(
+                                                _segundosReenvio > 0
+                                                    ? 'Reenviar código  $_relojReenvio'
+                                                    : 'Reenviar código',
+                                                style: const TextStyle(
                                                   fontWeight: FontWeight.w800,
                                                   fontSize: 13.5,
+                                                  fontFeatures: [FontFeature.tabularFigures()],
                                                 ),
                                               ),
                                             ),
@@ -261,7 +302,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                                   ? null
                                                   : () {
                                                       _formKey.currentState?.reset();
-                                                      setState(() => _paso = 1);
+                                                      _timerReenvio?.cancel();
+                                                      setState(() {
+                                                        _paso = 1;
+                                                        _segundosReenvio = 0;
+                                                      });
                                                     },
                                               child: const Text(
                                                 'Cambiar correo',

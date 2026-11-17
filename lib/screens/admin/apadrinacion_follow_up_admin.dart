@@ -16,6 +16,7 @@ import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/calendario_seguimientos.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
+import 'package:paw_match/widgets/dialogo_escritura.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 import 'package:paw_match/widgets/star_rating_selector.dart';
 import 'package:paw_match/widgets/tarjeta_seguimiento.dart';
@@ -611,9 +612,8 @@ class _ApadrinacionFollowUpAdminScreenState
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
+        builder: (context, setDialogState) => DialogoEscritura(
+          titulo: Row(
             children: [
               Icon(Icons.gavel_rounded, color: Colors.red.shade700, size: 28),
               const SizedBox(width: 8),
@@ -625,9 +625,9 @@ class _ApadrinacionFollowUpAdminScreenState
               ),
             ],
           ),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
+          cuerpo: [
+            Form(
+              key: formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -637,25 +637,29 @@ class _ApadrinacionFollowUpAdminScreenState
                     style: TextStyle(color: Colors.grey.shade800, fontSize: 13.5),
                   ),
                   const SizedBox(height: 14),
-                  TextFormField(
-                    controller: motivoCtrl,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      labelText: 'Motivo de la cancelación *',
-                      hintText: 'Ej. Incumplimiento reiterado de compromisos',
-                      filled: true,
-                      fillColor: const Color(0xFFF9FAFC),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ZonaCampo(
+                    builder: (foco) => TextFormField(
+                      focusNode: foco,
+                      controller: motivoCtrl,
+                      maxLines: 3,
+                      scrollPadding: rellenoCampoDialogo,
+                      decoration: InputDecoration(
+                        labelText: 'Motivo de la cancelación *',
+                        hintText: 'Ej. Incumplimiento reiterado de compromisos',
+                        filled: true,
+                        fillColor: const Color(0xFFF9FAFC),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'El motivo de la cancelación es obligatorio';
+                        }
+                        if (v.trim().length < 8) {
+                          return 'Ingresa un motivo detallado (mínimo 8 caracteres)';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'El motivo de la cancelación es obligatorio';
-                      }
-                      if (v.trim().length < 8) {
-                        return 'Ingresa un motivo detallado (mínimo 8 caracteres)';
-                      }
-                      return null;
-                    },
                   ),
                   const SizedBox(height: 14),
                   CheckboxListTile(
@@ -679,8 +683,8 @@ class _ApadrinacionFollowUpAdminScreenState
                 ],
               ),
             ),
-          ),
-          actions: [
+          ],
+          acciones: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Volver'),
@@ -1620,9 +1624,8 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
+        builder: (context, setDialogState) => DialogoEscritura(
+          titulo: Row(
             children: [
               Icon(Icons.gavel_rounded, color: Colors.red.shade700, size: 26),
               const SizedBox(width: 8),
@@ -1634,9 +1637,9 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
               ),
             ],
           ),
-          content: Form(
-            key: cancelFormKey,
-            child: SingleChildScrollView(
+          cuerpo: [
+            Form(
+              key: cancelFormKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1646,25 +1649,29 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
                     style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
                   ),
                   const SizedBox(height: 14),
-                  TextFormField(
-                    controller: motivoCtrl,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      labelText: 'Motivo de la cancelación *',
-                      hintText: 'Ingresa la razón detallada...',
-                      filled: true,
-                      fillColor: const Color(0xFFF9FAFC),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ZonaCampo(
+                    builder: (foco) => TextFormField(
+                      focusNode: foco,
+                      controller: motivoCtrl,
+                      maxLines: 3,
+                      scrollPadding: rellenoCampoDialogo,
+                      decoration: InputDecoration(
+                        labelText: 'Motivo de la cancelación *',
+                        hintText: 'Ingresa la razón detallada...',
+                        filled: true,
+                        fillColor: const Color(0xFFF9FAFC),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'El motivo de la cancelación es obligatorio';
+                        }
+                        if (v.trim().length < 8) {
+                          return 'El motivo debe tener al menos 8 caracteres';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'El motivo de la cancelación es obligatorio';
-                      }
-                      if (v.trim().length < 8) {
-                        return 'El motivo debe tener al menos 8 caracteres';
-                      }
-                      return null;
-                    },
                   ),
                   const SizedBox(height: 12),
                   CheckboxListTile(
@@ -1688,8 +1695,8 @@ class _ModalEvaluacionPadrinoState extends State<_ModalEvaluacionPadrino> {
                 ],
               ),
             ),
-          ),
-          actions: [
+          ],
+          acciones: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Volver'),

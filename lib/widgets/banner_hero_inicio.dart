@@ -42,7 +42,7 @@ class BannerHeroInicio extends StatelessWidget {
           children: [
             // 1. Foto de fondo (fundacion_hero.jpg)
             Image.asset(
-              'assets/images/inicio/fundacion_hero.jpg',
+              'assets/images/inicio/fundacion_hero.jpeg',
               fit: BoxFit.cover,
               alignment: Alignment.center,
               errorBuilder: (context, error, stackTrace) =>

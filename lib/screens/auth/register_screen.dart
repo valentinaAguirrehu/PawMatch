@@ -15,6 +15,21 @@ const _verdeOk = Color(0xFF2F9B6A);
 /// Misma separación del borde derecho para el visto y el ojo de la contraseña.
 const _margenFilo = 12.0;
 
+const _tituloEdadMinima = '¡Qué alegría que quieras ayudar! 🐾';
+
+const _mensajeEdadMinima =
+    'Para completar el registro, necesitas tener 15 años o más, ya que los procesos de adopción y apadrinamiento conllevan compromisos legales y de responsabilidad.\n\n'
+    'Si aún no cumples esta edad, ¡no te desanimes! Pídele a un familiar o adulto responsable que se registre por ti para que juntos puedan cambiarle la vida a un peludito.';
+
+int _edadEn(DateTime f) {
+  final hoy = DateTime.now();
+  var edad = hoy.year - f.year;
+  final aunNoCumple =
+      hoy.month < f.month || (hoy.month == f.month && hoy.day < f.day);
+  if (aunNoCumple) edad--;
+  return edad;
+}
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -60,12 +75,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _elegirFecha() async {
     final ahora = DateTime.now();
+    final hoy = DateTime(ahora.year, ahora.month, ahora.day);
     final elegida = await showDatePicker(
       context: context,
-      initialDate:
-          _nacimiento ?? DateTime(ahora.year - 18, ahora.month, ahora.day),
-      firstDate: DateTime(ahora.year - 100),
-      lastDate: ahora,
+      initialDate: _nacimiento ?? hoy,
+      firstDate: DateTime(hoy.year - 100),
+      lastDate: hoy,
       helpText: 'Fecha de nacimiento',
       cancelText: 'Cancelar',
       confirmText: 'Listo',
@@ -75,6 +90,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _fechaTocada = true;
       if (elegida != null) _nacimiento = elegida;
     });
+    if (elegida != null && _edadEn(elegida) < 15) {
+      await _avisoEdadMinima();
+    }
+  }
+
+  Future<void> _avisoEdadMinima() {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.blanco,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Text(
+          _tituloEdadMinima,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            height: 1.3,
+            color: AppColors.texto,
+          ),
+        ),
+        content: const Text(
+          _mensajeEdadMinima,
+          style: TextStyle(fontSize: 14.5, height: 1.45, color: AppColors.texto),
+        ),
+        actions: [
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.rosa),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
   }
 
   String? get _errorFecha {
@@ -93,6 +141,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final formularioOk = _formKey.currentState!.validate();
     setState(() => _intentoEnviar = true);
     if (!formularioOk || _nacimiento == null || _errorGenero != null) return;
+    if (_edadEn(_nacimiento!) < 15) {
+      await _avisoEdadMinima();
+      return;
+    }
 
     setState(() => _cargando = true);
 
@@ -892,19 +944,12 @@ class _FechaNacimiento extends StatelessWidget {
     'dic',
   ];
 
-  int _edad(DateTime f) {
-    final hoy = DateTime.now();
-    var edad = hoy.year - f.year;
-    final aunNoCumple =
-        hoy.month < f.month || (hoy.month == f.month && hoy.day < f.day);
-    if (aunNoCumple) edad--;
-    return edad;
-  }
-
   @override
   Widget build(BuildContext context) {
     final texto = Theme.of(context).textTheme;
     final elegida = fecha;
+    final menor = elegida != null && _edadEn(elegida) < 15;
+    final hayError = error != null || menor;
     final etiqueta = elegida == null
         ? 'Selecciona tu fecha de nacimiento'
         : '${elegida.day} ${_meses[elegida.month - 1]} ${elegida.year}';
@@ -933,10 +978,10 @@ class _FechaNacimiento extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: error == null
-                      ? const Color(0xFFF2BED6)
-                      : const Color(0xFFE53935),
-                  width: error == null ? 1.2 : 1.5,
+                  color: hayError
+                      ? const Color(0xFFE53935)
+                      : const Color(0xFFF2BED6),
+                  width: hayError ? 1.5 : 1.2,
                 ),
               ),
               child: Padding(
@@ -969,7 +1014,7 @@ class _FechaNacimiento extends StatelessWidget {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${_edad(elegida)} años',
+                          '${_edadEn(elegida)} años',
                           style: const TextStyle(
                             color: AppColors.rosa,
                             fontSize: 12,
@@ -977,8 +1022,10 @@ class _FechaNacimiento extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const FeatureIcon.correcto(color: _verdeOk),
+                      if (!menor) ...[
+                        const SizedBox(width: 8),
+                        const FeatureIcon.correcto(color: _verdeOk),
+                      ],
                     ],
                   ],
                 ),
@@ -1000,7 +1047,50 @@ class _FechaNacimiento extends StatelessWidget {
             ),
           ),
         ],
+        if (menor) ...[
+          const SizedBox(height: 12),
+          const _AvisoEdadMinima(),
+        ],
       ],
+    );
+  }
+}
+
+class _AvisoEdadMinima extends StatelessWidget {
+  const _AvisoEdadMinima();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.rosaSuave,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.bordeRosa),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _tituloEdadMinima,
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              height: 1.3,
+              color: AppColors.texto,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            _mensajeEdadMinima,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.45,
+              color: AppColors.texto,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

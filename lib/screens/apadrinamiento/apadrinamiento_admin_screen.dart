@@ -1,19 +1,29 @@
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/solicitud_apadrinamiento.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/acuerdo_apadrinamiento_pdf_service.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/limite_pdf.dart';
 import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
+import 'package:paw_match/widgets/dialogo_escritura.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 import 'package:printing/printing.dart';
+
+String avisoCorreoApadrinamiento(String base, Map<String, dynamic> resultado) {
+  final enviado = resultado['correo_enviado'] == true;
+  final correo = enviado
+      ? 'El correo fue aceptado por el servicio de envío.'
+      : 'El correo no se envió y quedó pendiente.';
+  return '$base $correo';
+}
 
 class ApadrinamientoAdminScreen extends StatefulWidget {
   const ApadrinamientoAdminScreen({super.key});
@@ -52,57 +62,54 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen> {
     final confirmacion = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Aprobar apadrinamiento', textAlign: TextAlign.center),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '¿Confirmas que ${s.solicitanteNombreCompleto} sea padrino de ${s.mascotaNombre.isEmpty ? 'la mascota' : s.mascotaNombre}?',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Fecha oficial de inicio',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today, color: AppColors.rosa),
-                  label: Text(
-                    '${fechaSeleccionada.day.toString().padLeft(2, '0')}/${fechaSeleccionada.month.toString().padLeft(2, '0')}/${fechaSeleccionada.year}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () async {
-                    final elegida = await showDatePicker(
-                      context: ctx,
-                      initialDate: fechaSeleccionada,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2035),
-                    );
-                    if (elegida != null) {
-                      setDialogState(() => fechaSeleccionada = elegida);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: observacionCtrl,
-                  maxLines: 2,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    hintText: 'Observación para el padrino (opcional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
+        builder: (ctx, setDialogState) => DialogoEscritura(
+          titulo: const Text('Aprobar apadrinamiento', textAlign: TextAlign.center),
+          alineacionAcciones: MainAxisAlignment.center,
+          cuerpo: [
+            Text(
+              '¿Confirmas que ${s.solicitanteNombreCompleto} sea padrino de ${s.mascotaNombre.isEmpty ? 'la mascota' : s.mascotaNombre}?',
+              textAlign: TextAlign.center,
             ),
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
+            const SizedBox(height: 14),
+            const Text(
+              'Fecha oficial de inicio',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today, color: AppColors.rosa),
+              label: Text(
+                '${fechaSeleccionada.day.toString().padLeft(2, '0')}/${fechaSeleccionada.month.toString().padLeft(2, '0')}/${fechaSeleccionada.year}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () async {
+                final elegida = await showDatePicker(
+                  context: ctx,
+                  initialDate: fechaSeleccionada,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2035),
+                );
+                if (elegida != null) {
+                  setDialogState(() => fechaSeleccionada = elegida);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+            ZonaCampo(
+              builder: (foco) => TextField(
+                focusNode: foco,
+                controller: observacionCtrl,
+                maxLines: 2,
+                maxLength: 500,
+                scrollPadding: rellenoCampoDialogo,
+                decoration: const InputDecoration(
+                  hintText: 'Observación para el padrino (opcional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+          ],
+          acciones: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar'),
@@ -122,7 +129,7 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen> {
     try {
       final fechaStr =
           '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}';
-      await ApadrinamientoService.actualizarEstado(
+      final resultado = await ApadrinamientoService.actualizarEstado(
         idSolicitud: s.id,
         estado: 'aprobada',
         fechaInicio: fechaStr,
@@ -130,7 +137,10 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Solicitud aceptada. Ya puedes subir el contrato.')),
+        SnackBar(content: Text(avisoCorreoApadrinamiento(
+          'Solicitud aceptada. Ya puedes subir el contrato.',
+          resultado,
+        ))),
       );
       setState(() => _filtro = 1);
       await _recargar();
@@ -150,20 +160,21 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen> {
     final confirmacion = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Center(child: Text('Rechazar solicitud')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Indica el motivo por el cual se rechaza la solicitud de ${s.mascotaNombre.isEmpty ? 'la mascota' : s.mascotaNombre}:',
-              ),
-              const SizedBox(height: 10),
-              TextField(
+        builder: (ctx, setLocal) => DialogoEscritura(
+          titulo: const Center(child: Text('Rechazar solicitud')),
+          alineacionAcciones: MainAxisAlignment.center,
+          cuerpo: [
+            Text(
+              'Indica el motivo por el cual se rechaza la solicitud de ${s.mascotaNombre.isEmpty ? 'la mascota' : s.mascotaNombre}:',
+            ),
+            const SizedBox(height: 10),
+            ZonaCampo(
+              builder: (foco) => TextField(
+                focusNode: foco,
                 controller: motivoCtrl,
                 maxLines: 3,
                 maxLength: 500,
+                scrollPadding: rellenoCampoDialogo,
                 onChanged: (_) {
                   if (errorMotivo != null) setLocal(() => errorMotivo = null);
                 },
@@ -173,10 +184,9 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen> {
                   errorText: errorMotivo,
                 ),
               ),
-            ],
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
+            ),
+          ],
+          acciones: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar'),
@@ -200,14 +210,14 @@ class _ApadrinamientoAdminScreenState extends State<ApadrinamientoAdminScreen> {
 
     setState(() => _procesandoId = s.id);
     try {
-      await ApadrinamientoService.actualizarEstado(
+      final resultado = await ApadrinamientoService.actualizarEstado(
         idSolicitud: s.id,
         estado: 'rechazada',
         observaciones: motivoCtrl.text.trim(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Solicitud rechazada.')),
+        SnackBar(content: Text(avisoCorreoApadrinamiento('Solicitud rechazada.', resultado))),
       );
       setState(() => _filtro = 2);
       await _recargar();
@@ -1091,6 +1101,16 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
 
       final file = files.first;
       final bytes = await file.xFile.readAsBytes();
+      if (LimitePdf.estaPesado(file.name, bytes.length, bytes)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.redAccent,
+            content: Text(LimitePdf.mensajePesado),
+          ),
+        );
+        return;
+      }
       if (bytes.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1230,72 +1250,69 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
     final confirmacion = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
+        builder: (ctx, setDialogState) => DialogoEscritura(
+          titulo: const Row(
             children: [
               Icon(Icons.check_circle_outline, color: Colors.green),
               SizedBox(width: 8),
               Expanded(child: Text('Aprobar Apadrinamiento')),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '¿Confirmas la aprobación para que ${widget.solicitud.solicitanteNombreCompleto} sea padrino de ${widget.solicitud.mascotaNombre}?',
-                  style: const TextStyle(height: 1.35),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Fecha oficial de inicio del apadrinamiento:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today, color: AppColors.rosa),
-                  label: Text(
-                    '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  onPressed: () async {
-                    final elegida = await showDatePicker(
-                      context: context,
-                      initialDate: fechaSeleccionada,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2035),
-                    );
-                    if (elegida != null) {
-                      setDialogState(() => fechaSeleccionada = elegida);
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Observaciones para el padrino (opcional):',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: observacionCtrl,
-                  maxLines: 3,
-                  maxLength: 500,
-                  decoration: const InputDecoration(
-                    hintText: 'Escribe aquí cualquier indicación o recomendación...',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Al aprobar, deberás subir el contrato de apadrinamiento para formalizar el proceso.',
-                  style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
-                ),
-              ],
+          cuerpo: [
+            Text(
+              '¿Confirmas la aprobación para que ${widget.solicitud.solicitanteNombreCompleto} sea padrino de ${widget.solicitud.mascotaNombre}?',
+              style: const TextStyle(height: 1.35),
             ),
-          ),
-          actions: [
+            const SizedBox(height: 16),
+            const Text(
+              'Fecha oficial de inicio del apadrinamiento:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today, color: AppColors.rosa),
+              label: Text(
+                '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              onPressed: () async {
+                final elegida = await showDatePicker(
+                  context: context,
+                  initialDate: fechaSeleccionada,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2035),
+                );
+                if (elegida != null) {
+                  setDialogState(() => fechaSeleccionada = elegida);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Observaciones para el padrino (opcional):',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            ZonaCampo(
+              builder: (foco) => TextField(
+                focusNode: foco,
+                controller: observacionCtrl,
+                maxLines: 3,
+                maxLength: 500,
+                scrollPadding: rellenoCampoDialogo,
+                decoration: const InputDecoration(
+                  hintText: 'Escribe aquí cualquier indicación o recomendación...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Al aprobar, deberás subir el contrato de apadrinamiento para formalizar el proceso.',
+              style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
+            ),
+          ],
+          acciones: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar'),
@@ -1316,7 +1333,7 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
     try {
       final fechaStr =
           '${fechaSeleccionada.year}-${fechaSeleccionada.month.toString().padLeft(2, '0')}-${fechaSeleccionada.day.toString().padLeft(2, '0')}';
-      await ApadrinamientoService.actualizarEstado(
+      final resultado = await ApadrinamientoService.actualizarEstado(
         idSolicitud: widget.solicitud.id,
         estado: 'aprobada',
         fechaInicio: fechaStr,
@@ -1324,9 +1341,12 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           backgroundColor: Colors.green,
-          content: Text('¡Solicitud aprobada! Ahora puedes adjuntar el contrato.'),
+          content: Text(avisoCorreoApadrinamiento(
+            '¡Solicitud aprobada! Ahora puedes adjuntar el contrato.',
+            resultado,
+          )),
         ),
       );
       widget.onCambioEstado('aprobada');
@@ -1343,28 +1363,28 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
     final motivoCtrl = TextEditingController();
     final confirmacion = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Rechazar Solicitud'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Indica el motivo por el cual se rechaza la solicitud de ${widget.solicitud.solicitanteNombreCompleto}:',
-            ),
-            const SizedBox(height: 10),
-            TextField(
+      builder: (ctx) => DialogoEscritura(
+        titulo: const Text('Rechazar Solicitud'),
+        cuerpo: [
+          Text(
+            'Indica el motivo por el cual se rechaza la solicitud de ${widget.solicitud.solicitanteNombreCompleto}:',
+          ),
+          const SizedBox(height: 10),
+          ZonaCampo(
+            builder: (foco) => TextField(
+              focusNode: foco,
               controller: motivoCtrl,
               maxLines: 3,
               maxLength: 500,
+              scrollPadding: rellenoCampoDialogo,
               decoration: const InputDecoration(
                 hintText: 'Motivo del rechazo u observaciones...',
                 border: OutlineInputBorder(),
               ),
             ),
-          ],
-        ),
-        actions: [
+          ),
+        ],
+        acciones: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Cancelar'),
@@ -1382,16 +1402,19 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
 
     setState(() => _procesando = true);
     try {
-      await ApadrinamientoService.actualizarEstado(
+      final resultado = await ApadrinamientoService.actualizarEstado(
         idSolicitud: widget.solicitud.id,
         estado: 'rechazada',
         observaciones: motivoCtrl.text.trim(),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           backgroundColor: Colors.orange,
-          content: Text('La solicitud ha sido rechazada.'),
+          content: Text(avisoCorreoApadrinamiento(
+            'La solicitud ha sido rechazada.',
+            resultado,
+          )),
         ),
       );
       widget.onCambioEstado('rechazada');
@@ -1408,48 +1431,45 @@ class _DetalleSolicitudSheetState extends State<_DetalleSolicitudSheet> {
     final motivoCtrl = TextEditingController();
     final confirmacion = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
+      builder: (ctx) => DialogoEscritura(
+        titulo: const Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
             SizedBox(width: 8),
             Expanded(child: Text('Cancelar Apadrinamiento')),
           ],
         ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '¿Confirmas la cancelación del apadrinamiento de ${widget.solicitud.solicitanteNombreCompleto} para ${widget.solicitud.mascotaNombre}?',
-                style: const TextStyle(height: 1.35),
-              ),
-              const SizedBox(height: 14),
-              const Text(
-                'Motivo de cancelación (obligatorio para el usuario):',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              TextField(
-                controller: motivoCtrl,
-                maxLines: 3,
-                maxLength: 500,
-                decoration: const InputDecoration(
-                  hintText: 'Explica el motivo por el cual se cancela el apadrinamiento...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Este comentario se guardará en la base de datos y se mostrará al usuario en sus apadrinamientos.',
-                style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
-              ),
-            ],
+        cuerpo: [
+          Text(
+            '¿Confirmas la cancelación del apadrinamiento de ${widget.solicitud.solicitanteNombreCompleto} para ${widget.solicitud.mascotaNombre}?',
+            style: const TextStyle(height: 1.35),
           ),
-        ),
-        actions: [
+          const SizedBox(height: 14),
+          const Text(
+            'Motivo de cancelación (obligatorio para el usuario):',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          ZonaCampo(
+            builder: (foco) => TextField(
+              focusNode: foco,
+              controller: motivoCtrl,
+              maxLines: 3,
+              maxLength: 500,
+              scrollPadding: rellenoCampoDialogo,
+              decoration: const InputDecoration(
+                hintText: 'Explica el motivo por el cual se cancela el apadrinamiento...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Este comentario se guardará en la base de datos y se mostrará al usuario en sus apadrinamientos.',
+            style: TextStyle(fontSize: 12, color: AppColors.grisTexto),
+          ),
+        ],
+        acciones: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Volver'),

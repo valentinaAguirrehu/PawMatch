@@ -26,7 +26,6 @@ class FundacionAdminScreen extends StatefulWidget {
 class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  late final _nombreCtrl = TextEditingController(text: FundacionInfo.nombre);
   late final _ciudadCtrl = TextEditingController(text: FundacionInfo.ciudad);
   late final _direccionCtrl = TextEditingController(text: FundacionInfo.direccion);
   late final _mapaUrlCtrl = TextEditingController(
@@ -49,14 +48,8 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     text: FundacionInfo.redes['tiktok'] ?? '',
   );
 
-  late final _ayudaAdoptaTituloCtrl = TextEditingController(
-    text: FundacionInfo.ayudaAdoptaTitulo,
-  );
   late final _ayudaAdoptaTextoCtrl = TextEditingController(
     text: FundacionInfo.ayudaAdoptaTexto,
-  );
-  late final _ayudaApadrinaTituloCtrl = TextEditingController(
-    text: FundacionInfo.ayudaApadrinaTitulo,
   );
   late final _ayudaApadrinaTextoCtrl = TextEditingController(
     text: FundacionInfo.ayudaApadrinaTexto,
@@ -65,21 +58,40 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     text: FundacionInfo.contactoTexto,
   );
 
-  late final _rescatistaNombreCtrl = TextEditingController(
-    text: FundacionInfo.rescatistaNombre,
-  );
   late final _rescatistaTextoCtrl = TextEditingController(
     text: FundacionInfo.rescatistaTexto,
   );
 
   // Imágenes (rutas existentes o nuevas subidas)
-  late String _logo = FundacionInfo.logo;
   late String _imagenPrincipal = FundacionInfo.imagenPrincipal;
-  late String _fotoFondo = FundacionInfo.fotoFondoAyudas;
+  late String _fotoDenuncias = FundacionInfo.fotoDenuncias;
   late String _fotoRescatista = FundacionInfo.fotoRescatista;
 
   bool _cargando = true;
   bool _guardando = false;
+  bool _intentoGuardar = false;
+  final _clavesCampos = <String, GlobalKey>{};
+
+  GlobalKey _claveDe(String etiqueta) =>
+      _clavesCampos.putIfAbsent(etiqueta, GlobalKey.new);
+
+  List<({String etiqueta, TextEditingController ctrl, bool obligatorio})> get _campos => [
+        (etiqueta: 'Ciudad / Ubicación corta', ctrl: _ciudadCtrl, obligatorio: true),
+        (etiqueta: 'Dirección completa', ctrl: _direccionCtrl, obligatorio: true),
+        (etiqueta: 'URL personalizada de Google Maps', ctrl: _mapaUrlCtrl, obligatorio: false),
+        (etiqueta: 'Descripción / Historia principal', ctrl: _descripcionCtrl, obligatorio: true),
+        (etiqueta: 'Nuestra Misión', ctrl: _misionCtrl, obligatorio: true),
+        (etiqueta: 'Nuestra Visión', ctrl: _visionCtrl, obligatorio: true),
+        (etiqueta: 'Texto de tarjeta Adopta', ctrl: _ayudaAdoptaTextoCtrl, obligatorio: true),
+        (etiqueta: 'Texto de tarjeta Apadrina', ctrl: _ayudaApadrinaTextoCtrl, obligatorio: true),
+        (etiqueta: 'Mensaje de contacto / Donación', ctrl: _contactoTextoCtrl, obligatorio: true),
+        (etiqueta: 'Teléfono / WhatsApp (solo dígitos con código de país)', ctrl: _telefonoCtrl, obligatorio: true),
+        (etiqueta: 'Correo electrónico', ctrl: _correoCtrl, obligatorio: true),
+        (etiqueta: 'Facebook URL', ctrl: _facebookCtrl, obligatorio: false),
+        (etiqueta: 'Instagram URL', ctrl: _instagramCtrl, obligatorio: false),
+        (etiqueta: 'TikTok URL', ctrl: _tiktokCtrl, obligatorio: false),
+        (etiqueta: 'Texto / Trayectoria de la rescatista', ctrl: _rescatistaTextoCtrl, obligatorio: true),
+      ];
 
   @override
   void initState() {
@@ -91,7 +103,6 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     setState(() => _cargando = true);
     await FundacionService.cargar();
     if (!mounted) return;
-    _nombreCtrl.text = FundacionInfo.nombre;
     _ciudadCtrl.text = FundacionInfo.ciudad;
     _direccionCtrl.text = FundacionInfo.direccion;
     _mapaUrlCtrl.text = FundacionInfo.mapaUrlPersonalizado;
@@ -103,23 +114,18 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     _facebookCtrl.text = FundacionInfo.redes['facebook'] ?? '';
     _instagramCtrl.text = FundacionInfo.redes['instagram'] ?? '';
     _tiktokCtrl.text = FundacionInfo.redes['tiktok'] ?? '';
-    _ayudaAdoptaTituloCtrl.text = FundacionInfo.ayudaAdoptaTitulo;
     _ayudaAdoptaTextoCtrl.text = FundacionInfo.ayudaAdoptaTexto;
-    _ayudaApadrinaTituloCtrl.text = FundacionInfo.ayudaApadrinaTitulo;
     _ayudaApadrinaTextoCtrl.text = FundacionInfo.ayudaApadrinaTexto;
     _contactoTextoCtrl.text = FundacionInfo.contactoTexto;
-    _rescatistaNombreCtrl.text = FundacionInfo.rescatistaNombre;
     _rescatistaTextoCtrl.text = FundacionInfo.rescatistaTexto;
-    _logo = FundacionInfo.logo;
     _imagenPrincipal = FundacionInfo.imagenPrincipal;
-    _fotoFondo = FundacionInfo.fotoFondoAyudas;
+    _fotoDenuncias = FundacionInfo.fotoDenuncias;
     _fotoRescatista = FundacionInfo.fotoRescatista;
     setState(() => _cargando = false);
   }
 
   @override
   void dispose() {
-    _nombreCtrl.dispose();
     _ciudadCtrl.dispose();
     _direccionCtrl.dispose();
     _mapaUrlCtrl.dispose();
@@ -131,12 +137,9 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     _facebookCtrl.dispose();
     _instagramCtrl.dispose();
     _tiktokCtrl.dispose();
-    _ayudaAdoptaTituloCtrl.dispose();
     _ayudaAdoptaTextoCtrl.dispose();
-    _ayudaApadrinaTituloCtrl.dispose();
     _ayudaApadrinaTextoCtrl.dispose();
     _contactoTextoCtrl.dispose();
-    _rescatistaNombreCtrl.dispose();
     _rescatistaTextoCtrl.dispose();
     super.dispose();
   }
@@ -215,7 +218,36 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
   }
 
   Future<void> _guardar() async {
-    if (!_formKey.currentState!.validate()) return;
+    setState(() => _intentoGuardar = true);
+    if (!_formKey.currentState!.validate()) {
+      final faltantes = _campos
+          .where((campo) {
+            final texto = campo.ctrl.text.trim();
+            return (campo.obligatorio && texto.isEmpty) || texto.length > 300;
+          })
+          .map((campo) => campo.etiqueta)
+          .toList();
+      final contexto = faltantes.isEmpty
+          ? null
+          : _clavesCampos[faltantes.first]?.currentContext;
+      if (contexto != null) {
+        await Scrollable.ensureVisible(
+          contexto,
+          alignment: 0.05,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOut,
+        );
+      }
+      _aviso(
+        faltantes.isEmpty
+            ? 'Revisa los campos marcados en rojo'
+            : faltantes.length == 1
+                ? 'Completa el campo: ${faltantes.first}'
+                : 'Completa estos campos: ${faltantes.join(', ')}',
+        esError: true,
+      );
+      return;
+    }
     setState(() => _guardando = true);
 
     final redes = <String, String>{};
@@ -230,7 +262,7 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     }
 
     final datos = {
-      'nombre': _nombreCtrl.text.trim(),
+      'nombre': FundacionInfo.nombre,
       'ciudad': _ciudadCtrl.text.trim(),
       'direccion': _direccionCtrl.text.trim(),
       'mapa_url': _mapaUrlCtrl.text.trim(),
@@ -239,15 +271,16 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
       'vision': _visionCtrl.text.trim(),
       'telefono': _telefonoCtrl.text.trim(),
       'correo': _correoCtrl.text.trim(),
-      'logo': _logo.trim(),
+      'logo': FundacionInfo.logo,
       'imagen_principal': _imagenPrincipal.trim(),
-      'imagen_fondo': _fotoFondo.trim(),
-      'rescatista_nombre': _rescatistaNombreCtrl.text.trim(),
+      'imagen_fondo': FundacionInfo.fotoFondoAyudas,
+      'imagen_denuncias': _fotoDenuncias.trim(),
+      'rescatista_nombre': FundacionInfo.rescatistaNombre,
       'rescatista_texto': _rescatistaTextoCtrl.text.trim(),
       'rescatista_foto': _fotoRescatista.trim(),
-      'ayuda_adopta_titulo': _ayudaAdoptaTituloCtrl.text.trim(),
+      'ayuda_adopta_titulo': FundacionInfo.ayudaAdoptaTitulo,
       'ayuda_adopta_texto': _ayudaAdoptaTextoCtrl.text.trim(),
-      'ayuda_apadrina_titulo': _ayudaApadrinaTituloCtrl.text.trim(),
+      'ayuda_apadrina_titulo': FundacionInfo.ayudaApadrinaTitulo,
       'ayuda_apadrina_texto': _ayudaApadrinaTextoCtrl.text.trim(),
       'contacto_texto': _contactoTextoCtrl.text.trim(),
       'redes_sociales': redes,
@@ -263,8 +296,11 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
     }
   }
 
+  static const _rojo = Color(0xFFE11D48);
+
   InputDecoration _deco(String hint, {VoidCallback? onLimpiar}) => InputDecoration(
         hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.rosa, fontWeight: FontWeight.w500),
         filled: true,
         fillColor: AppColors.rosaSuave,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -287,7 +323,51 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.rosa, width: 2),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _rojo, width: 2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _rojo, width: 2),
+        ),
+        errorStyle: const TextStyle(color: _rojo, fontWeight: FontWeight.w600),
       );
+
+  String? _validarTexto(String? valor, {bool obligatorio = true}) {
+    final texto = valor?.trim() ?? '';
+    if (obligatorio && texto.isEmpty) return 'Completa este campo';
+    if (texto.length > 300) return 'Máximo 300 caracteres';
+    return null;
+  }
+
+  Widget _texto({
+    required String etiqueta,
+    required TextEditingController controller,
+    required String ejemplo,
+    int lineas = 1,
+    TextInputType teclado = TextInputType.text,
+    bool obligatorio = true,
+  }) {
+    return KeyedSubtree(
+      key: _claveDe(etiqueta),
+      child: _campo(
+      etiqueta,
+      TextFormField(
+        controller: controller,
+        maxLength: 300,
+        maxLengthEnforcement: MaxLengthEnforcement.enforced,
+        maxLines: lineas,
+        keyboardType: teclado,
+        decoration: _deco(
+          ejemplo,
+          onLimpiar: () => setState(() => controller.clear()),
+        ),
+        validator: (valor) => _validarTexto(valor, obligatorio: obligatorio),
+      ),
+    ),
+    );
+  }
 
   Widget _seccionTitulo(String titulo, IconData icono) => Padding(
         padding: const EdgeInsets.only(top: 20, bottom: 12),
@@ -445,6 +525,9 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
   Widget _formulario() {
     return Form(
       key: _formKey,
+      autovalidateMode: _intentoGuardar
+          ? AutovalidateMode.onUserInteraction
+          : AutovalidateMode.disabled,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
         children: [
@@ -474,265 +557,106 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
             ),
           ),
 
-          // 1. INFORMACIÓN GENERAL Y UBICACIÓN
           _seccionTitulo('Información general y Ubicación', Icons.business),
-          _campo(
-            'Nombre de la Fundación *',
-            TextFormField(
-              controller: _nombreCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco('Ej: Fundación Maritza Arévalo'),
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'El nombre es obligatorio'
-                  : null,
-            ),
+          _texto(
+            etiqueta: 'Ciudad / Ubicación corta',
+            controller: _ciudadCtrl,
+            ejemplo: 'Ej: San Juan de Pasto, Nariño',
           ),
-          _campo(
-            'Ciudad / Ubicación corta',
-            TextFormField(
-              controller: _ciudadCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Ej: San Juan de Pasto, Nariño',
-                onLimpiar: () => setState(() => _ciudadCtrl.clear()),
-              ),
-            ),
+          _texto(
+            etiqueta: 'Dirección completa',
+            controller: _direccionCtrl,
+            ejemplo: 'Ej: Pasto, Nariño',
           ),
-          _campo(
-            'Dirección completa',
-            TextFormField(
-              controller: _direccionCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Ej: Pasto, Nariño',
-                onLimpiar: () => setState(() => _direccionCtrl.clear()),
-              ),
-            ),
+          _texto(
+            etiqueta: 'URL personalizada de Google Maps',
+            controller: _mapaUrlCtrl,
+            ejemplo: 'https://maps.google.com/?q=...',
+            teclado: TextInputType.url,
+            obligatorio: false,
           ),
-          _campo(
-            'URL personalizada de Google Maps (deja vacío para buscar por dirección)',
-            TextFormField(
-              controller: _mapaUrlCtrl,
-              decoration: _deco(
-                'https://maps.google.com/?q=...',
-                onLimpiar: () => setState(() => _mapaUrlCtrl.clear()),
-              ),
-            ),
-          ),
-          _campo(
-            'Descripción / Historia principal',
-            TextFormField(
-              controller: _descripcionCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Historia de la fundación...',
-                onLimpiar: () => setState(() => _descripcionCtrl.clear()),
-              ),
-              maxLines: 4,
-              validator: (v) => (v != null && v.length > 500)
-                  ? 'Máximo 500 caracteres'
-                  : null,
-            ),
+          _texto(
+            etiqueta: 'Descripción / Historia principal',
+            controller: _descripcionCtrl,
+            ejemplo: 'Historia de la fundación...',
+            lineas: 4,
           ),
 
-          // 2. MISIÓN Y VISIÓN
           _seccionTitulo('Misión y Visión', Icons.lightbulb_outline),
-          _campo(
-            'Nuestra Misión',
-            TextFormField(
-              controller: _misionCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Misión de la fundación...',
-                onLimpiar: () => setState(() => _misionCtrl.clear()),
-              ),
-              maxLines: 3,
-              validator: (v) => (v != null && v.length > 500)
-                  ? 'Máximo 500 caracteres'
-                  : null,
-            ),
+          _texto(
+            etiqueta: 'Nuestra Misión',
+            controller: _misionCtrl,
+            ejemplo: 'Misión de la fundación...',
+            lineas: 3,
           ),
-          _campo(
-            'Nuestra Visión',
-            TextFormField(
-              controller: _visionCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Visión de la fundación...',
-                onLimpiar: () => setState(() => _visionCtrl.clear()),
-              ),
-              maxLines: 3,
-              validator: (v) => (v != null && v.length > 500)
-                  ? 'Máximo 500 caracteres'
-                  : null,
-            ),
+          _texto(
+            etiqueta: 'Nuestra Visión',
+            controller: _visionCtrl,
+            ejemplo: 'Visión de la fundación...',
+            lineas: 3,
           ),
 
-          // 3. SECCIÓN ENCUÉNTRANOS Y AYÚDANOS
           _seccionTitulo('Sección "Encuéntranos y Ayúdanos"', Icons.volunteer_activism_outlined),
-          _campo(
-            'Título de tarjeta Adopta',
-            TextFormField(
-              controller: _ayudaAdoptaTituloCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Ej: Adopta',
-                onLimpiar: () => setState(() => _ayudaAdoptaTituloCtrl.clear()),
-              ),
-            ),
+          _texto(
+            etiqueta: 'Texto de tarjeta Adopta',
+            controller: _ayudaAdoptaTextoCtrl,
+            ejemplo: 'Encuentra un compañero...',
+            lineas: 2,
           ),
-          _campo(
-            'Texto de tarjeta Adopta',
-            TextFormField(
-              controller: _ayudaAdoptaTextoCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Encuentra un compañero...',
-                onLimpiar: () => setState(() => _ayudaAdoptaTextoCtrl.clear()),
-              ),
-              maxLines: 2,
-              validator: (v) => (v != null && v.length > 500)
-                  ? 'Máximo 500 caracteres'
-                  : null,
-            ),
+          _texto(
+            etiqueta: 'Texto de tarjeta Apadrina',
+            controller: _ayudaApadrinaTextoCtrl,
+            ejemplo: 'Contribuye a su cuidado...',
+            lineas: 2,
           ),
-          _campo(
-            'Título de tarjeta Apadrina',
-            TextFormField(
-              controller: _ayudaApadrinaTituloCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Ej: Apadrina',
-                onLimpiar: () => setState(() => _ayudaApadrinaTituloCtrl.clear()),
-              ),
-            ),
-          ),
-          _campo(
-            'Texto de tarjeta Apadrina',
-            TextFormField(
-              controller: _ayudaApadrinaTextoCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Contribuye a su cuidado...',
-                onLimpiar: () => setState(() => _ayudaApadrinaTextoCtrl.clear()),
-              ),
-              maxLines: 2,
-              validator: (v) => (v != null && v.length > 500)
-                  ? 'Máximo 500 caracteres'
-                  : null,
-            ),
-          ),
-          _campo(
-            'Mensaje de contacto / Donación',
-            TextFormField(
-              controller: _contactoTextoCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Para coordinar una donación, contáctanos por WhatsApp.',
-                onLimpiar: () => setState(() => _contactoTextoCtrl.clear()),
-              ),
-              maxLines: 2,
-              validator: (v) => (v != null && v.length > 500)
-                  ? 'Máximo 500 caracteres'
-                  : null,
-            ),
+          _texto(
+            etiqueta: 'Mensaje de contacto / Donación',
+            controller: _contactoTextoCtrl,
+            ejemplo: 'Para coordinar una donación, contáctanos por WhatsApp.',
+            lineas: 2,
           ),
 
-          // 4. CONTACTO Y REDES
           _seccionTitulo('Contacto y Redes Sociales', Icons.contact_phone_outlined),
-          _campo(
-            'Teléfono / WhatsApp (solo dígitos con código de país)',
-            TextFormField(
-              controller: _telefonoCtrl,
-              decoration: _deco(
-                'Ej: 573136177747',
-                onLimpiar: () => setState(() => _telefonoCtrl.clear()),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
+          _texto(
+            etiqueta: 'Teléfono / WhatsApp (solo dígitos con código de país)',
+            controller: _telefonoCtrl,
+            ejemplo: 'Ej: 573136177747',
+            teclado: TextInputType.phone,
           ),
-          _campo(
-            'Correo electrónico',
-            TextFormField(
-              controller: _correoCtrl,
-              decoration: _deco(
-                'Ej: contacto@fundacion.org',
-                onLimpiar: () => setState(() => _correoCtrl.clear()),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
+          _texto(
+            etiqueta: 'Correo electrónico',
+            controller: _correoCtrl,
+            ejemplo: 'Ej: contacto@fundacion.org',
+            teclado: TextInputType.emailAddress,
           ),
-          _campo(
-            'Facebook URL',
-            TextFormField(
-              controller: _facebookCtrl,
-              decoration: _deco(
-                'https://facebook.com/...',
-                onLimpiar: () => setState(() => _facebookCtrl.clear()),
-              ),
-            ),
+          _texto(
+            etiqueta: 'Facebook URL',
+            controller: _facebookCtrl,
+            ejemplo: 'https://facebook.com/...',
+            teclado: TextInputType.url,
+            obligatorio: false,
           ),
-          _campo(
-            'Instagram URL',
-            TextFormField(
-              controller: _instagramCtrl,
-              decoration: _deco(
-                'https://instagram.com/...',
-                onLimpiar: () => setState(() => _instagramCtrl.clear()),
-              ),
-            ),
+          _texto(
+            etiqueta: 'Instagram URL',
+            controller: _instagramCtrl,
+            ejemplo: 'https://instagram.com/...',
+            teclado: TextInputType.url,
+            obligatorio: false,
           ),
-          _campo(
-            'TikTok URL',
-            TextFormField(
-              controller: _tiktokCtrl,
-              decoration: _deco(
-                'https://tiktok.com/@...',
-                onLimpiar: () => setState(() => _tiktokCtrl.clear()),
-              ),
-            ),
+          _texto(
+            etiqueta: 'TikTok URL',
+            controller: _tiktokCtrl,
+            ejemplo: 'https://tiktok.com/@...',
+            teclado: TextInputType.url,
+            obligatorio: false,
           ),
 
-          // 5. NUESTRA RESCATISTA
           _seccionTitulo('Sección "Nuestra rescatista"', Icons.person_pin_outlined),
-          _campo(
-            'Nombre de la rescatista',
-            TextFormField(
-              controller: _rescatistaNombreCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Ej: Maritza Arévalo',
-                onLimpiar: () => setState(() => _rescatistaNombreCtrl.clear()),
-              ),
-            ),
-          ),
-          _campo(
-            'Texto / Trayectoria de la rescatista',
-            TextFormField(
-              controller: _rescatistaTextoCtrl,
-              maxLength: 500,
-              maxLengthEnforcement: MaxLengthEnforcement.enforced,
-              decoration: _deco(
-                'Labor de la rescatista...',
-                onLimpiar: () => setState(() => _rescatistaTextoCtrl.clear()),
-              ),
-              maxLines: 3,
-              validator: (v) => (v != null && v.length > 500)
-                  ? 'Máximo 500 caracteres'
-                  : null,
-            ),
+          _texto(
+            etiqueta: 'Texto / Trayectoria de la rescatista',
+            controller: _rescatistaTextoCtrl,
+            ejemplo: 'Labor de la rescatista...',
+            lineas: 3,
           ),
           _tarjetaFoto(
             titulo: 'Foto de la rescatista',
@@ -745,14 +669,6 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
           // 6. IMÁGENES DE LA BIENVENIDA
           _seccionTitulo('Imágenes de la bienvenida', Icons.image_outlined),
           _tarjetaFoto(
-            titulo: 'Logo de la Fundación',
-            ruta: _logo,
-            alto: 120,
-            fit: BoxFit.contain,
-            onEliminar: () => setState(() => _logo = ''),
-            onCambiada: (ruta) => setState(() => _logo = ruta),
-          ),
-          _tarjetaFoto(
             titulo: 'Imagen principal (Círculo de inicio)',
             ruta: _imagenPrincipal,
             alto: 200,
@@ -761,11 +677,13 @@ class _FundacionAdminScreenState extends State<FundacionAdminScreen> {
             onCambiada: (ruta) => setState(() => _imagenPrincipal = ruta),
           ),
           _tarjetaFoto(
-            titulo: 'Imagen de fondo de logros',
-            ruta: _fotoFondo,
-            alto: 160,
-            onEliminar: () => setState(() => _fotoFondo = ''),
-            onCambiada: (ruta) => setState(() => _fotoFondo = ruta),
+            titulo: 'Foto de Protección animal',
+            ruta: _fotoDenuncias,
+            alto: 200,
+            onEliminar: () => setState(
+              () => _fotoDenuncias = FundacionInfo.fotoDenunciasPredeterminada,
+            ),
+            onCambiada: (ruta) => setState(() => _fotoDenuncias = ruta),
           ),
 
           const SizedBox(height: 16),

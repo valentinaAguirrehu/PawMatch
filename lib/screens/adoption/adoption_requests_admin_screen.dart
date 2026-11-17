@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/core/app_colors.dart';
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/screens/adoption/adoption_detail_admin_screen.dart';
@@ -13,6 +13,7 @@ import 'package:paw_match/services/navegacion.dart';
 import 'package:paw_match/services/session.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
+import 'package:paw_match/widgets/dialogo_escritura.dart';
 import 'package:paw_match/widgets/pet_card.dart';
 
 /// Solicitudes de adopción del administrador: foto, peludito, adoptante
@@ -49,53 +50,50 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
     final notas = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+      builder: (ctx) => DialogoEscritura(
+        titulo: const Text(
           '¡Todo listo para la adopción! 🐾',
           textAlign: TextAlign.center,
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '¡Qué emoción! ${s.applicantFullName} está a punto de darle un nuevo hogar lleno de amor a ${s.petName.isEmpty ? 'la mascota' : s.petName}.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            TextField(
+        alineacionAcciones: MainAxisAlignment.center,
+        cuerpo: [
+          Text(
+            '¡Qué emoción! ${s.applicantFullName} está a punto de darle un nuevo hogar lleno de amor a ${s.petName.isEmpty ? 'la mascota' : s.petName}.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 14),
+          ZonaCampo(
+            builder: (foco) => TextField(
+              focusNode: foco,
               controller: notas,
               maxLines: 2,
               maxLength: 300,
               textAlign: TextAlign.center,
+              scrollPadding: rellenoCampoDialogo,
               decoration: const InputDecoration(
                 hintText: 'Envía una nota o recomendación',
                 hintMaxLines: 3,
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 8),
-            Center(
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF059669),
-                  minimumSize: const Size(0, 46),
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('¡Confirmar adopción! 💖'),
-              ),
+          ),
+        ],
+        acciones: [
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF059669),
+              minimumSize: const Size(0, 46),
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-            Center(
-              child: TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancelar'),
-              ),
-            ),
-          ],
-        ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('¡Confirmar adopción! 💖'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+        ],
       ),
     );
     if (ok != true || !mounted) return;
@@ -118,25 +116,26 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Center(
+        builder: (ctx, setLocal) => DialogoEscritura(
+          titulo: const Center(
             child: Text(
               'Rechazar solicitud',
               textAlign: TextAlign.center,
             ),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Indica el motivo por el cual se rechaza la solicitud de ${s.petName.isEmpty ? 'la mascota' : s.petName}:',
-              ),
-              const SizedBox(height: 10),
-              TextField(
+          alineacionAcciones: MainAxisAlignment.center,
+          cuerpo: [
+            Text(
+              'Indica el motivo por el cual se rechaza la solicitud de ${s.petName.isEmpty ? 'la mascota' : s.petName}:',
+            ),
+            const SizedBox(height: 10),
+            ZonaCampo(
+              builder: (foco) => TextField(
+                focusNode: foco,
                 controller: motivo,
                 maxLines: 3,
                 maxLength: 500,
+                scrollPadding: rellenoCampoDialogo,
                 onChanged: (_) {
                   if (errorMotivo != null) setLocal(() => errorMotivo = null);
                 },
@@ -146,15 +145,14 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
                   errorText: errorMotivo,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                _avisoCorreo(s.applicantEmail, 'rechazo'),
-                style: const TextStyle(fontSize: 12, color: AppColors.grisTexto),
-              ),
-            ],
-          ),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _avisoCorreo(s.applicantEmail, 'rechazo'),
+              style: const TextStyle(fontSize: 12, color: AppColors.grisTexto),
+            ),
+          ],
+          acciones: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child: const Text('Cancelar'),
@@ -179,17 +177,25 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
       s,
       estado: 'rechazada',
       observaciones: motivo.text.trim(),
-      aviso: 'Solicitud rechazada. Se envió el correo al adoptante.',
+      aviso: 'Solicitud rechazada.',
     );
     if (guardada && mounted) setState(() => _filtro = 2);
   }
 
   String _avisoCorreo(String correo, String decision) {
     final destino = correo.trim();
-    if (destino.isEmpty) {
-      return 'Se enviará un correo de $decision y una notificación en la app al solicitante.';
-    }
-    return 'Se enviará un correo de $decision a $destino y una notificación en la app.';
+    final aQuien = destino.isEmpty ? 'al solicitante' : 'a $destino';
+    return 'La solicitud se guardará y la app mostrará la notificación. '
+        'El correo de $decision $aQuien solo figura como enviado si el servicio lo acepta; '
+        'si no está configurado, queda pendiente.';
+  }
+
+  String _textoConCorreo(String estado, String aviso, bool enviado) {
+    if (estado != 'aprobada' && estado != 'rechazada') return aviso;
+    final correo = enviado
+        ? 'El correo fue aceptado por el servicio de envío.'
+        : 'El correo no se envió y quedó pendiente.';
+    return '$aviso $correo';
   }
 
   Future<bool> _guardar(
@@ -201,14 +207,17 @@ class _AdoptionRequestsAdminScreenState extends State<AdoptionRequestsAdminScree
   }) async {
     setState(() => _procesandoId = s.id);
     try {
-      await AdoptionService.updateStatus(
+      final resultado = await AdoptionService.updateStatus(
         id: s.id,
         status: estado,
         startDate: fechaInicio,
         observations: observaciones,
       );
       if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(aviso)));
+      final enviado = resultado['correo_enviado'] == true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_textoConCorreo(estado, aviso, enviado))),
+      );
       await _recargar();
       return true;
     } catch (e) {

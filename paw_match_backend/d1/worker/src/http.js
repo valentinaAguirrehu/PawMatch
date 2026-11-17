@@ -3,21 +3,38 @@ export function json(data, status = 200, extra = {}) {
   return new Response(JSON.stringify(data), { status, headers });
 }
 
+
 export function cors(request, env, response) {
   const headers = new Headers(response.headers);
   const origen = request.headers.get('Origin');
+
   const permitidos = String(env.CORS_ORIGINS || env.CORS_ORIGIN || '')
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
+
   if (origenPermitido(origen, permitidos)) {
     headers.set('Access-Control-Allow-Origin', origen);
   }
+
   headers.set('Access-Control-Allow-Credentials', 'true');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Paw-Client');
-  headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+
+  headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Paw-Client, X-Usuario-Id, Cache-Control, Pragma'
+  );
+
+  headers.set(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+  );
+
   headers.set('Vary', 'Origin');
-  return new Response(response.body, { status: response.status, headers });
+
+  return new Response(response.body, {
+    status: response.status,
+    headers
+  });
 }
 
 export function errorJson(error, mensaje) {
@@ -268,8 +285,13 @@ export async function guardarArchivo(env, carpeta, archivo) {
   if (!mimePermitido) {
     throw new ErrorSolicitud('El tipo del archivo no está permitido.');
   }
+  const tamano = Number(archivo.size || 0);
+  const esPdf = extension === '.pdf' || mime === 'application/pdf';
+  if (esPdf && tamano > 2 * 1024 * 1024) {
+    throw new ErrorSolicitud('Este PDF está muy pesado. Sube uno más pequeño, de menos de 2 MB.');
+  }
   const limite = LIMITE_POR_CARPETA[carpeta] || 8 * 1024 * 1024;
-  if (Number(archivo.size || 0) > limite) {
+  if (tamano > limite) {
     throw new ErrorSolicitud(`El archivo supera el máximo de ${Math.round(limite / (1024 * 1024))} MB.`);
   }
   const nombre = `${crypto.randomUUID()}${extension}`;

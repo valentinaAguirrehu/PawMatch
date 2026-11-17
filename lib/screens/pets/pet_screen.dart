@@ -9,6 +9,7 @@ import 'package:paw_match/screens/match/aviso_reasignacion_match.dart';
 import 'package:paw_match/screens/pets/pet_detail_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
 import 'package:paw_match/services/apadrinamiento_service.dart';
+import 'package:paw_match/services/favoritos_mascotas.dart';
 import 'package:paw_match/services/match_estado.dart';
 import 'package:paw_match/services/match_service.dart';
 import 'package:paw_match/services/navegacion.dart';
@@ -19,7 +20,6 @@ import 'package:paw_match/services/entrevista_mascota_luna_service.dart';
 import 'package:paw_match/widgets/barra_superior.dart';
 import 'package:paw_match/widgets/dialogo_cerrar_sesion.dart';
 import 'package:paw_match/widgets/pet_card.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Pantalla de visualización de mascotas con buscador, filtros por categoría,
 /// cuadrícula de dos columnas, etiqueta «NUEVO» por 48h, aviso de nuevas
@@ -72,7 +72,10 @@ class _PetScreenState extends State<PetScreen> {
     _respuestasUsuario = MatchEstado.instancia.respuestas;
     MatchEstado.instancia.addListener(_onMatchEstadoActualizado);
     PetsService.mascotasEnMemoria.addListener(_onMascotasMemoriaActualizadas);
-    _cargarFavoritos();
+    FavoritosMascotas.ids.addListener(_aplicarFavoritos);
+    FavoritosMascotas.asegurar().then((_) {
+      if (mounted) _aplicarFavoritos();
+    });
     if (Session.esAdmin) {
       _cargarBorradores();
     }
@@ -82,6 +85,7 @@ class _PetScreenState extends State<PetScreen> {
   void dispose() {
     MatchEstado.instancia.removeListener(_onMatchEstadoActualizado);
     PetsService.mascotasEnMemoria.removeListener(_onMascotasMemoriaActualizadas);
+    FavoritosMascotas.ids.removeListener(_aplicarFavoritos);
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -108,50 +112,23 @@ class _PetScreenState extends State<PetScreen> {
     _sincronizarMatchYNotificaciones();
   }
 
-  String get _claveFavoritos =>
-      'favoritos_mascotas_${Session.idUsuario ?? "anon"}';
-
-  Future<void> _cargarFavoritos() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final guardados =
-          prefs.getStringList(_claveFavoritos) ?? const <String>[];
-      final claveOrden = '${_claveFavoritos}_reciente';
-      final yaOrdenado = prefs.getBool(claveOrden) ?? false;
-      final ordenados = yaOrdenado ? guardados : guardados.reversed.toList();
-      if (!mounted) return;
-      setState(() {
-        _favoritosIds
-          ..clear()
-          ..addAll(ordenados);
-      });
-      if (!yaOrdenado) {
-        await prefs.setStringList(_claveFavoritos, List<String>.from(_favoritosIds));
-        await prefs.setBool(claveOrden, true);
-      }
-    } catch (_) {}
+  void _aplicarFavoritos() {
+    if (!mounted) return;
+    setState(() {
+      _favoritosIds
+        ..clear()
+        ..addAll(FavoritosMascotas.ids.value);
+    });
   }
 
   Future<void> _alternarFavorito(Pet mascota) async {
-    final yaEraFavorito = _favoritosIds.contains(mascota.id);
-    setState(() {
-      _favoritosIds.remove(mascota.id);
-      if (!yaEraFavorito) {
-        _favoritosIds.insert(0, mascota.id);
-      }
-    });
+    final ahoraEsFavorito = await FavoritosMascotas.alternar(mascota.id);
+    if (!mounted) return;
     _avisoFavorito(
-      yaEraFavorito
-          ? 'Eliminaste a ${mascota.nombre} de favoritos 🤍'
-          : '¡Añadiste a ${mascota.nombre} a favoritos! 💖',
+      ahoraEsFavorito
+          ? '¡Añadiste a ${mascota.nombre} a favoritos! 💖'
+          : 'Eliminaste a ${mascota.nombre} de favoritos 🤍',
     );
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _claveFavoritos,
-        _favoritosIds.toList(),
-      );
-    } catch (_) {}
   }
 
   void _avisoFavorito(String mensaje) {

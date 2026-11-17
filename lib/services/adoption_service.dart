@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:paw_match/services/archivo_multipart.dart';
+import 'package:paw_match/services/cliente_http.dart' as http;
 import 'package:paw_match/models/adoption_request.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -55,19 +56,9 @@ class AdoptionService {
       if (correoContacto != null && correoContacto.trim().isNotEmpty)
         'correo_contacto': correoContacto.trim(),
     });
+    req.files.add(archivoMultipart('foto_cedula', idCardBytes, idCardName));
     req.files.add(
-      http.MultipartFile.fromBytes(
-        'foto_cedula',
-        idCardBytes,
-        filename: idCardName,
-      ),
-    );
-    req.files.add(
-      http.MultipartFile.fromBytes(
-        'foto_servicios_publicos',
-        utilityBillBytes,
-        filename: utilityBillName,
-      ),
+      archivoMultipart('foto_servicios_publicos', utilityBillBytes, utilityBillName),
     );
 
     final res = await http.Response.fromStream(await req.send());
@@ -104,7 +95,10 @@ class AdoptionService {
   }
 
   /// [status] es `aprobada` o `rechazada`.
-  static Future<void> updateStatus({
+  ///
+  /// Devuelve la respuesta del Worker, incluido `correo_enviado`.
+  /// Ese campo solo es verdadero si Resend aceptó el mensaje.
+  static Future<Map<String, dynamic>> updateStatus({
     required String id,
     required String status,
     String? startDate,
@@ -122,6 +116,10 @@ class AdoptionService {
     if (res.statusCode != 200) {
       throw Exception(_mensaje(res, 'No se pudo actualizar la solicitud'));
     }
+    final data = jsonDecode(utf8.decode(res.bodyBytes));
+    if (data is Map<String, dynamic>) return data;
+    if (data is Map) return Map<String, dynamic>.from(data);
+    return {};
   }
 
   /// Consulta cada 12 segundos si hay solicitudes nuevas o respuestas sin leer.
@@ -185,9 +183,7 @@ class AdoptionService {
   }) async {
     final req = http.MultipartRequest('POST', Uri.parse('$_url/$id/contrato'));
     req.headers['x-usuario-id'] = Session.idUsuario ?? '';
-    req.files.add(
-      http.MultipartFile.fromBytes('contrato', bytes, filename: nombreArchivo),
-    );
+    req.files.add(archivoMultipart('contrato', bytes, nombreArchivo));
     final res = await http.Response.fromStream(await req.send());
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception(_mensaje(res, 'No se pudo subir el contrato'));
