@@ -8,6 +8,13 @@ import { concordar, interpretarPersonalidad } from './personalidad_ia.js';
 import { turnoLuna } from './luna.js';
 import * as correos from './correos.js';
 
+const MENSAJE_CONTRASENA = 'La contraseña debe tener mínimo 8 caracteres, al menos una mayúscula (A-Z), una minúscula (a-z), un número (0-9) y un carácter especial (@, #, $, %, &, *).';
+
+function contrasenaInvalida(valor) {
+  const pass = String(valor || '');
+  return pass.length < 8 || !/[A-Z]/.test(pass) || !/[a-z]/.test(pass) || !/[0-9]/.test(pass) || !/[@#$%&*]/.test(pass);
+}
+
 const PREGUNTAS = [
   ['nivel_energia', 'Nivel de energía', '¿Qué tan activo/a te consideras en tu día a día?'],
   ['sociabilidad_personas', 'Sociabilidad con personas', '¿Qué tan cómodo/a te sientes rodeado/a de nuevas personas?'],
@@ -223,9 +230,7 @@ async function registrar(request, env) {
   const { nombres, apellidos, correo, telefono, contrasena, fecha_nacimiento, genero } = body;
   if (!nombres || !apellidos || !correo || !contrasena) return json({ error: 'Faltan campos obligatorios' }, 400);
   const pass = String(contrasena);
-  if (pass.length < 8 || !/[A-Z]/.test(pass) || !/[a-z]/.test(pass) || !/[0-9]/.test(pass) || !/[@#$%&*]/.test(pass)) {
-    return json({ error: 'La contraseña debe tener mínimo 8 caracteres, al menos una mayúscula (A-Z), una minúscula (a-z), un número (0-9) y un carácter especial (@, #, $, %, &, *).' }, 400);
-  }
+  if (contrasenaInvalida(pass)) return json({ error: MENSAJE_CONTRASENA }, 400);
   if (genero !== 'Hombre' && genero !== 'Mujer') return json({ error: 'Selecciona si eres Hombre o Mujer' }, 400);
   const existe = await env.DB.prepare('SELECT id_usuario FROM usuario WHERE correo = ?').bind(correo).first();
   if (existe) return json({ error: 'Ese correo ya está registrado' }, 409);
@@ -312,7 +317,7 @@ async function restablecer(request, env) {
   const usuario = await codigoValido(env, body.correo, body.codigo);
   if (!usuario) return json({ error: 'El código ingresado es incorrecto.' }, 400);
   const pass = String(body.contrasena || '');
-  if (pass.length < 8) return json({ error: 'La contraseña debe tener al menos 8 caracteres' }, 400);
+  if (contrasenaInvalida(pass)) return json({ error: MENSAJE_CONTRASENA }, 400);
   await env.DB.prepare(
     `UPDATE usuario SET contrasena_hash = ?, token_recuperacion = NULL, token_recuperacion_expira = NULL WHERE id_usuario = ?`
   ).bind(bcrypt.hashSync(pass, 10), usuario.id_usuario).run();
@@ -361,7 +366,7 @@ async function cambiarClave(request, env, id) {
   const acceso = await exigirPropio(request, env, id);
   if (acceso.error) return acceso.error;
   const body = await cuerpo(request);
-  if (!body.contrasena || String(body.contrasena).length < 6) return json({ error: 'La contraseña debe tener al menos 6 caracteres' }, 400);
+  if (contrasenaInvalida(body.contrasena)) return json({ error: MENSAJE_CONTRASENA }, 400);
   const fila = await env.DB.prepare('UPDATE usuario SET contrasena_hash = ? WHERE id_usuario = ? RETURNING id_usuario').bind(bcrypt.hashSync(String(body.contrasena), 10), id).first();
   await revocarOtrasSesiones(request, env, id);
   if (!fila) return json({ error: 'Usuario no encontrado' }, 404);
@@ -491,7 +496,7 @@ async function crearAdmin(request, env) {
   if (acceso.error) return acceso.error;
   const body = await cuerpo(request);
   if (!body.nombres || !body.apellidos || !body.correo || !body.contrasena) return json({ error: 'Faltan campos obligatorios' }, 400);
-  if (String(body.contrasena).length < 8) return json({ error: 'La contraseña debe tener al menos 8 caracteres' }, 400);
+  if (contrasenaInvalida(body.contrasena)) return json({ error: MENSAJE_CONTRASENA }, 400);
   const existe = await env.DB.prepare('SELECT 1 AS ok FROM usuario WHERE lower(correo) = lower(?)').bind(body.correo).first();
   if (existe) return json({ error: 'Ese correo ya está registrado' }, 409);
   const fila = await env.DB.prepare(
@@ -511,6 +516,7 @@ async function editarAdmin(request, env, id) {
   const repetido = await env.DB.prepare('SELECT 1 AS ok FROM usuario WHERE lower(correo) = lower(?) AND id_usuario <> ?').bind(body.correo, id).first();
   if (repetido) return json({ error: 'Ese correo ya está registrado' }, 409);
   if (body.contrasena) {
+    if (contrasenaInvalida(body.contrasena)) return json({ error: MENSAJE_CONTRASENA }, 400);
     return json(await env.DB.prepare(
       `UPDATE usuario SET nombres = ?, apellidos = ?, correo = ?, telefono = ?, contrasena_hash = ?
        WHERE id_usuario = ? AND rol = 'administrador'
