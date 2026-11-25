@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/contrasena.dart';
 import 'package:paw_match/models/user.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/screens/users/personality_detail.dart';
@@ -749,8 +750,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 etiqueta: 'Nueva contraseña',
                 oculta: _ocultarClave,
                 onVer: () => setState(() => _ocultarClave = !_ocultarClave),
-                validator: (v) =>
-                    (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
+                validator: validarContrasena,
               ),
               _clave(
                 controller: _confirmarCtrl,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/contrasena.dart';
 import 'package:paw_match/models/admin_user.dart';
 import 'package:paw_match/screens/auth/welcome_screen.dart';
 import 'package:paw_match/services/adoption_service.dart';
@@ -553,7 +554,7 @@ class _CrearAdministradorDialogState extends State<_CrearAdministradorDialog> {
                   decoration: InputDecoration(
                     labelText: _editando
                         ? 'Nueva contraseña (opcional)'
-                        : 'Contraseña (mínimo 8 caracteres)',
+                        : 'Contraseña',
                     suffixIcon: IconButton(
                       tooltip: _mostrarContrasena
                           ? 'Ocultar contraseña'
@@ -568,14 +569,10 @@ class _CrearAdministradorDialogState extends State<_CrearAdministradorDialog> {
                       ),
                     ),
                   ),
-                  validator: (value) {
-                    final texto = value ?? '';
-                    if (_editando && texto.isEmpty) return null;
-                    if (texto.length < 8) {
-                      return 'Usa al menos 8 caracteres';
-                    }
-                    return null;
-                  },
+                  validator: (value) => validarContrasena(
+                    value,
+                    obligatoria: !_editando,
+                  ),
                 ),
               ],
             ),

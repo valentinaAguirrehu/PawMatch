@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/contrasena.dart';
 import 'package:paw_match/screens/match/user_personality.dart';
 import 'package:paw_match/services/api_service.dart';
 import 'package:paw_match/services/session.dart';
@@ -407,23 +408,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _requerido(String? valor) =>
       (valor == null || valor.trim().isEmpty) ? 'Requerido' : null;
 
-  String? _validarContrasena(String? v) {
-    if (v == null || v.isEmpty) return 'Requerido';
-    if (v.length < 8) return 'Tener mínimo 8 caracteres.';
-    if (!RegExp(r'[A-Z]').hasMatch(v)) {
-      return 'Contener al menos una letra mayúscula (A-Z).';
-    }
-    if (!RegExp(r'[a-z]').hasMatch(v)) {
-      return 'Contener al menos una letra minúscula (a-z).';
-    }
-    if (!RegExp(r'[0-9]').hasMatch(v)) {
-      return 'Contener al menos un número (0-9).';
-    }
-    if (!RegExp(r'[@#$%&*]').hasMatch(v)) {
-      return 'Contener al menos un carácter especial (@, #, \$, %, &, *).';
-    }
-    return null;
-  }
+  String? _validarContrasena(String? v) => validarContrasena(v);
 }
 
 class _RequisitosContrasena extends StatelessWidget {

@@ -36,6 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _recordarContrasena = creds.recordar;
       if (creds.recordar && creds.correo.isNotEmpty) {
         _correoCtrl.text = creds.correo;
+        _contrasenaCtrl.text = creds.contrasena;
       }
     });
   }
@@ -64,6 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await Session.guardarCredenciales(
         recordar: _recordarContrasena,
         correo: _correoCtrl.text.trim(),
+        contrasena: _contrasenaCtrl.text,
       );
 
       if (!mounted) return;

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:paw_match/core/app_colors.dart';
+import 'package:paw_match/core/contrasena.dart';
 import 'package:paw_match/services/recuperacion_service.dart';
 import 'package:paw_match/widgets/feature_icon.dart';
 
@@ -325,8 +326,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                           etiqueta: 'Contraseña nueva',
                                           esContrasena: true,
                                           accion: TextInputAction.next,
-                                          validator: (v) =>
-                                              (v == null || v.length < 6) ? 'Mínimo 6 caracteres' : null,
+                                          validator: validarContrasena,
                                         ),
                                         const SizedBox(height: 14),
                                         _CampoRecuperacion(

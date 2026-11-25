@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const pool = require('../db');
 const { esAdministrador, esSuperAdmin } = require('../utils/roles');
+const { MENSAJE_CONTRASENA, contrasenaInvalida } = require('../utils/contrasena');
 
 const router = express.Router();
 
@@ -67,8 +68,8 @@ function validarAdministrador(datos, { contrasenaObligatoria }) {
   if (contrasenaObligatoria && !datos.contrasena) {
     return 'Faltan campos obligatorios';
   }
-  if (datos.contrasena && datos.contrasena.length < 8) {
-    return 'La contraseña debe tener al menos 8 caracteres';
+  if (datos.contrasena && contrasenaInvalida(datos.contrasena)) {
+    return MENSAJE_CONTRASENA;
   }
   return null;
 }

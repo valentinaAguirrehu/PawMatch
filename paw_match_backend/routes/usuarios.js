@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const { randomUUID } = require('crypto');
 const pool = require('../db');
+const { MENSAJE_CONTRASENA, contrasenaInvalida } = require('../utils/contrasena');
 const {
   personalityColumns,
   validarRespuestasGuardado,
@@ -61,18 +62,8 @@ router.post('/registro', async (req, res) => {
   if (!nombres || !apellidos || !correo || !contrasena) {
     return res.status(400).json({ error: 'Faltan campos obligatorios' });
   }
-  const passStr = String(contrasena);
-  if (
-    passStr.length < 8 ||
-    !/[A-Z]/.test(passStr) ||
-    !/[a-z]/.test(passStr) ||
-    !/[0-9]/.test(passStr) ||
-    !/[@#$%&*]/.test(passStr)
-  ) {
-    return res.status(400).json({
-      error:
-        'La contraseña debe tener mínimo 8 caracteres, al menos una mayúscula (A-Z), una minúscula (a-z), un número (0-9) y un carácter especial (@, #, $, %, &, *).',
-    });
+  if (contrasenaInvalida(contrasena)) {
+    return res.status(400).json({ error: MENSAJE_CONTRASENA });
   }
   if (!generoValido(genero)) {
     return res.status(400).json({ error: 'Selecciona si eres Hombre o Mujer' });
@@ -272,10 +263,8 @@ router.post('/restablecer-contrasena', async (req, res) => {
     return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
   }
 
-  if (contrasena.length < 6) {
-    return res.status(400).json({
-      error: 'La nueva contraseña debe tener al menos 6 caracteres.',
-    });
+  if (contrasenaInvalida(contrasena)) {
+    return res.status(400).json({ error: MENSAJE_CONTRASENA });
   }
 
   const correoLimpio = correo.trim().toLowerCase();
@@ -676,8 +665,8 @@ router.get('/:id', async (req, res) => {
 
 router.put('/:id/contrasena', async (req, res) => {
   const { contrasena } = req.body;
-  if (!contrasena || String(contrasena).length < 6) {
-    return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+  if (contrasenaInvalida(contrasena)) {
+    return res.status(400).json({ error: MENSAJE_CONTRASENA });
   }
 
   try {

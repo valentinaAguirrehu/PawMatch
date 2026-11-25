@@ -68,7 +68,6 @@ class Session {
   /// Restaura la sesión guardada previamente si existe.
   /// En celular exige el token del almacén seguro. En web usa la cookie.
   static Future<bool> restaurar() async {
-    await _olvidarContrasenaPlana();
     if (AlmacenSeguro.persisteToken) {
       final token = await AlmacenSeguro.leer();
       if (token == null || token.isEmpty) {
@@ -101,32 +100,39 @@ class Session {
     return false;
   }
 
-  /// Guarda el correo para el formulario. Nunca guarda la contraseña.
+  /// Guarda correo y contraseña del formulario cuando la persona marca recordar.
   static Future<void> guardarCredenciales({
     required bool recordar,
     required String correo,
+    required String contrasena,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kKeyRecordar, recordar);
-      await prefs.remove(_kKeyContrasena);
       if (recordar) {
         await prefs.setString(_kKeyCorreo, correo);
+        await prefs.setString(_kKeyContrasena, contrasena);
       } else {
         await prefs.remove(_kKeyCorreo);
+        await prefs.remove(_kKeyContrasena);
       }
     } catch (_) {}
   }
 
-  /// Obtiene el correo recordado. La contraseña siempre vuelve vacía.
+  /// Devuelve correo y contraseña guardados para volver a llenar el ingreso.
   static Future<({bool recordar, String correo, String contrasena})>
       obtenerCredencialesRecordadas() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kKeyContrasena);
       final recordar = prefs.getBool(_kKeyRecordar) ?? true;
-      final c = prefs.getString(_kKeyCorreo) ?? '';
-      return (recordar: recordar, correo: c, contrasena: '');
+      if (!recordar) {
+        return (recordar: false, correo: '', contrasena: '');
+      }
+      return (
+        recordar: true,
+        correo: prefs.getString(_kKeyCorreo) ?? '',
+        contrasena: prefs.getString(_kKeyContrasena) ?? '',
+      );
     } catch (_) {
       return (recordar: true, correo: '', contrasena: '');
     }
@@ -162,15 +168,7 @@ class Session {
 
     SharedPreferences.getInstance().then((prefs) {
       prefs.remove(_kKeyUsuario);
-      prefs.remove(_kKeyContrasena);
     }).catchError((_) {});
-  }
-
-  static Future<void> _olvidarContrasenaPlana() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kKeyContrasena);
-    } catch (_) {}
   }
 
   static Future<void> _limpiarUsuarioLocal() async {
